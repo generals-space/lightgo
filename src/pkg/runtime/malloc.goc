@@ -432,14 +432,14 @@ runtime·mallocinit(void)
 	}
 	if((uintptr)p & (((uintptr)1<<PageShift)-1))
 		runtime·throw("runtime: SysReserve returned unaligned address");
-
+	// runtime·mheap是一个全局变量, 这里规定span, bitmap和arena3个区域的地址划分.
 	runtime·mheap.spans = (MSpan**)p;
 	runtime·mheap.bitmap = p + spans_size;
 	runtime·mheap.arena_start = p + spans_size + bitmap_size;
-	runtime·mheap.arena_used = runtime·mheap.arena_start;
+	runtime·mheap.arena_used = runtime·mheap.arena_start; // 初始arena的使用为0, 所以其地址等于arena_start
 	runtime·mheap.arena_end = runtime·mheap.arena_start + arena_size;
 
-	// Initialize the rest of the allocator.	
+	// Initialize the rest of the allocator.
 	runtime·MHeap_Init(&runtime·mheap);
 	m->mcache = runtime·allocmcache();
 

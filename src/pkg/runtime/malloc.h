@@ -90,6 +90,7 @@ typedef struct GCStats	GCStats;
 
 enum
 {
+	// 1 << 12 = 4k, 正好是一页的大小
 	PageShift	= 12,
 	PageSize	= 1<<PageShift,
 	PageMask	= PageSize - 1,
@@ -98,14 +99,16 @@ typedef	uintptr	PageID;		// address >> PageShift
 
 enum
 {
-	// Computed constant.  The definition of MaxSmallSize and the
-	// algorithm in msize.c produce some number of different allocation
-	// size classes.  NumSizeClasses is that number.  It's needed here
-	// because there are static arrays of this length; when msize runs its
-	// size choosing algorithm it double-checks that NumSizeClasses agrees.
+	// Computed constant. 
+	// The definition of MaxSmallSize and the algorithm in msize.c produce some number of different allocation size classes. 
+	// NumSizeClasses is that number. 
+	// It's needed here because there are static arrays of this length; 
+	// when msize runs its size choosing algorithm it double-checks that NumSizeClasses agrees.
 	NumSizeClasses = 61,
 
 	// Tunable constants.
+	// 小对象大小上限, 32k, 超过这个值就不会在span链表中分配而是直接到heap分配
+	// 1 << 10 = 1024, 32 << 10 = 32k
 	MaxSmallSize = 32<<10,
 
 	FixAllocChunk = 16<<10,		// Chunk size for FixAlloc
@@ -432,6 +435,7 @@ struct MHeap
 	uint64 nlargefree;	// number of frees for large objects (>MaxSmallSize)
 	uint64 nsmallfree[NumSizeClasses];	// number of frees for small objects (<=MaxSmallSize)
 };
+// C中的extern, 应该类似于go中的全局变量
 extern MHeap runtime·mheap;
 
 void	runtime·MHeap_Init(MHeap *h);
