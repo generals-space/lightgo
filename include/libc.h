@@ -50,6 +50,7 @@ extern "C" {
 #ifndef nil
 #define	nil	((void*)0)
 #endif
+// 功能类似len, cap, 得到目标x的容量(x应该是数组类型的对象, 使用x占用的全部空间, 除以其中成员所占用的空间)
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 
 #ifndef offsetof

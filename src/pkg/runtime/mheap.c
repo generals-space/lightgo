@@ -50,19 +50,23 @@ RecordSpan(void *vh, byte *p)
 }
 
 // Initialize the heap; fetch memory using alloc.
+// 初始化堆内存, 使用alloc从OS申请初始内存.
+// caller: malloc.goc -> runtime·mallocinit()
+// @param: *h runtime·mheap对象指针
 void
 runtime·MHeap_Init(MHeap *h)
 {
 	uint32 i;
-
+	// FixAlloc_Init()位于mfixalloc.c
 	runtime·FixAlloc_Init(&h->spanalloc, sizeof(MSpan), RecordSpan, h, &mstats.mspan_sys);
 	runtime·FixAlloc_Init(&h->cachealloc, sizeof(MCache), nil, nil, &mstats.mcache_sys);
 	// h->mapcache needs no init
-	for(i=0; i<nelem(h->free); i++)
-		runtime·MSpanList_Init(&h->free[i]);
+	// runtime·MSpanList_Init()只是将目标对象初始化为空的双向链表, 没有额外操作.
+	for(i=0; i<nelem(h->free); i++) runtime·MSpanList_Init(&h->free[i]);
+
 	runtime·MSpanList_Init(&h->large);
-	for(i=0; i<nelem(h->central); i++)
-		runtime·MCentral_Init(&h->central[i], i);
+	// h->central与h->free的作用差不多, 类型也差不多, 只不过为对象分配空间时, h->free的优先级更高.
+	for(i=0; i<nelem(h->central); i++) runtime·MCentral_Init(&h->central[i], i);
 }
 
 void
@@ -511,6 +515,7 @@ runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 }
 
 // Initialize an empty doubly-linked list.
+// 初始化空的双向链表
 void
 runtime·MSpanList_Init(MSpan *list)
 {

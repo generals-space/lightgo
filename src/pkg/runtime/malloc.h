@@ -111,9 +111,18 @@ enum
 	// 1 << 10 = 1024, 32 << 10 = 32k
 	MaxSmallSize = 32<<10,
 
-	FixAllocChunk = 16<<10,		// Chunk size for FixAlloc
-	MaxMHeapList = 1<<(20 - PageShift),	// Maximum page length for fixed-size list in MHeap.
-	HeapAllocChunk = 1<<20,		// Chunk size for heap growth
+	// Chunk size for FixAlloc
+	FixAllocChunk = 16<<10,
+	// Maximum page length for fixed-size list in MHeap.
+	// MHeap中定长列表的最大页长度, 
+	// 用于修饰MHeap中的free字段 MSpan列表(即MaxMHeapList为MSpan数组的长度值)
+	// 我想应该是这样的, MHeap中有free成员, 类型为MSpan数组, 用于为固定大小的小对象分配空间.
+	// 
+	MaxMHeapList = 1<<(20 - PageShift),
+	// Chunk size for heap growth
+	// 堆增长的块大小, 1 << 20 = 1M
+	// ...难道说堆空间不足时向OS申请内存的单位为1M? 会不会有点小?
+	HeapAllocChunk = 1<<20,
 
 	// Number of bits in page to span calculations (4k pages).
 	// On Windows 64-bit we limit the arena to 32GB or 35 bits (see below for reason).
@@ -212,8 +221,9 @@ void	runtime·FixAlloc_Free(FixAlloc *f, void *p);
 struct MStats
 {
 	// General statistics.
-	uint64	alloc;		// bytes allocated and still in use
-	uint64	total_alloc;	// bytes allocated (even if freed)
+	uint64	alloc;		// bytes allocated and still in use // 已分配且正在使用的字节数
+	uint64	total_alloc;	// bytes allocated (even if freed) // 所有已分配的字节数, 包括已释放, 处于空闲状态的空间.
+	// sys 从系统获取的字节数, 其值近似等于下面的xxx_sys对象的总和
 	uint64	sys;		// bytes obtained from system (should be sum of xxx_sys below, no locking, approximate)
 	uint64	nlookup;	// number of pointer lookups
 	uint64	nmalloc;	// number of mallocs
@@ -419,9 +429,8 @@ struct MHeap
 	byte *arena_end;
 
 	// central free lists for small size classes.
-	// the padding makes sure that the MCentrals are
-	// spaced CacheLineSize bytes apart, so that each MCentral.Lock
-	// gets its own cache line.
+	// the padding makes sure that the MCentrals are spaced CacheLineSize bytes apart, 
+	// so that each MCentral.Lock gets its own cache line.
 	struct {
 		MCentral;
 		byte pad[CacheLineSize];

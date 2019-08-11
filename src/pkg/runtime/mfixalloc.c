@@ -12,6 +12,9 @@
 
 // Initialize f to allocate objects of the given size,
 // using the allocator to obtain chunks of memory.
+// caller: mheap.c -> runtime·MHeap_Init()
+// 第3个参数void (*first)(void*, byte*)是一函数类型 
+// *first为函数地址, (void*, byte*)为ta的两个参数
 void
 runtime·FixAlloc_Init(FixAlloc *f, uintptr size, void (*first)(void*, byte*), void *arg, uint64 *stat)
 {

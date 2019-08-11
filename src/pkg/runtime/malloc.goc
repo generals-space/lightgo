@@ -30,6 +30,9 @@ extern volatile intgo runtime·MemProfileRate;
 // Small objects are allocated from the per-thread cache's free lists.
 // Large objects (> 32 kB) are allocated straight from the heap.
 // If the block will be freed with runtime·free(), typ must be 0.
+// 小对象由每个线程(m对象)的cache中的空闲列表(mcache)中分配.
+// 大对象(大于32k)直接从堆中分配.
+// 如果分配的块之后需要使用runtime·free()释放, 则typ参数必须指定为0.
 void*
 runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 {
@@ -43,32 +46,30 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 
 	if(size == 0) {
 		// All 0-length allocations use this pointer.
-		// The language does not require the allocations to
-		// have distinct values.
+		// The language does not require the allocations to have distinct values.
+		// 所有长度为0的分配操作都返回这个指针(...是不是nil对象?)
+		// go不要求nil对象有不同的值.
 		return &runtime·zerobase;
 	}
-	if(m->mallocing)
-		runtime·throw("malloc/free - deadlock");
+	// m在runtime.h中声明, 也是全局变量, m是M类型的列表对象.
+	if(m->mallocing) runtime·throw("malloc/free - deadlock");
 	// Disable preemption during settype_flush.
 	// We can not use m->mallocing for this, because settype_flush calls mallocgc.
 	m->locks++;
-	m->mallocing = 1;
+	m->mallocing = 1; // 加锁
 
-	if(DebugTypeAtBlockEnd)
-		size += sizeof(uintptr);
+	if(DebugTypeAtBlockEnd) size += sizeof(uintptr);
 
 	c = m->mcache;
 	if(size <= MaxSmallSize) {
 		// Allocate from mcache free lists.
 		// Inlined version of SizeToClass().
-		if(size <= 1024-8)
-			sizeclass = runtime·size_to_class8[(size+7)>>3];
-		else
-			sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
+		if(size <= 1024-8) sizeclass = runtime·size_to_class8[(size+7)>>3];
+		else sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
 		size = runtime·class_to_size[sizeclass];
 		l = &c->list[sizeclass];
-		if(l->list == nil)
-			runtime·MCache_Refill(c, sizeclass);
+		if(l->list == nil) runtime·MCache_Refill(c, sizeclass);
+
 		v = l->list;
 		l->list = v->next;
 		l->nlist--;
@@ -83,6 +84,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		// TODO(rsc): Report tracebacks for very large allocations.
 
 		// Allocate directly from heap.
+		// 从堆上直接分配
 		npages = size >> PageShift;
 		if((size & PageMask) != 0)
 			npages++;
@@ -94,6 +96,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		v = (void*)(s->start << PageShift);
 
 		// setup for mark sweep
+		// 准备好之后的标记清除(应该是记录下分配空间的位置, 方便GC时的索引)
 		runtime·markspan(v, 0, 0, true);
 	}
 
@@ -115,7 +118,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		m->settype_bufsize = i;
 	}
 
-	m->mallocing = 0;
+	m->mallocing = 0; // 解锁
 	if(UseSpanType && !(flag & FlagNoScan) && typ != 0 && m->settype_bufsize == nelem(m->settype_buf))
 		runtime·settype_flush(m);
 	m->locks--;
@@ -142,8 +145,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc)
 		runtime·gc(0);
 
-	if(raceenabled)
-		runtime·racemalloc(v, size);
+	if(raceenabled) runtime·racemalloc(v, size);
 	return v;
 }
 
@@ -163,8 +165,7 @@ runtime·free(void *v)
 	uint32 prof;
 	uintptr size;
 
-	if(v == nil)
-		return;
+	if(v == nil) return;
 	
 	// If you change this also change mgc0.c:/^sweep,
 	// which has a copy of the guts of free.
@@ -440,10 +441,12 @@ runtime·mallocinit(void)
 	runtime·mheap.arena_end = runtime·mheap.arena_start + arena_size;
 
 	// Initialize the rest of the allocator.
+	// MHeap_Init()位于mheap.c
 	runtime·MHeap_Init(&runtime·mheap);
 	m->mcache = runtime·allocmcache();
 
 	// See if it works.
+	// ...先分配一个1byte的对象(参数1即对象size为1), 再回收
 	runtime·free(runtime·malloc(1));
 }
 

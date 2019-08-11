@@ -68,7 +68,7 @@ runtime·InitSizes(void)
 	runtime·class_to_size[0] = 0;
 	sizeclass = 1;	// 0 means no class 从第1级开始
 	align = 8; 
-	runtime·printf("+++ init runtime·class_to_size\n");
+	// runtime·printf("+++ init runtime·class_to_size\n");
 	for(size = align; size <= MaxSmallSize; size += align) {
 		if((size&(size-1)) == 0) {	// bump alignment once in a while
 			if(size >= 2048) 		align = 256;
@@ -93,7 +93,7 @@ runtime·InitSizes(void)
 		npages = allocsize >> PageShift;
 
 		// 打印size与align, 会在运行目标程序时输出(编译时也会输出), 需要重新编译
-		runtime·printf("+++ sizeclass: %d, size: %d, align: %d, pages: %d\n", sizeclass, size, align, (int32)npages);
+		// runtime·printf("+++ sizeclass: %d, size: %d, align: %d, pages: %d\n", sizeclass, size, align, (int32)npages);
 
 		// If the previous sizeclass chose the same allocation size and fit the same number of objects into the page, 
 		// we might as well use just this size instead of having two different sizes.
@@ -107,7 +107,7 @@ runtime·InitSizes(void)
 		&& allocsize/size == allocsize/runtime·class_to_size[sizeclass-1]) {
 			runtime·class_to_size[sizeclass-1] = size;
 			// 在这里, npages可以正常输出, 但allocsize的值为0, 日志信息中表示其类型为VULONG, 不太明白为什么.
-			runtime·printf("++++++ npages: %d, allocsize: %d\n", npages, (int64)allocsize);
+			// runtime·printf("++++++ npages: %d, allocsize: %d\n", npages, (int64)allocsize);
 			continue;
 		}
 

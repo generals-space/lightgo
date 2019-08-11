@@ -92,15 +92,16 @@ typedef	struct	DebugVars	DebugVars;
  * Per-CPU declaration.
  *
  * "extern register" is a special storage class implemented by 6c, 8c, etc.
- * On the ARM, it is an actual register; elsewhere it is a slot in thread-
- * local storage indexed by a segment register. See zasmhdr in
- * src/cmd/dist/buildruntime.c for details, and be aware that the linker may
- * make further OS-specific changes to the compiler's output. For example,
- * 6l/linux rewrites 0(GS) as -16(FS).
+ * register 寄存器?
+ * On the ARM, it is an actual register; 
+ * elsewhere it is a slot in thread-local storage indexed by a segment register. 
+ * See zasmhdr in src/cmd/dist/buildruntime.c for details, 
+ * and be aware that the linker may make further OS-specific changes to the compiler's output. 
+ * For example, 6l/linux rewrites 0(GS) as -16(FS).
  *
- * Every C file linked into a Go program must include runtime.h so that the
- * C compiler (6c, 8c, etc.) knows to avoid other uses of these dedicated
- * registers. The Go compiler (6g, 8g, etc.) knows to avoid them.
+ * Every C file linked into a Go program must include runtime.h 
+ * so that the C compiler (6c, 8c, etc.) knows to avoid other uses of these dedicated registers. 
+ * The Go compiler (6g, 8g, etc.) knows to avoid them.
  */
 extern	register	G*	g;
 extern	register	M*	m;
@@ -306,7 +307,7 @@ struct	M
 	P*	p;		// attached P for executing Go code (nil if not executing Go code)
 	P*	nextp;
 	int32	id;
-	int32	mallocing;
+	int32	mallocing; // 类似于锁的变量, 1表示此m对象正在分配内存, 0表示分配完成.
 	int32	throwing;
 	int32	gcing;
 	int32	locks;
