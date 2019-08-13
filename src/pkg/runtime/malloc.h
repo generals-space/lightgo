@@ -192,13 +192,16 @@ void	runtime·SysMap(void *v, uintptr nbytes, uint64 *stat);
 void*	runtime·SysReserve(void *v, uintptr nbytes);
 
 // FixAlloc is a simple free-list allocator for fixed size objects.
-// Malloc uses a FixAlloc wrapped around SysAlloc to manages its
-// MCache and MSpan objects.
-//
+// Malloc uses a FixAlloc wrapped around SysAlloc to manages its MCache and MSpan objects.
+// FixAlloc是一个简单的空闲列表分配器, 用于为固定大小的对象分配空间.
+// 其中的list成员为链表类型, 就是用来分配空间的.
+// 
 // Memory returned by FixAlloc_Alloc is not zeroed.
 // The caller is responsible for locking around FixAlloc calls.
 // Callers can keep state in the object but the first word is
 // smashed by freeing and reallocating.
+// FixAlloc_Alloc()返回的内存空间并未清零, 调用者需要在调用FixAlloc相关函数时自行加锁.
+// 
 struct FixAlloc
 {
 	uintptr	size;
@@ -303,7 +306,9 @@ struct MCache
 	// The following members are accessed on every malloc,
 	// so they are grouped here for better caching.
 	int32 next_sample;		// trigger heap sample after allocating this many bytes
-	intptr local_cachealloc;	// bytes allocated (or freed) from cache since last lock of heap
+	// bytes allocated (or freed) from cache since last lock of heap
+	// 标记此cache对象已经分配出去(不管是正在使用或是已经空闲...???)的大小
+	intptr local_cachealloc;
 	// The rest is not accessed on every malloc.
 	MCacheList list[NumSizeClasses];
 	// Local allocator stats, flushed during GC.
@@ -319,10 +324,10 @@ void	runtime·MCache_ReleaseAll(MCache *c);
 
 // MTypes describes the types of blocks allocated within a span.
 // The compression field describes the layout of the data.
-//
+// MTypes结构描述了在span中分配的块的类型, 
+// 其中compression成员描述了data成员的布局(compression可取MTypes_XXX)
 // MTypes_Empty:
-//     All blocks are free, or no type information is available for
-//     allocated blocks.
+//     All blocks are free, or no type information is available for allocated blocks.
 //     The data field has no meaning.
 // MTypes_Single:
 //     The span contains just one block.
@@ -413,8 +418,10 @@ struct MHeap
 	Lock;
 	MSpan free[MaxMHeapList];	// free lists of given length
 	MSpan large;			// free lists length >= MaxMHeapList
-	MSpan **allspans;
-	uint32	nspan;
+	MSpan **allspans;		// MSpan指针类型, 存储所有span对象指针
+	uint32	nspan;			// 这是用来表示堆中span中的总个数?
+	// allspans成员列表能存储的MSpan的指针的个数, 可以说是其容量
+	// 在为allspans分配空间时会同时为此成员赋值.
 	uint32	nspancap;
 
 	// span lookup
@@ -482,7 +489,9 @@ uintptr	runtime·gettype(void*);
 enum
 {
 	// flags to malloc
-	FlagNoScan	= 1<<0,	// GC doesn't have to scan object
+	// GC doesn't have to scan object
+	// GC不需要扫描目标对象(object指分配了空间的对象, Flag标记了object的状态)
+	FlagNoScan	= 1<<0,
 	FlagNoProfiling	= 1<<1,	// must not profile
 	FlagNoGC	= 1<<2,	// must not free or scan for pointers
 	FlagNoZero	= 1<<3, // don't zero memory

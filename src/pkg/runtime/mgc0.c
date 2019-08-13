@@ -2325,6 +2325,7 @@ runfinq(void)
 
 // mark the block at v of size n as allocated.
 // If noscan is true, mark it as not needing scanning.
+// 标记从地址v开始, 大小为n的内存块为已分配状态.
 void
 runtime·markallocated(void *v, uintptr n, bool noscan)
 {
@@ -2412,6 +2413,7 @@ runtime·checkfreed(void *v, uintptr n)
 
 // mark the span of memory at v as having n blocks of the given size.
 // if leftover is true, there is left over space at the end of the span.
+// 标记在内存span的地址v处, 分配了n个大小为size的块
 void
 runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 {

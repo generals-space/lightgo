@@ -49,6 +49,8 @@ mmap_fixed(byte *v, uintptr n, int32 prot, int32 flags, int32 fd, uint32 offset)
 	return p;
 }
 
+// 向OS申请大小为n的内存空间, 成功后将n加到stat指向的数值变量, 用于记录.
+// stat一般是: &mstats.other_sys
 void*
 runtime·SysAlloc(uintptr n, uint64 *stat)
 {
@@ -96,8 +98,8 @@ runtime·SysReserve(void *v, uintptr n)
 {
 	void *p;
 
-	// On 64-bit, people with ulimit -v set complain if we reserve too
-	// much address space.  Instead, assume that the reservation is okay
+	// On 64-bit, people with ulimit -v set complain if we reserve too much address space.  
+	// Instead, assume that the reservation is okay 
 	// if we can reserve at least 64K and check the assumption in SysMap.
 	// Only user-mode Linux (UML) rejects these requests.
 	if(sizeof(void*) == 8 && (uintptr)v >= 0xffffffffU) {

@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Fixed-size object allocator.  Returned memory is not zeroed.
-//
+// 固定大小对象的分配器. 其返回的内存空间未清零
 // See malloc.h for overview.
 
 #include "runtime.h"
@@ -12,6 +12,7 @@
 
 // Initialize f to allocate objects of the given size,
 // using the allocator to obtain chunks of memory.
+// 初始化f以分配指定大小size的对象(创建f就是为了给size大小的对象分配空间)
 // caller: mheap.c -> runtime·MHeap_Init()
 // 第3个参数void (*first)(void*, byte*)是一函数类型 
 // *first为函数地址, (void*, byte*)为ta的两个参数

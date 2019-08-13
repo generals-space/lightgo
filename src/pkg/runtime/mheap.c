@@ -22,6 +22,10 @@ static void MHeap_FreeLocked(MHeap*, MSpan*);
 static MSpan *MHeap_AllocLarge(MHeap*, uintptr);
 static MSpan *BestFit(MSpan*, uintptr, MSpan*);
 
+// 为heap.allspans分配空间, 用来存储所有span对象指针
+// caller: runtime·MHeap_Init()
+// 这个函数只在其他地址出现了一次, 但并不是只调用一次, 
+// 因为ta是作为成员函数被嵌入了heap->spanalloc对象
 static void
 RecordSpan(void *vh, byte *p)
 {
@@ -32,13 +36,17 @@ RecordSpan(void *vh, byte *p)
 
 	h = vh;
 	s = (MSpan*)p;
+	// 内存不⾜时(allspans指针空间不足), 重新申请, 并将原数据转移过来.
 	if(h->nspan >= h->nspancap) {
+		// ...总空间64k?
 		cap = 64*1024/sizeof(all[0]);
-		if(cap < h->nspancap*3/2)
-			cap = h->nspancap*3/2;
+		// 扩容到1.5倍
+		if(cap < h->nspancap*3/2) cap = h->nspancap*3/2;
+
 		all = (MSpan**)runtime·SysAlloc(cap*sizeof(all[0]), &mstats.other_sys);
-		if(all == nil)
-			runtime·throw("runtime: cannot allocate memory");
+
+		if(all == nil) runtime·throw("runtime: cannot allocate memory");
+		// 如果h->allspans不为空, 这是要先释放掉?
 		if(h->allspans) {
 			runtime·memmove(all, h->allspans, h->nspancap*sizeof(all[0]));
 			runtime·SysFree(h->allspans, h->nspancap*sizeof(all[0]), &mstats.other_sys);
@@ -225,6 +233,9 @@ BestFit(MSpan *list, uintptr npage, MSpan *best)
 
 // Try to add at least npage pages of memory to the heap,
 // returning whether it worked.
+// 尝试增加至少npage个页的内存空间给目标堆
+// 返回是否成功
+// ...这是堆容量的时候要增长的?
 static bool
 MHeap_Grow(MHeap *h, uintptr npage)
 {

@@ -62,12 +62,15 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 
 	c = m->mcache;
 	if(size <= MaxSmallSize) {
-		// Allocate from mcache free lists.
 		// Inlined version of SizeToClass().
+		// 从mcache空闲列表中分配
+		// 第二句的意思应该是, 下面的语句实现了SizeToClass()的功能, 相当于内联版本.
 		if(size <= 1024-8) sizeclass = runtime·size_to_class8[(size+7)>>3];
 		else sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
+		// 这里的size与前面的size大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
 		size = runtime·class_to_size[sizeclass];
 		l = &c->list[sizeclass];
+		// 如果list中已经没有成员(分配一个成员就会从list中移除), 从堆中的central空间中拿一些过来.
 		if(l->list == nil) runtime·MCache_Refill(c, sizeclass);
 
 		v = l->list;
@@ -82,25 +85,27 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		c->local_cachealloc += size;
 	} else {
 		// TODO(rsc): Report tracebacks for very large allocations.
-
-		// Allocate directly from heap.
 		// 从堆上直接分配
 		npages = size >> PageShift;
-		if((size & PageMask) != 0)
-			npages++;
+
+		if((size & PageMask) != 0) npages++;
+
 		s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, !(flag & FlagNoZero));
-		if(s == nil)
-			runtime·throw("out of memory");
+
+		if(s == nil) runtime·throw("out of memory");
+
 		s->limit = (byte*)(s->start<<PageShift) + size;
 		size = npages<<PageShift;
 		v = (void*)(s->start << PageShift);
 
 		// setup for mark sweep
 		// 准备好之后的标记清除(应该是记录下分配空间的位置, 方便GC时的索引)
+		// 在mgc0.c文件中定义
 		runtime·markspan(v, 0, 0, true);
 	}
-
+	// 如果flag不包括FlagNoGC标识位
 	if(!(flag & FlagNoGC))
+		// 如果flag包括FlagNoScan标识位, 则设置此内存块为noscan类型(即不包含指针, GC时无需从此处开始寻找释放对象).
 		runtime·markallocated(v, size, (flag&FlagNoScan) != 0);
 
 	if(DebugTypeAtBlockEnd)
@@ -381,6 +386,7 @@ runtime·mallocinit(void)
 		spans_size = ROUND(spans_size, PageSize);
 		for(i = 0; i <= 0x7f; i++) {
 			p = (void*)(i<<40 | 0x00c0ULL<<32);
+			// 保留虚拟地址范围, 并未实际分配内存.
 			p = runtime·SysReserve(p, bitmap_size + spans_size + arena_size);
 			if(p != nil)
 				break;
@@ -433,6 +439,7 @@ runtime·mallocinit(void)
 	}
 	if((uintptr)p & (((uintptr)1<<PageShift)-1))
 		runtime·throw("runtime: SysReserve returned unaligned address");
+	// 保留区域头部存储 spans、bitmap. 仅设置地址, 并没有分配内存
 	// runtime·mheap是一个全局变量, 这里规定span, bitmap和arena3个区域的地址划分.
 	runtime·mheap.spans = (MSpan**)p;
 	runtime·mheap.bitmap = p + spans_size;
@@ -443,6 +450,7 @@ runtime·mallocinit(void)
 	// Initialize the rest of the allocator.
 	// MHeap_Init()位于mheap.c
 	runtime·MHeap_Init(&runtime·mheap);
+	// 为当前线程创建cache(mcache存在于每个线程中, 并不是在堆上)
 	m->mcache = runtime·allocmcache();
 
 	// See if it works.
