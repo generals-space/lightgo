@@ -68,11 +68,11 @@ runtime·mchr(byte *p, byte c, byte *ep)
 			return p;
 	return nil;
 }
+// 如果用ida pro对go程序进行反编译, 可以发现在入口处会对argc和argv进行赋值.
+static int32	argc; // argument count, 表示传入参数的个数
+static uint8**	argv; // argument vector, 函数的参数序列或指针(第一个参数argv[0]是程序的名称, 包含程序所在的完整路径)
 
-static int32	argc;
-static uint8**	argv;
-
-Slice os·Args;
+Slice os·Args; // 命令行执行时的参数列表
 Slice syscall·envs;
 
 void (*runtime·sysargs)(int32, uint8**);
@@ -94,18 +94,20 @@ int32 runtime·iswindows;
 uint32 runtime·cpuid_ecx;
 uint32 runtime·cpuid_edx;
 
+// 将命令行传入的参数列表填充入os·Args列表.
 void
 runtime·goargs(void)
 {
-	String *s;
+	String *s; // 参数列表, 按照字符串类型处理
 	int32 i;
 
 	// for windows implementation see "os" package
-	if(Windows)
-		return;
-
+	if(Windows) return;
+	// 为s参数列表分配空间
 	s = runtime·malloc(argc*sizeof s[0]);
 	for(i=0; i<argc; i++)
+		// 将argv[i]处的字符串构建为内置String对象并赋值给s[i]
+		// 那么问题来了...argv的值是在哪里赋的? 
 		s[i] = runtime·gostringnocopy(argv[i]);
 	os·Args.array = (byte*)s;
 	os·Args.len = argc;

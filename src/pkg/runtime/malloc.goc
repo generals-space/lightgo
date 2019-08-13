@@ -388,8 +388,7 @@ runtime·mallocinit(void)
 			p = (void*)(i<<40 | 0x00c0ULL<<32);
 			// 保留虚拟地址范围, 并未实际分配内存.
 			p = runtime·SysReserve(p, bitmap_size + spans_size + arena_size);
-			if(p != nil)
-				break;
+			if(p != nil) break;
 		}
 	}
 	if (p == nil) {

@@ -163,8 +163,7 @@ runtime·schedinit(void)
 
 	mstats.enablegc = 1;
 
-	if(raceenabled)
-		g->racectx = runtime·raceinit();
+	if(raceenabled) g->racectx = runtime·raceinit();
 }
 
 extern void main·init(void);
@@ -304,6 +303,7 @@ checkmcount(void)
 	}
 }
 
+// caller: runtime·schedinit(), runtime·allocm()
 static void
 mcommoninit(M *mp)
 {

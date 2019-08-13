@@ -493,7 +493,9 @@ enum
 	// GC不需要扫描目标对象(object指分配了空间的对象, Flag标记了object的状态)
 	FlagNoScan	= 1<<0,
 	FlagNoProfiling	= 1<<1,	// must not profile
-	FlagNoGC	= 1<<2,	// must not free or scan for pointers
+	// must not free or scan for pointers
+	// 禁止释放或是扫描目标指针
+	FlagNoGC	= 1<<2,	
 	FlagNoZero	= 1<<3, // don't zero memory
 	FlagNoInvokeGC	= 1<<4, // don't invoke GC
 };
