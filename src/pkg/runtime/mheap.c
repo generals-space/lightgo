@@ -58,7 +58,9 @@ RecordSpan(void *vh, byte *p)
 }
 
 // Initialize the heap; fetch memory using alloc.
-// 初始化堆内存, 使用alloc从OS申请初始内存.
+// 初始化堆内存, 使用alloc从OS申请初始内存. 
+// 构造mheap的free, large成员为初始的双向循环链表, 但实际只分配了一个表头, 没有真正的分配空间.
+// 然后就是调用runtime·MCentral_Init()初始化mcentral成员.
 // caller: malloc.goc -> runtime·mallocinit()
 // @param: *h runtime·mheap对象指针
 void

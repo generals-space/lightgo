@@ -195,12 +195,15 @@ void*	runtime·SysReserve(void *v, uintptr nbytes);
 // Malloc uses a FixAlloc wrapped around SysAlloc to manages its MCache and MSpan objects.
 // FixAlloc是一个简单的空闲列表分配器, 用于为固定大小的对象分配空间.
 // 其中的list成员为链表类型, 就是用来分配空间的.
+// Malloc引入FixAlloc对象封装SysAlloc, 只用来管理ta的MCache和MSpan对象.
+// ...实际上也只有heap的spanalloc和cachealloc两个成员是FixAlloc对象.
 // 
 // Memory returned by FixAlloc_Alloc is not zeroed.
 // The caller is responsible for locking around FixAlloc calls.
 // Callers can keep state in the object but the first word is
 // smashed by freeing and reallocating.
-// FixAlloc_Alloc()返回的内存空间并未清零, 调用者需要在调用FixAlloc相关函数时自行加锁.
+// FixAlloc_Alloc()返回的内存空间并未清零.
+// 调用者需要在调用FixAlloc_XXX相关函数时加锁.
 // 
 struct FixAlloc
 {
