@@ -10,6 +10,10 @@
 #include "arch_GOARCH.h"
 #include "malloc.h"
 
+// 当线程中mcache对象没有多余的内存时, 会调用此函数向mcentral获取一批内存块
+// 此函数只是runtime·MCentral_AllocList()的包装函数, 
+// 实际的获取操作在runtime·MCentral_AllocList()中.
+// caller: runtime·mallocgc()
 void
 runtime·MCache_Refill(MCache *c, int32 sizeclass)
 {
@@ -17,11 +21,12 @@ runtime·MCache_Refill(MCache *c, int32 sizeclass)
 
 	// Replenish using central lists.
 	l = &c->list[sizeclass];
-	if(l->list)
-		runtime·throw("MCache_Refill: the list is not empty");
+
+	if(l->list) runtime·throw("MCache_Refill: the list is not empty");
+
 	l->nlist = runtime·MCentral_AllocList(&runtime·mheap.central[sizeclass], &l->list);
-	if(l->list == nil)
-		runtime·throw("out of memory");
+
+	if(l->list == nil) runtime·throw("out of memory");
 }
 
 // Take n elements off l and return them to the central free list.

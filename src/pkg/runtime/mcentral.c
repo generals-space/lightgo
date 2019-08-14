@@ -34,14 +34,21 @@ runtime·MCentral_Init(MCentral *c, int32 sizeclass)
 // Return the number of objects allocated.
 // The objects are linked together by their first words.
 // On return, *pfirst points at the first object.
+// 从mcentral的空闲列表中分配一批对象, 返回对象的个数.
+// 这些对象组成一个链表, 返回时pfirst指向第一个对象的地址.
+// 这个函数只被runtime·MCache_Refill()调用, 
+// 是在线程的mcache没有多余的空间来分配对象时, 尝试从mcentral获取一批空闲空间.
+// ...从传入参数来看, 好像没说要获取多少? 看心情吗?
+// caller: runtime·MCache_Refill()
 int32
 runtime·MCentral_AllocList(MCentral *c, MLink **pfirst)
 {
 	MSpan *s;
 	int32 cap, n;
-
+	// mcentral被多线程共享, 所以从mcentral获取内存时需要加锁
 	runtime·lock(c);
 	// Replenish central list if empty.
+	// 如果mcentral中也没有空闲空间时, 就从堆中获取, 补充自身.
 	if(runtime·MSpanList_IsEmpty(&c->nonempty)) {
 		if(!MCentral_Grow(c)) {
 			runtime·unlock(c);

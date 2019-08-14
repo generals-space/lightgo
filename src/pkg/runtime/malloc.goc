@@ -280,10 +280,9 @@ runtime·allocmcache(void)
 
 	// Set first allocation sample size.
 	rate = runtime·MemProfileRate;
-	if(rate > 0x3fffffff)	// make 2*rate not overflow
-		rate = 0x3fffffff;
-	if(rate != 0)
-		c->next_sample = runtime·fastrand1() % (2*rate);
+	// make 2*rate not overflow
+	if(rate > 0x3fffffff) rate = 0x3fffffff;
+	if(rate != 0) c->next_sample = runtime·fastrand1() % (2*rate);
 
 	return c;
 }
@@ -448,6 +447,10 @@ runtime·mallocinit(void)
 
 	// Initialize the rest of the allocator.
 	// MHeap_Init()位于mheap.c
+	// 在runtime·MHeap_Init()对mheap->cachealloc成员执行了runtime·FixAlloc_Init()
+	// 将其初始化为FixAlloc对象, 而且没有指定first函数, 实际上没有其他任何操作.
+	// 其实对mheap->cachealloc成员的分配操作是在runtime·allocmcache()函数中执行的,
+	// 此函数调用了runtime·FixAlloc_Alloc()为其分配空间并清零.
 	runtime·MHeap_Init(&runtime·mheap);
 	// 为当前线程创建cache(mcache存在于每个线程中, 并不是在堆上)
 	m->mcache = runtime·allocmcache();
