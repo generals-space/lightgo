@@ -157,6 +157,9 @@ struct	Lock
 	// Futex-based impl treats it as uint32 key,
 	// while sema-based impl as M* waitm.
 	// Used to be a union, but unions break precise GC.
+	// 基于futex的实现将key看作uint32的key, 
+	// 而基于信号量的实现会将其看作M* waitm (...这tm什么玩意?)
+	// 之前是union联合对象, 但是unions会打断精准GC (性能问题吧?)
 	uintptr	key;
 };
 struct	Note
@@ -889,10 +892,22 @@ void	runtime·starttheworld(void);
 extern uint32 runtime·worldsema;
 
 /*
- * mutual exclusion locks.  in the uncontended case,
+ * mutual exclusion locks. 
+ * in the uncontended case,
  * as fast as spin locks (just a few user-level instructions),
  * but on the contention path they sleep in the kernel.
  * a zeroed Lock is unlocked (no need to initialize each lock).
+ * 互斥锁Mutex实现
+ * 在没有竞争的情况下, 与自旋锁一样快(只有一些用户层的操作),
+ * 但存在竞争时, ta会在内核层休眠.
+ * 0值Lock实例对象是没有加锁的(没必要对Lock实例对象进行初始化)
+ * 目前看到两处runtime·lock的实现: lock_futex.c, lock_sema.c
+ * 编译时, 不同的系统平台会选择不同的方式, 
+ * linux, freebsd, dragonfly选择futex实现
+ * darwin netbsd openbsd plan9 windows选择信号量实现.
+ *
+ * 不过很奇怪, lock/unlock函数的参数是什么?
+ * 在主调函数里参数类型都是一个地址, 难道能和Lock*类型相互转换?
  */
 void	runtime·lock(Lock*);
 void	runtime·unlock(Lock*);
