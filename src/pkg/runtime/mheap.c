@@ -72,6 +72,7 @@ runtime·MHeap_Init(MHeap *h)
 	runtime·FixAlloc_Init(&h->cachealloc, sizeof(MCache), nil, nil, &mstats.mcache_sys);
 	// h->mapcache needs no init
 	// runtime·MSpanList_Init()只是将目标对象初始化为空的双向链表, 没有额外操作.
+	// 按照MHeap中对free的定义: `MSpan free[MaxMHeapList]`, free数组可容纳256个双向链表.
 	for(i=0; i<nelem(h->free); i++) runtime·MSpanList_Init(&h->free[i]);
 
 	runtime·MSpanList_Init(&h->large);

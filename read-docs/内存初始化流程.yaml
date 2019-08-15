@@ -1,0 +1,32 @@
+runtime·mallocinit():
+    description: 内存初始化
+    stack:
+        runtime·InitSizes():
+            description: 初始化用于分配小对象的span的size <-> class映射表
+
+        runtime·MHeap_Init():
+            description: ""
+            stack:
+                runtime·FixAlloc_Init(&mheap->spanalloc):
+                    description: ""
+                runtime·FixAlloc_Init(&mheap->cachealloc):
+                    description: ""
+
+                runtime·MSpanList_Init(&mheap->free):
+                    description: 初始化为空的双向链表. free是一个256个成员的数组, 即可容纳256个双向链表
+                runtime·MSpanList_Init(&mheap->large):
+                    description: 初始化为空的双向链表, ...large只有一个
+                
+                runtime·MCentral_Init(&mheap->central):
+                    description: ""
+                    stack:
+                        runtime·MSpanList_Init(&mcentral->nonempty):
+                            description: 初始化为空的双向链表
+                        runtime·MSpanList_Init(&mcentral->empty):
+                            description: 初始化为空的双向链表
+
+        runtime·allocmcache():
+            description: ""
+            stack:
+                runtime·FixAlloc_Alloc(mheap.cachealloc):
+                    description: 为mheap->mcahce分配空间
