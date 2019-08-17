@@ -32,7 +32,8 @@ extern volatile intgo runtime·MemProfileRate;
 // If the block will be freed with runtime·free(), typ must be 0.
 // 小对象由每个线程(m对象)的cache中的空闲列表(mcache)中分配.
 // 大对象(大于32k)直接从堆中分配.
-// 如果分配的块之后需要使用runtime·free()释放, 则typ参数必须指定为0.
+// 如果分配的块之后需要调用runtime·free()手动释放(即不由GC操作来回收空间), 
+// 则typ参数必须指定为0, 而此时flag一般为FlagNoInvokeGC.
 void*
 runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 {
@@ -53,6 +54,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	}
 	// m在runtime.h中声明, 也是全局变量, m是M类型的列表对象.
 	if(m->mallocing) runtime·throw("malloc/free - deadlock");
+
 	// Disable preemption during settype_flush.
 	// We can not use m->mallocing for this, because settype_flush calls mallocgc.
 	m->locks++;
@@ -69,19 +71,23 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		else sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
 		// 这里的size与前面的size大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
 		size = runtime·class_to_size[sizeclass];
+		// 先从当前线程的mcache中分配
 		l = &c->list[sizeclass];
 		// 如果list中已经没有成员(分配一个成员就会从list中移除), 从堆中的central空间中拿一些过来.
 		if(l->list == nil) runtime·MCache_Refill(c, sizeclass);
 
+		// ...mcache的span链表分配小对象, 相当于直接从链表中移除了一个成员啊...那之后怎么跟踪啊??? GC怎么办???
 		v = l->list;
 		l->list = v->next;
 		l->nlist--;
 		if(!(flag & FlagNoZero)) {
 			v->next = nil;
 			// block is zeroed iff second word is zero ...
+			// 目标块地址v的第2个成员为空, 就表示整个块已清零, 不需要调用runtime·memclr()
 			if(size > sizeof(uintptr) && ((uintptr*)v)[1] != 0)
 				runtime·memclr((byte*)v, size);
 		}
+		// 记录已经分配的大小.
 		c->local_cachealloc += size;
 	} else {
 		// TODO(rsc): Report tracebacks for very large allocations.
@@ -154,6 +160,9 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	return v;
 }
 
+// 由于使用了FlagNoInvokeGC标记, 
+// 通过此函数分配的空间都是由调用者再通过runtime·free()释放的,
+// 而不是通过GC来回收.
 void*
 runtime·malloc(uintptr size)
 {
@@ -161,6 +170,7 @@ runtime·malloc(uintptr size)
 }
 
 // Free the object whose base pointer is v.
+// 释放指向地址v的对象
 void
 runtime·free(void *v)
 {
@@ -175,8 +185,7 @@ runtime·free(void *v)
 	// If you change this also change mgc0.c:/^sweep,
 	// which has a copy of the guts of free.
 
-	if(m->mallocing)
-		runtime·throw("malloc/free - deadlock");
+	if(m->mallocing) runtime·throw("malloc/free - deadlock");
 	m->mallocing = 1;
 
 	if(!runtime·mlookup(v, nil, nil, &s)) {
@@ -214,8 +223,7 @@ runtime·free(void *v)
 		c->local_nsmallfree[sizeclass]++;
 		runtime·MCache_Free(c, v, sizeclass, size);
 	}
-	if(prof)
-		runtime·MProf_Free(v, size);
+	if(prof) runtime·MProf_Free(v, size);
 	m->mallocing = 0;
 }
 
@@ -455,6 +463,7 @@ runtime·mallocinit(void)
 	// 为当前线程创建cache(mcache存在于每个线程中, 并不是在堆上)
 	m->mcache = runtime·allocmcache();
 
+	// 貌似直到这里, mheap的free列表中各个span链表都还是空的, 并未分配过空间啊...
 	// See if it works.
 	// ...先分配一个1byte的对象(参数1即对象size为1), 再回收
 	runtime·free(runtime·malloc(1));

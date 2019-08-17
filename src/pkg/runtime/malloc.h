@@ -112,6 +112,7 @@ enum
 	MaxSmallSize = 32<<10,
 
 	// Chunk size for FixAlloc
+	// FixAlloc对象chunk成员的固定大小, 16k.
 	FixAllocChunk = 16<<10,
 	// Maximum page length for fixed-size list in MHeap.
 	// MHeap中定长列表的最大页长度, 
@@ -374,8 +375,12 @@ struct MSpan
 {
 	MSpan	*next;		// in a span linked list
 	MSpan	*prev;		// in a span linked list
-	PageID	start;		// starting page number
-	uintptr	npages;		// number of pages in span
+	// starting page number
+	// 起始页的页号...应该是可以推算出来的. start << PageShift可以用来表示真正的内存地址.
+	PageID	start;		
+	// number of pages in span
+	// 该span中页的数量, 同一sizeclass的MSpan对象中npages的值相同.
+	uintptr	npages;		
 	MLink	*freelist;	// list of free objects
 	uint32	ref;		// number of allocated objects in this span
 	int32	sizeclass;	// size class
@@ -500,7 +505,9 @@ enum
 	// 禁止释放或是扫描目标指针
 	FlagNoGC	= 1<<2,	
 	FlagNoZero	= 1<<3, // don't zero memory
-	FlagNoInvokeGC	= 1<<4, // don't invoke GC
+	// don't invoke GC
+	// 不引入GC...意思是此次分配的空间不需要通过GC回收吧, 应该是想要手动释放的.
+	FlagNoInvokeGC	= 1<<4, 
 };
 
 void	runtime·MProf_Malloc(void*, uintptr);

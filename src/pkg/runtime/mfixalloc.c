@@ -38,23 +38,30 @@ runtime·FixAlloc_Alloc(FixAlloc *f)
 		runtime·printf("runtime: use of FixAlloc_Alloc before FixAlloc_Init\n");
 		runtime·throw("runtime: internal error");
 	}
-
+	// 如果list不为空, 就直接拿一个内存块返回.
 	if(f->list) {
 		v = f->list;
 		f->list = *(void**)f->list;
 		f->inuse += f->size;
 		return v;
 	}
+	// 如果list为空, 就把焦点转移到chunk上去.
+
+	// 如果chunk剩余的空间不足, 就从操作系统再申请FixAllocChunk大小的空间, 并重新计算.
 	if(f->nchunk < f->size) {
 		f->chunk = runtime·persistentalloc(FixAllocChunk, 0, f->stat);
 		f->nchunk = FixAllocChunk;
 	}
+
 	v = f->chunk;
-	if(f->first)
-		f->first(f->arg, v);
+	
+	if(f->first) f->first(f->arg, v);
+	
+	// 记录分配数据
 	f->chunk += f->size;
 	f->nchunk -= f->size;
 	f->inuse += f->size;
+	
 	return v;
 }
 

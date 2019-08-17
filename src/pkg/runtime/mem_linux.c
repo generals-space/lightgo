@@ -86,6 +86,8 @@ runtime·SysUnused(void *v, uintptr n)
 	runtime·madvise(v, n, MADV_DONTNEED);
 }
 
+// 除了windows, 其他类unix系统如MacOS, netbsd, openbsd等都是如下的USED(), 
+// 实际上相当于什么都不做.
 void
 runtime·SysUsed(void *v, uintptr n)
 {

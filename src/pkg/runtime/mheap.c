@@ -26,6 +26,9 @@ static MSpan *BestFit(MSpan*, uintptr, MSpan*);
 // caller: runtime·MHeap_Init()
 // 这个函数只在其他地址出现了一次, 但并不是只调用一次, 
 // 因为ta是作为成员函数被嵌入了heap->spanalloc对象
+// 实际会在runtime·FixAlloc_Alloc()函数中调用. 调用时, 
+// 参数vh是FixAlloc对象的args成员地址(按照ta唯一一次初始化所写的, vh其实是mheap的地址), 
+// 参数p是FixAlloc对象的chunk成员地址(chunk类型其实是byte*, 这里直接当作MSpan*来用了).
 static void
 RecordSpan(void *vh, byte *p)
 {
@@ -99,14 +102,23 @@ runtime·MHeap_MapSpans(MHeap *h)
 
 // Allocate a new span of npage pages from the heap
 // and record its size class in the HeapMap and HeapMapCache.
+// 从heap分配一组大小为npage个页的空间, 
+// 并且在HeapMap和HeapMapCache记录其size等级...
+// 超过32k的对象才从heap分配, 哪还有size等级???
+// 好吧, 在runtime·mallocgc()中调用时的确是为大对象分配空间, 而且sizeclass值指定为0.
+// caller: runtime·mallocgc(), MCentral_Grow()
 MSpan*
 runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed)
 {
 	MSpan *s;
-
+	// 由于heap是被所有线程共享的, 所以对heap的操作需要加锁.
 	runtime·lock(h);
+	// ...从mcache分配小于32k对象时会记录在mcahe的local_cachealloc, 但这里是什么意思? 
+	// 是把从mcache中分配的空间全部记算到mheap的头上, 之后归还空间的时候直接还给mheap?
+	// 好像也不是不可以, 毕竟从mcache分配空间时, 直接把内存块从mcache下链表中移除了...
 	mstats.heap_alloc += m->mcache->local_cachealloc;
 	m->mcache->local_cachealloc = 0;
+
 	s = MHeap_AllocLocked(h, npage, sizeclass);
 	if(s != nil) {
 		mstats.heap_inuse += npage<<PageShift;
@@ -121,6 +133,8 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 	return s;
 }
 
+// 只有一处调用, 看来是在runtime·MHeap_Alloc()先加锁, 实际的操作在这里啊.
+// caller: MHeap_AllocLocked()
 static MSpan*
 MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 {
@@ -130,6 +144,7 @@ MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 
 	// Try in fixed-size lists up to max.
 	for(n=npage; n < nelem(h->free); n++) {
+		// 如果当前span链表不为空.
 		if(!runtime·MSpanList_IsEmpty(&h->free[n])) {
 			s = h->free[n].next;
 			goto HaveSpan;
@@ -138,54 +153,60 @@ MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 
 	// Best fit in list of large spans.
 	if((s = MHeap_AllocLarge(h, npage)) == nil) {
-		if(!MHeap_Grow(h, npage))
-			return nil;
-		if((s = MHeap_AllocLarge(h, npage)) == nil)
-			return nil;
+		if(!MHeap_Grow(h, npage)) return nil;
+		if((s = MHeap_AllocLarge(h, npage)) == nil) return nil;
 	}
 
 HaveSpan:
 	// Mark span in use.
-	if(s->state != MSpanFree)
-		runtime·throw("MHeap_AllocLocked - MSpan not free");
-	if(s->npages < npage)
-		runtime·throw("MHeap_AllocLocked - bad npages");
+	// 标记该span对象为MSpanInUse状态, 并从free的这个span链表中移除.
+	if(s->state != MSpanFree) runtime·throw("MHeap_AllocLocked - MSpan not free");
+	if(s->npages < npage) runtime·throw("MHeap_AllocLocked - bad npages");
 	runtime·MSpanList_Remove(s);
 	s->state = MSpanInUse;
+
+	// 记录此次分配的内存空间数据变化
 	mstats.heap_idle -= s->npages<<PageShift;
 	mstats.heap_released -= s->npreleased<<PageShift;
 	if(s->npreleased > 0) {
-		// We have called runtime·SysUnused with these pages, and on
-		// Unix systems it called madvise.  At this point at least
-		// some BSD-based kernels will return these pages either as
-		// zeros or with the old data.  For our caller, the first word
-		// in the page indicates whether the span contains zeros or
-		// not (this word was set when the span was freed by
-		// MCentral_Free or runtime·MCentral_FreeSpan).  If the first
-		// page in the span is returned as zeros, and some subsequent
-		// page is returned with the old data, then we will be
-		// returning a span that is assumed to be all zeros, but the
-		// actual data will not be all zeros.  Avoid that problem by
-		// explicitly marking the span as not being zeroed, just in
-		// case.  The beadbead constant we use here means nothing, it
-		// is just a unique constant not seen elsewhere in the
-		// runtime, as a clue in case it turns up unexpectedly in
-		// memory or in a stack trace.
+		// We have called runtime·SysUnused with these pages, 
+		// and on Unix systems it called madvise. 
+		// 我们对这些页已经调用过runtime·SysUnused()处理, 在Unix系统中其实就是简单的调用了runtime·madvise()
+		// At this point at least some BSD-based kernels will return these pages 
+		// either as zeros or with the old data.  
+		// For our caller, the first word in the page indicates whether the span contains zeros or not 
+		// (this word was set when the span was freed by MCentral_Free or runtime·MCentral_FreeSpan). 
+		// 对我们的调用者而言, 页的第一个字(word)表示该span的内容是否被清零
+		// (这个字(word)在对span对象调用MCentral_Free()或runtime·MCentral_FreeSpan()释放时设置)
+		// If the first page in the span is returned as zeros, 
+		// and some subsequent page is returned with the old data, 
+		// then we will be returning a span that is assumed to be all zeros, 
+		// but the actual data will not be all zeros. 
+		// 如果span的第一页存放的是0值, 即使之后的页却仍然保留着旧数据, 
+		// 那我们也将假设返回的span已经被清零过, 实际上并不一定是.
+		// Avoid that problem by explicitly marking the span as not being zeroed, just in case. 
+		// 以防万一, 我们显式得将span对象标记为未清零状态, 以避免这个问题.
+		// The beadbead constant we use here means nothing, 
+		// it is just a unique constant not seen elsewhere in the runtime, 
+		// as a clue in case it turns up unexpectedly in memory or in a stack trace.
+		// beadbead常量没什么特殊的含义, 只是在runtime时的一个唯一值, 
+		// 在出现内存异常或是在堆栈跟踪时可以作为一个排查线索.
 		runtime·SysUsed((void*)(s->start<<PageShift), s->npages<<PageShift);
 		*(uintptr*)(s->start<<PageShift) = (uintptr)0xbeadbeadbeadbeadULL;
 	}
 	s->npreleased = 0;
 
+	// 找到的span对象包含的页数可能多于期望值, 此时需要将多余的页放回heap.
 	if(s->npages > npage) {
 		// Trim extra and put it back in the heap.
+		// mheap->spanalloc在runtime·FixAlloc_Init()时指定了first函数为RecordSpan, 
+		// 此时就可以用上了.
 		t = runtime·FixAlloc_Alloc(&h->spanalloc);
 		runtime·MSpan_Init(t, s->start + npage, s->npages - npage);
 		s->npages = npage;
 		p = t->start;
-		if(sizeof(void*) == 8)
-			p -= ((uintptr)h->arena_start>>PageShift);
-		if(p > 0)
-			h->spans[p-1] = s;
+		if(sizeof(void*) == 8) p -= ((uintptr)h->arena_start>>PageShift);
+		if(p > 0) h->spans[p-1] = s;
 		h->spans[p] = t;
 		h->spans[p+t->npages-1] = t;
 		*(uintptr*)(t->start<<PageShift) = *(uintptr*)(s->start<<PageShift);  // copy "needs zeroing" mark
@@ -195,16 +216,13 @@ HaveSpan:
 	}
 	s->unusedsince = 0;
 
-	// Record span info, because gc needs to be
-	// able to map interior pointer to containing span.
+	// Record span info, because gc needs to be able to map interior pointer to containing span.
 	s->sizeclass = sizeclass;
 	s->elemsize = (sizeclass==0 ? s->npages<<PageShift : runtime·class_to_size[sizeclass]);
 	s->types.compression = MTypes_Empty;
 	p = s->start;
-	if(sizeof(void*) == 8)
-		p -= ((uintptr)h->arena_start>>PageShift);
-	for(n=0; n<npage; n++)
-		h->spans[p+n] = s;
+	if(sizeof(void*) == 8) p -= ((uintptr)h->arena_start>>PageShift);
+	for(n=0; n<npage; n++) h->spans[p+n] = s;
 	return s;
 }
 
