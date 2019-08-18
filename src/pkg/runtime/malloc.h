@@ -421,6 +421,9 @@ void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, ML
 // Main malloc heap.
 // The heap itself is the "free[]" and "large" arrays,
 // but all the other global data is here too.
+// 堆
+// heap本身只存储free[]数组和large, 应该就是arena区域.
+// 但是其他全局数据也存储在这里, 应该是挂的指针, 比如spans, bitmap
 struct MHeap
 {
 	Lock;

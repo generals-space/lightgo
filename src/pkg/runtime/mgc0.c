@@ -23,7 +23,11 @@ enum {
 	IgnorePreciseGC = 0,
 
 	// Four bits per word (see #defines below).
+	// 这里的word指一个指针的大小, 8 bytes, 也即64 bits.
+	// bitmap:heap == 1:16
+	// wordsPerBitmapWord = 16
 	wordsPerBitmapWord = sizeof(void*)*8/4,
+	// bitShift = 16
 	bitShift = sizeof(void*)*8/4,
 
 	handoffThreshold = 4,
@@ -45,31 +49,67 @@ enum {
 // Bits in per-word bitmap.
 // #defines because enum might not be able to hold the values.
 //
-// Each word in the bitmap describes wordsPerBitmapWord words
-// of heap memory.  There are 4 bitmap bits dedicated to each heap word,
+// Each word in the bitmap describes wordsPerBitmapWord words of heap memory. 
+// bitmap中的每个字(word)都描述了堆内存中wordsPerBitmapWord(即16)个字.
+// There are 4 bitmap bits dedicated to each heap word,
 // so on a 64-bit system there is one bitmap word per 16 heap words.
-// The bits in the word are packed together by type first, then by
-// heap location, so each 64-bit bitmap word consists of, from top to bottom,
+// 堆中的每个字, 都可以用bitmap区域中4 bit唯一指定, 
+// 所以在64位系统中, bitmap区域中一个字可以指定16个堆中的字.
+// The bits in the word are packed together by type first, then by heap location, 
+// so each 64-bit bitmap word consists of, from top to bottom,
 // the 16 bitSpecial bits for the corresponding heap words, then the 16 bitMarked bits,
 // then the 16 bitNoScan/bitBlockBoundary bits, then the 16 bitAllocated bits.
 // This layout makes it easier to iterate over the bits of a given type.
-//
-// The bitmap starts at mheap.arena_start and extends *backward* from
-// there.  On a 64-bit system the off'th word in the arena is tracked by
-// the off/16+1'th word before mheap.arena_start.  (On a 32-bit system,
-// the only difference is that the divisor is 8.)
-//
+// 字中的bit位填充, 首先表示目标类型, 之后的表示处于堆的位置.
+// 所以在bitmap中每个64-bit的字(一个字就是一个指针, 8 bytes, 也即64 bits)的组成, 从上到下依次为, 
+// 16个bitSpecial, 用于表示指定的heap中的字, 然后是16个bitMarked,
+// 还有16个bitNoScan/bitBlockBoundary, 然后是16个bitAllocated.
+// 这样的布局使得迭代一个指定类型的bit位时更加容易.
+// The bitmap starts at mheap.arena_start and extends *backward* from there. 
+// On a 64-bit system the off'th word in the arena is tracked by
+// the off/16+1'th word before mheap.arena_start. 
+// (On a 32-bit system, the only difference is that the divisor is 8.)
+// bitmap区域从mheap.arena_start开始, 并且向后扩展.
+// 在64位系统中, arena区域的第off个字, 可以通过mheap.arena_start前
+// (就是bitmap区域了)的第(off/16+1)个字查询到.
 // To pull out the bits corresponding to a given pointer p, we use:
 //
+// p为某个对象在arena区域所占空间的起始地址, off的单位应该是指针数量.
+// b则表示bitmap中相应字的位置(应该是以字为单位, 毕竟其实也是指针大小)
 //	off = p - (uintptr*)mheap.arena_start;  // word offset
 //	b = (uintptr*)mheap.arena_start - off/wordsPerBitmapWord - 1;
 //	shift = off % wordsPerBitmapWord
-//	bits = *b >> shift;
+//	bits = *b >> shift; // 注意这里对b用*做取值操作.
 //	/* then test bits & bitAllocated, bits & bitMarked, etc. */
 //
+// 下图可以分析出off与b的计算方法, x1表示1个字的大小
+//     * bitmap *|********************** arena *************************
+//     +----+----|--------------------------+--------------------------+
+//     | x1 | x1 |            x16           |            x16           |
+//     +----+----|--------------------------+--------------------------+
+//        |   └────────────────┘                          ↑
+//        └───────────────────────────────────────────────┘
+//
+// 下面可以分析出shift的计算方法, shift是指在bitmap中的一个字中, 指向目标heap中字的那4 bit的偏移量.
+// 而bits则是那4 bit的位置
+//                bitmap                  |       arena
+//                                        |
+// | <------------x1-------------> |      |         | <----------x1----------> | <----------x1----------> | <----------x1----------> |
+// |                               |      |         |                          |                          |                          |
+// +---|---+---|---+---|---+---|---+------|---------+--------------------------+--------------------------+--------------------------+
+// |   |   |   |  ...  |   | 4b| 4b|......|   ...   |                          |                          |                          |
+// +---|---+---|---+---|-|-+-|-|---+------|---------+--------------------------+--------------------------+--------------------------+
+//                       |   |   └────────────────────────────────┘                          ↑                            ↑
+//                       |   └───────────────────────────────────────────────────────────────┘                            |
+//                       └────────────────────────────────────────────────────────────────────────────────────────────────┘
+//
+// 0000 0000 0000 0001
 #define bitAllocated		((uintptr)1<<(bitShift*0))
+// 0000 0000 0001 0000
 #define bitNoScan		((uintptr)1<<(bitShift*1))	/* when bitAllocated is set */
+// 0000 0001 0000 0000
 #define bitMarked		((uintptr)1<<(bitShift*2))	/* when bitAllocated is set */
+// 0001 0000 0000 0000
 #define bitSpecial		((uintptr)1<<(bitShift*3))	/* when bitAllocated is set - has finalizer or being profiled */
 #define bitBlockBoundary	((uintptr)1<<(bitShift*1))	/* when bitAllocated is NOT set */
 
@@ -2331,21 +2371,22 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 {
 	uintptr *b, obits, bits, off, shift;
 
-	if(0)
-		runtime·printf("markallocated %p+%p\n", v, n);
-
+	if(0) runtime·printf("markallocated %p+%p\n", v, n);
+	// 如果v+n的区域超出了arena部分, 则抛出异常.
 	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markallocated: bad pointer");
-
+	
+	// 起始地址距arena开始处的偏移量
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;  // word offset
+	// 这是计算映射在bitmap区域中的位置.
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
 	shift = off % wordsPerBitmapWord;
 
 	for(;;) {
 		obits = *b;
 		bits = (obits & ~(bitMask<<shift)) | (bitAllocated<<shift);
-		if(noscan)
-			bits |= bitNoScan<<shift;
+		if(noscan) bits |= bitNoScan<<shift;
+
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
@@ -2358,6 +2399,7 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 }
 
 // mark the block at v of size n as freed.
+// 标记从地址v开始, 大小为n的内存块为空闲状态.
 void
 runtime·markfreed(void *v, uintptr n)
 {

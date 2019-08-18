@@ -109,16 +109,16 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		// 在mgc0.c文件中定义
 		runtime·markspan(v, 0, 0, true);
 	}
-	// 如果flag不包括FlagNoGC标识位
+	// 如果flag不包括FlagNoGC标识位, 说明该空间需要被GC, 所以将其标记.
 	if(!(flag & FlagNoGC))
-		// 如果flag包括FlagNoScan标识位, 则设置此内存块为noscan类型(即不包含指针, GC时无需从此处开始寻找释放对象).
+		// 设置此内存块为noscan类型(即不包含指针, GC时无需从此处开始寻找释放对象).
 		runtime·markallocated(v, size, (flag&FlagNoScan) != 0);
 
 	if(DebugTypeAtBlockEnd)
 		*(uintptr*)((uintptr)v+size-sizeof(uintptr)) = typ;
 
-	// TODO: save type even if FlagNoScan?  Potentially expensive but might help
-	// heap profiling/tracing.
+	// TODO: save type even if FlagNoScan? 
+	// Potentially expensive but might help heap profiling/tracing.
 	if(UseSpanType && !(flag & FlagNoScan) && typ != 0) {
 		uintptr *buf, i;
 
@@ -133,19 +133,17 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	if(UseSpanType && !(flag & FlagNoScan) && typ != 0 && m->settype_bufsize == nelem(m->settype_buf))
 		runtime·settype_flush(m);
 	m->locks--;
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
+	// restore the preemption request in case we've cleared it in newstack
+	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 
 	if(!(flag & FlagNoProfiling) && (rate = runtime·MemProfileRate) > 0) {
-		if(size >= rate)
-			goto profile;
-		if(m->mcache->next_sample > size)
-			m->mcache->next_sample -= size;
+		if(size >= rate) goto profile;
+		if(m->mcache->next_sample > size) m->mcache->next_sample -= size;
 		else {
 			// pick next profile time
 			// If you change this, also change allocmcache.
-			if(rate > 0x3fffffff)	// make 2*rate not overflow
-				rate = 0x3fffffff;
+			// make 2*rate not overflow
+			if(rate > 0x3fffffff) rate = 0x3fffffff;
 			m->mcache->next_sample = runtime·fastrand1() % (2*rate);
 		profile:
 			runtime·setblockspecial(v, true);

@@ -54,9 +54,10 @@ runtime·FixAlloc_Alloc(FixAlloc *f)
 	}
 
 	v = f->chunk;
-	
+	// 从chunk中获取size大小的空间, 并记录.
+	// 只有在初始化mheap->spanalloc时指定过first函数, 且arg参数为mheap本身.
 	if(f->first) f->first(f->arg, v);
-	
+
 	// 记录分配数据
 	f->chunk += f->size;
 	f->nchunk -= f->size;
