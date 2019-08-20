@@ -144,8 +144,9 @@ enum
 
 	// Max number of threads to run garbage collection.
 	// 2, 3, and 4 are all plausible maximums depending
-	// on the hardware details of the machine.  The garbage
-	// collector scales well to 8 cpus.
+	// on the hardware details of the machine. 
+	// The garbage collector scales well to 8 cpus.
+	// 可执行GC的最大线程数.
 	MaxGcproc = 8,
 };
 
@@ -238,7 +239,9 @@ struct MStats
 
 	// Statistics about malloc heap.
 	// protected by mheap.Lock
-	uint64	heap_alloc;	// bytes allocated and still in use
+
+	// bytes allocated and still in use
+	uint64	heap_alloc;	
 	uint64	heap_sys;	// bytes obtained from system
 	uint64	heap_idle;	// bytes in idle spans
 	uint64	heap_inuse;	// bytes in non-idle spans
@@ -259,8 +262,14 @@ struct MStats
 
 	// Statistics about garbage collector.
 	// Protected by mheap or stopping the world during GC.
-	uint64	next_gc;	// next GC (in heap_alloc time)
-	uint64  last_gc;	// last GC (in absolute time)
+
+	// next GC (in heap_alloc time)
+	// 下一次GC触发的时间...好像不能说是时间, 而是空间吧.
+	// 这个值总是用来与heap_alloc做比较
+	uint64	next_gc;
+	// last GC (in absolute time)
+	// GC完成时通过runtime·nanotime()获取到的系统时间.
+	uint64  last_gc;
 	uint64	pause_total_ns;
 	uint64	pause_ns[256];
 	uint32	numgc;
@@ -528,7 +537,9 @@ enum
 	TypeInfo_Array = 1,
 	TypeInfo_Chan = 2,
 
-	// Enables type information at the end of blocks allocated from heap	
+	// Enables type information at the end of blocks allocated from heap
+	// 这个值为1时, 在为对象分配空间时, 尾部会多出一个指针大小的空间, 用于存储type信息
+	// ...目前还没看到type信息的类型列表.
 	DebugTypeAtBlockEnd = 0,
 };
 

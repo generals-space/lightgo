@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Parallel for algorithm.
+// 并行算法.
 
 #include "runtime.h"
 #include "arch_GOARCH.h"
@@ -69,8 +70,7 @@ runtime·parforsetup(ParFor *desc, uint32 nthr, uint32 n, void *ctx, bool wait, 
 		begin = (uint64)n*i / nthr;
 		end = (uint64)n*(i+1) / nthr;
 		pos = &desc->thr[i].pos;
-		if(((uintptr)pos & 7) != 0)
-			runtime·throw("parforsetup: pos is not aligned");
+		if(((uintptr)pos & 7) != 0) runtime·throw("parforsetup: pos is not aligned");
 		*pos = (uint64)begin | (((uint64)end)<<32);
 	}
 }
@@ -101,8 +101,7 @@ runtime·parfordo(ParFor *desc)
 
 	// If single-threaded, just execute the for serially.
 	if(desc->nthr==1) {
-		for(i=0; i<desc->cnt; i++)
-			desc->body(desc, i);
+		for(i=0; i<desc->cnt; i++) desc->body(desc, i);
 		return;
 	}
 

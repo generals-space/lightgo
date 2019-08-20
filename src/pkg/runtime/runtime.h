@@ -252,7 +252,8 @@ struct	WinCallbackContext
 struct	G
 {
 	// stackguard0 can be set to StackPreempt as opposed to stackguard
-	uintptr	stackguard0;	// cannot move - also known to linker, libmach, runtime/cgo
+	// cannot move - also known to linker, libmach, runtime/cgo
+	uintptr	stackguard0;	
 	uintptr	stackbase;	// cannot move - also known to libmach, runtime/cgo
 	uint32	panicwrap;	// cannot move - also known to linker
 	uint32	selgen;		// valid sudog pointer
@@ -263,7 +264,8 @@ struct	G
 	uintptr	syscallsp;	// if status==Gsyscall, syscallsp = sched.sp to use during gc
 	uintptr	syscallpc;	// if status==Gsyscall, syscallpc = sched.pc to use during gc
 	uintptr	syscallguard;	// if status==Gsyscall, syscallguard = stackguard to use during gc
-	uintptr	stackguard;	// same as stackguard0, but not set to StackPreempt
+	// same as stackguard0, but not set to StackPreempt
+	uintptr	stackguard;	
 	uintptr	stack0;
 	uintptr	stacksize;
 	G*	alllink;	// on allg

@@ -116,10 +116,11 @@ enum {
 // 0001 0000 0000 0000
 #define bitSpecial		((uintptr)1<<(bitShift*3))	/* when bitAllocated is set - has finalizer or being profiled */
 #define bitBlockBoundary	((uintptr)1<<(bitShift*1))	/* when bitAllocated is NOT set */
-
+// 0001 0001 0000 0001
 #define bitMask (bitBlockBoundary | bitAllocated | bitMarked | bitSpecial)
 
 // Holding worldsema grants an M the right to try to stop the world.
+// 哪个M对象获取到了worldsema, 谁都拥有STW的权力
 // The procedure is:
 //
 //	runtime·semacquire(&runtime·worldsema);
@@ -204,7 +205,7 @@ static struct {
 	volatile uint32	nwait;
 	volatile uint32	ndone;
 	volatile uint32 debugmarkdone;
-	Note	alldone;
+	Note	alldone; // Note与Lock一样(...完全一样), 是分别基于futex/sema实现的锁吧
 	ParFor	*markfor;
 	ParFor	*sweepfor;
 
@@ -1549,6 +1550,8 @@ addfinroots(void *v)
 	addroot((Obj){base, size, 0});
 }
 
+// 这就是添加传说中的根节点吗?
+// caller: gc()
 static void
 addroots(void)
 {
@@ -1865,16 +1868,16 @@ runtime·gchelper(void)
 #define GcpercentUnknown (-2)
 
 // Initialized from $GOGC.  GOGC=off means no gc.
-//
+// 从环境变量GOGC进行初始化. GOGC=off表示不进行gc
 // Next gc is after we've allocated an extra amount of
 // memory proportional to the amount already in use.
-// If gcpercent=100 and we're using 4M, we'll gc again
-// when we get to 8M.  This keeps the gc cost in linear
-// proportion to the allocation cost.  Adjusting gcpercent
-// just changes the linear constant (and also the amount of
-// extra memory used).
+// If gcpercent=100 and we're using 4M, we'll gc again when we get to 8M. 
+// This keeps the gc cost in linear proportion to the allocation cost. 
+// Adjusting gcpercent just changes the linear constant 
+// (and also the amount of extra memory used).
 static int32 gcpercent = GcpercentUnknown;
 
+// caller: updatememstats(), gc()
 static void
 cachestats(void)
 {
@@ -1883,8 +1886,7 @@ cachestats(void)
 
 	for(pp=runtime·allp; p=*pp; pp++) {
 		c = p->mcache;
-		if(c==nil)
-			continue;
+		if(c==nil) continue;
 		runtime·purgecachedstats(c);
 	}
 }
@@ -1980,9 +1982,12 @@ updatememstats(GCStats *stats)
 
 // Structure of arguments passed to function gc().
 // This allows the arguments to be passed via runtime·mcall.
+// 传入gc()函数的的参数结构体(注意不是runtime·gc()),
+// 这允许通过runtime·mcall()传递参数.
 struct gc_args
 {
-	int64 start_time; // start time of GC in ns (just before stoptheworld)
+	// start time of GC in ns (just before stoptheworld)
+	int64 start_time; 
 };
 
 static void gc(struct gc_args *args);
@@ -1994,10 +1999,8 @@ readgogc(void)
 	byte *p;
 
 	p = runtime·getenv("GOGC");
-	if(p == nil || p[0] == '\0')
-		return 100;
-	if(runtime·strcmp(p, (byte*)"off") == 0)
-		return -1;
+	if(p == nil || p[0] == '\0') return 100;
+	if(runtime·strcmp(p, (byte*)"off") == 0) return -1;
 	return runtime·atoi(p);
 }
 
@@ -2010,56 +2013,75 @@ runtime·gc(int32 force)
 	int32 i;
 
 	// The atomic operations are not atomic if the uint64s
-	// are not aligned on uint64 boundaries. This has been
-	// a problem in the past.
+	// are not aligned on uint64 boundaries. 
+	// This has been a problem in the past.
+	// 在empty/full这两个uint64类型的成员没有在uint64边界上对齐时, 
+	// 原子操作其实并不原子...
+	// 这个问题在之前就出现了.
+	// 7 == 0111
+	// work对象在当前文件的开头定义(第200行左右)
 	if((((uintptr)&work.empty) & 7) != 0)
 		runtime·throw("runtime: gc work buffer is misaligned");
 	if((((uintptr)&work.full) & 7) != 0)
 		runtime·throw("runtime: gc work buffer is misaligned");
 
-	// The gc is turned off (via enablegc) until
-	// the bootstrap has completed.
+	// The gc is turned off (via enablegc) until the bootstrap has completed.
 	// Also, malloc gets called in the guts
-	// of a number of libraries that might be
-	// holding locks.  To avoid priority inversion
-	// problems, don't bother trying to run gc
-	// while holding a lock.  The next mallocgc
-	// without a lock will do the gc instead.
+	// of a number of libraries that might be holding locks. 
+	// To avoid priority inversion problems, 
+	// don't bother trying to run gc while holding a lock. 
+	// The next mallocgc without a lock will do the gc instead.
+	// 如下情况退出GC
+	// 1. enablegc == 0表示runtime还未启动完成, 这个值在runtime·schedinit()末尾才被赋值为1
+	// 2. 很多持有lock锁的库中会调用malloc, 为了避免优先级混乱的问题, 在持有锁的函数中就不要调用gc了.
+	// malloc下面的mallocgc可以在没有锁的情况下进行gc操作.
 	if(!mstats.enablegc || g == m->g0 || m->locks > 0 || runtime·panicking)
 		return;
 
-	if(gcpercent == GcpercentUnknown) {	// first time through
+	// first time through
+	// 首次调用(gcpercent初始值就是GcpercentUnknown)
+	if(gcpercent == GcpercentUnknown) {
 		runtime·lock(&runtime·mheap);
-		if(gcpercent == GcpercentUnknown)
-			gcpercent = readgogc();
+		// 第一次执行, 调用readgogc从环境变量中取GOGC设置. 
+		// GOGC为off时得到-1, 其他的默认情况下返回100
+		if(gcpercent == GcpercentUnknown) gcpercent = readgogc();
+
 		runtime·unlock(&runtime·mheap);
 	}
-	if(gcpercent < 0)
-		return;
+	// 当GOGC设置为off时, gcpercent的值将取-1
+	if(gcpercent < 0) return;
 
+	// gc STW前尝试获取全局锁
 	runtime·semacquire(&runtime·worldsema, false);
+
+	// 如果不强制gc, 而此时还没有next_gc的时间时, 就退出了...
 	if(!force && mstats.heap_alloc < mstats.next_gc) {
-		// typically threads which lost the race to grab
-		// worldsema exit here when gc is done.
+		// typically threads which lost the race to grab worldsema exit here when gc is done.
 		runtime·semrelease(&runtime·worldsema);
 		return;
 	}
 
-	// Ok, we're doing it!  Stop everybody else
+	// Ok, we're doing it! Stop everybody else
 	a.start_time = runtime·nanotime();
 	m->gcing = 1;
 	runtime·stoptheworld();
-	
-	// Run gc on the g0 stack.  We do this so that the g stack
-	// we're currently running on will no longer change.  Cuts
-	// the root set down a bit (g0 stacks are not scanned, and
-	// we don't need to scan gc's internal state).  Also an
-	// enabler for copyable stacks.
+
+	// Run gc on the g0 stack. 
+	// We do this so that the g stack we're currently running on will no longer change. 
+	// Cuts the root set down a bit (g0 stacks are not scanned, 
+	// and we don't need to scan gc's internal state). 
+	// Also an enabler for copyable stacks.
+	// GODEBUG="gotrace=2" 会引发两次回收
 	for(i = 0; i < (runtime·debug.gctrace > 1 ? 2 : 1); i++) {
 		// switch to g0, call gc(&a), then switch back
+		// 这其实就是runtime·mcall的作用
 		g->param = &a;
 		g->status = Gwaiting;
 		g->waitreason = "garbage collection";
+		// mgc上下面定义的函数名, 是实际执行GC的函数.
+		// runtime·mcall是汇编代码, 原型为void mcall(void (*fn)(G*))
+		// 作用是切换到m->g0的上下文, 并调用mgc(g).
+		// 注意参数g应该就是此处的局部变量g.
 		runtime·mcall(mgc);
 		// record a new start time in case we're going around again
 		a.start_time = runtime·nanotime();
@@ -2068,6 +2090,7 @@ runtime·gc(int32 force)
 	// all done
 	m->gcing = 0;
 	m->locks++;
+	// gc STW后释放全局锁
 	runtime·semrelease(&runtime·worldsema);
 	runtime·starttheworld();
 	m->locks--;
@@ -2088,6 +2111,8 @@ runtime·gc(int32 force)
 	runtime·gosched();
 }
 
+// caller: runtime·gc()
+// 在STW后调用
 static void
 mgc(G *gp)
 {
@@ -2123,11 +2148,10 @@ gc(struct gc_args *args)
 		obj0 = mstats.nmalloc - mstats.nfree;
 	}
 
-	m->locks++;	// disable gc during mallocs in parforalloc
-	if(work.markfor == nil)
-		work.markfor = runtime·parforalloc(MaxGcproc);
-	if(work.sweepfor == nil)
-		work.sweepfor = runtime·parforalloc(MaxGcproc);
+	// disable gc during mallocs in parforalloc
+	m->locks++;
+	if(work.markfor == nil) work.markfor = runtime·parforalloc(MaxGcproc);
+	if(work.sweepfor == nil) work.sweepfor = runtime·parforalloc(MaxGcproc);
 	m->locks--;
 
 	if(itabtype == nil) {
@@ -2139,8 +2163,10 @@ gc(struct gc_args *args)
 	work.nwait = 0;
 	work.ndone = 0;
 	work.debugmarkdone = 0;
+	// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, cpus, 8).
 	work.nproc = runtime·gcprocs();
 	addroots();
+	// 设置并⾏ mark、 sweep 属性, markroot与sweepspan都是函数
 	runtime·parforsetup(work.markfor, work.nproc, work.nroot, nil, false, markroot);
 	runtime·parforsetup(work.sweepfor, work.nproc, runtime·mheap.nspan, nil, true, sweepspan);
 	if(work.nproc > 1) {
@@ -2151,34 +2177,35 @@ gc(struct gc_args *args)
 	t1 = runtime·nanotime();
 
 	gchelperstart();
+	// 并行mark
 	runtime·parfordo(work.markfor);
 	scanblock(nil, nil, 0, true);
 
 	if(DebugMark) {
-		for(i=0; i<work.nroot; i++)
-			debug_scanblock(work.roots[i].p, work.roots[i].n);
+		for(i=0; i<work.nroot; i++) debug_scanblock(work.roots[i].p, work.roots[i].n);
 		runtime·atomicstore(&work.debugmarkdone, 1);
 	}
 	t2 = runtime·nanotime();
-
+	// 并行sweep
 	runtime·parfordo(work.sweepfor);
 	bufferList[m->helpgc].busy = 0;
 	t3 = runtime·nanotime();
 
-	if(work.nproc > 1)
-		runtime·notesleep(&work.alldone);
-
+	if(work.nproc > 1) runtime·notesleep(&work.alldone);
+	// 统计数据
 	cachestats();
+	// 计算下一次GC触发的时间...好像不能说是时间, 而是空间吧.
+	// next_gc总是与heap_alloc进行比较, 应该是每增长百分之gcpercent就进行一次GC吧.
 	mstats.next_gc = mstats.heap_alloc+mstats.heap_alloc*gcpercent/100;
 
 	t4 = runtime·nanotime();
-	mstats.last_gc = t4;
+	mstats.last_gc = t4; // 设置最近一次gc的时间(绝对时间)
 	mstats.pause_ns[mstats.numgc%nelem(mstats.pause_ns)] = t4 - t0;
 	mstats.pause_total_ns += t4 - t0;
-	mstats.numgc++;
-	if(mstats.debuggc)
-		runtime·printf("pause %D\n", t4-t0);
+	mstats.numgc++; // gc次数加1
+	if(mstats.debuggc) runtime·printf("pause %D\n", t4-t0);
 
+	// 打印gc调试信息
 	if(runtime·debug.gctrace) {
 		updatememstats(&stats);
 		heap1 = mstats.heap_alloc;
@@ -2380,22 +2407,27 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markallocated: bad pointer");
 	
-	// 起始地址距arena开始处的偏移量
+	// 起始地址距arena开始处的偏移量, 单位是字(即指针大小)
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;  // word offset
 	// 这是计算映射在bitmap区域中的位置.
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
 	shift = off % wordsPerBitmapWord;
 
 	for(;;) {
-		obits = *b;
+		// 取出在地址b处的描述字的值.
+		obits = *b; 
+		// 为obits设置bitMask和bitAllocated标记
 		bits = (obits & ~(bitMask<<shift)) | (bitAllocated<<shift);
+		// 如果noscan为true, 则设置bitNoScan标记
 		if(noscan) bits |= bitNoScan<<shift;
 
+		// 如果只有一个P, 可以直接为地址b赋值, 如果有多个, 则需要使用原子操作.
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
 		} else {
 			// more than one goroutine is potentially running: use atomic op
+			// 比较地址b处的值是否与obits相同, 如相同则将其替换为bits
 			if(runtime·casp((void**)b, (void*)obits, (void*)bits))
 				break;
 		}
@@ -2404,13 +2436,13 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 
 // mark the block at v of size n as freed.
 // 标记从地址v开始, 大小为n的内存块为空闲状态.
+// 操作流程与runtime·markallocated基本相同.
 void
 runtime·markfreed(void *v, uintptr n)
 {
 	uintptr *b, obits, bits, off, shift;
 
-	if(0)
-		runtime·printf("markfreed %p+%p\n", v, n);
+	if(0) runtime·printf("markfreed %p+%p\n", v, n);
 
 	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markfreed: bad pointer");
@@ -2421,6 +2453,7 @@ runtime·markfreed(void *v, uintptr n)
 
 	for(;;) {
 		obits = *b;
+		// 所以bitMask是干啥的?
 		bits = (obits & ~(bitMask<<shift)) | (bitBlockBoundary<<shift);
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;

@@ -128,8 +128,7 @@ runtime·notewakeup(Note *n)
 void
 runtime·notesleep(Note *n)
 {
-	if(g != m->g0)
-		runtime·throw("notesleep not on g0");
+	if(g != m->g0) runtime·throw("notesleep not on g0");
 	while(runtime·atomicload((uint32*)&n->key) == 0)
 		runtime·futexsleep((uint32*)&n->key, 0, -1);
 }

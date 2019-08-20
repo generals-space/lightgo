@@ -160,7 +160,8 @@ runtime·schedinit(void)
 	}
 	runtime·allp = runtime·malloc((MaxGomaxprocs+1)*sizeof(runtime·allp[0]));
 	procresize(procs);
-
+	// 正式开启GC. 这里表示runtime启动完成.
+	// 在runtime·gc()中会判断此值, 如果不为1, 就结束操作.
 	mstats.enablegc = 1;
 
 	if(raceenabled) g->racectx = runtime·raceinit();
@@ -343,10 +344,11 @@ runtime·ready(G *gp)
 	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0)  // TODO: fast atomic
 		wakep();
 	m->locks--;
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
+	// restore the preemption request in case we've cleared it in newstack
+	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 }
 
+// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, cpus, 8)
 int32
 runtime·gcprocs(void)
 {
@@ -354,14 +356,13 @@ runtime·gcprocs(void)
 
 	// Figure out how many CPUs to use during GC.
 	// Limited by gomaxprocs, number of actual CPUs, and MaxGcproc.
+	// 确定可用于GC操作的CPU数量, 三者中取最小值.
 	runtime·lock(&runtime·sched);
 	n = runtime·gomaxprocs;
-	if(n > runtime·ncpu)
-		n = runtime·ncpu;
-	if(n > MaxGcproc)
-		n = MaxGcproc;
-	if(n > runtime·sched.nmidle+1) // one M is currently running
-		n = runtime·sched.nmidle+1;
+	if(n > runtime·ncpu) n = runtime·ncpu;
+	if(n > MaxGcproc) n = MaxGcproc;
+	// one M is currently running
+	if(n > runtime·sched.nmidle+1) n = runtime·sched.nmidle+1;
 	runtime·unlock(&runtime·sched);
 	return n;
 }
@@ -390,12 +391,12 @@ runtime·helpgc(int32 nproc)
 
 	runtime·lock(&runtime·sched);
 	pos = 0;
-	for(n = 1; n < nproc; n++) {  // one M is currently running
-		if(runtime·allp[pos]->mcache == m->mcache)
-			pos++;
+	// one M is currently running
+	for(n = 1; n < nproc; n++) {  
+		if(runtime·allp[pos]->mcache == m->mcache) pos++;
+		// 从sched获取一个空闲的m对象
 		mp = mget();
-		if(mp == nil)
-			runtime·throw("runtime·gcprocs inconsistency");
+		if(mp == nil) runtime·throw("runtime·gcprocs inconsistency");
 		mp->helpgc = n;
 		mp->mcache = runtime·allp[pos]->mcache;
 		pos++;
@@ -422,8 +423,8 @@ runtime·freezetheworld(void)
 		runtime·sched.stopwait = 0x7fffffff;
 		runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 		// this should stop running goroutines
-		if(!preemptall())
-			break;  // no running goroutines
+		// no running goroutines
+		if(!preemptall()) break; 
 		runtime·usleep(1000);
 	}
 	// to be sure
@@ -473,12 +474,10 @@ runtime·stoptheworld(void)
 			preemptall();
 		}
 	}
-	if(runtime·sched.stopwait)
-		runtime·throw("stoptheworld: not stopped");
+	if(runtime·sched.stopwait) runtime·throw("stoptheworld: not stopped");
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p->status != Pgcstop)
-			runtime·throw("stoptheworld: not stopped");
+		if(p->status != Pgcstop) runtime·throw("stoptheworld: not stopped");
 	}
 }
 
@@ -2620,6 +2619,7 @@ mput(M *mp)
 
 // Try to get an m from midle list.
 // Sched must be locked.
+// 从sched.midle中取得一个m
 static M*
 mget(void)
 {

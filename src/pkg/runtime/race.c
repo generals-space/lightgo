@@ -164,8 +164,7 @@ void
 runtime·racemalloc(void *p, uintptr sz)
 {
 	// use m->curg because runtime·stackalloc() is called from g0
-	if(m->curg == nil)
-		return;
+	if(m->curg == nil) return;
 	m->racecall = true;
 	m->locks++;
 	runtime∕race·Malloc(m->curg->racectx, p, sz, /* unused pc */ 0);

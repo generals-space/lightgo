@@ -150,7 +150,8 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 			runtime·MProf_Malloc(v, size);
 		}
 	}
-
+	// 如果flag不包含FlagNoInvokeGC, 说明此次分配会给GC增加压力(因为此次分配需要GC来回收)
+	// 而此时如果next_gc时间到了, 就手动触发gc()
 	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc)
 		runtime·gc(0);
 
