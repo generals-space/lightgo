@@ -271,11 +271,15 @@ markonly(void *obj)
 
 	// obj may be a pointer to a live object.
 	// Try to find the beginning of the object.
+	// obj可能是指向一个对象的指针, 尝试找到这个对象的起始地址.
+	// 这么说其实是obj可能是某个结构体内部的成员? 虽然是指针但并不指向对象的起始位置.
 
-	// Round down to word boundary.
+	// Round down to word boundary. 
+	// 向下取整到字边界...啥意思?
 	obj = (void*)((uintptr)obj & ~((uintptr)PtrSize-1));
 
 	// Find bits for this word.
+	// 找到这个字在bitmap中的位置
 	off = (uintptr*)obj - (uintptr*)runtime·mheap.arena_start;
 	bitp = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
 	shift = off % wordsPerBitmapWord;
@@ -283,20 +287,20 @@ markonly(void *obj)
 	bits = xbits >> shift;
 
 	// Pointing at the beginning of a block?
+	// 如果正好指向一个块的边界
 	if((bits & (bitAllocated|bitBlockBoundary)) != 0) {
-		if(CollectStats)
-			runtime·xadd64(&gcstats.markonly.foundbit, 1);
+		if(CollectStats) runtime·xadd64(&gcstats.markonly.foundbit, 1);
 		goto found;
 	}
 
 	// Pointing just past the beginning?
 	// Scan backward a little to find a block boundary.
+	// 如果指向的不是起始地址, 反向寻找直到找到边界.
 	for(j=shift; j-->0; ) {
 		if(((xbits>>j) & (bitAllocated|bitBlockBoundary)) != 0) {
 			shift = j;
 			bits = xbits>>shift;
-			if(CollectStats)
-				runtime·xadd64(&gcstats.markonly.foundword, 1);
+			if(CollectStats) runtime·xadd64(&gcstats.markonly.foundword, 1);
 			goto found;
 		}
 	}
@@ -305,8 +309,7 @@ markonly(void *obj)
 	// (Manually inlined copy of MHeap_LookupMaybe.)
 	k = (uintptr)obj>>PageShift;
 	x = k;
-	if(sizeof(void*) == 8)
-		x -= (uintptr)runtime·mheap.arena_start>>PageShift;
+	if(sizeof(void*) == 8) x -= (uintptr)runtime·mheap.arena_start>>PageShift;
 	s = runtime·mheap.spans[x];
 	if(s == nil || k < s->start || obj >= s->limit || s->state != MSpanInUse)
 		return false;
@@ -325,24 +328,19 @@ markonly(void *obj)
 	shift = off % wordsPerBitmapWord;
 	xbits = *bitp;
 	bits = xbits >> shift;
-	if(CollectStats)
-		runtime·xadd64(&gcstats.markonly.foundspan, 1);
+	if(CollectStats) runtime·xadd64(&gcstats.markonly.foundspan, 1);
 
 found:
 	// Now we have bits, bitp, and shift correct for
 	// obj pointing at the base of the object.
 	// Only care about allocated and not marked.
-	if((bits & (bitAllocated|bitMarked)) != bitAllocated)
-		return false;
-	if(work.nproc == 1)
-		*bitp |= bitMarked<<shift;
+	if((bits & (bitAllocated|bitMarked)) != bitAllocated) return false;
+	if(work.nproc == 1) *bitp |= bitMarked<<shift;
 	else {
 		for(;;) {
 			x = *bitp;
-			if(x & (bitMarked<<shift))
-				return false;
-			if(runtime·casp((void**)bitp, (void*)x, (void*)(x|(bitMarked<<shift))))
-				break;
+			if(x & (bitMarked<<shift)) return false;
+			if(runtime·casp((void**)bitp, (void*)x, (void*)(x|(bitMarked<<shift)))) break;
 		}
 	}
 
@@ -1349,6 +1347,7 @@ handoff(Workbuf *b)
 	return b1;
 }
 
+// ##addroot
 static void
 addroot(Obj obj)
 {
@@ -1357,11 +1356,9 @@ addroot(Obj obj)
 
 	if(work.nroot >= work.rootcap) {
 		cap = PageSize/sizeof(Obj);
-		if(cap < 2*work.rootcap)
-			cap = 2*work.rootcap;
+		if(cap < 2*work.rootcap) cap = 2*work.rootcap;
 		new = (Obj*)runtime·SysAlloc(cap*sizeof(Obj), &mstats.gc_sys);
-		if(new == nil)
-			runtime·throw("runtime: cannot allocate memory");
+		if(new == nil) runtime·throw("runtime: cannot allocate memory");
 		if(work.roots != nil) {
 			runtime·memmove(new, work.roots, work.rootcap*sizeof(Obj));
 			runtime·SysFree(work.roots, work.rootcap*sizeof(Obj), &mstats.gc_sys);
@@ -1475,6 +1472,10 @@ addframeroots(Stkframe *frame, void*)
 		addroot((Obj){frame->argp, frame->arglen, 0});
 }
 
+// addroots操作遍历栈空间时调用.
+// 由于此时已经经过了STW, 所以理论上所有的g对象都处于休眠状态.
+// 对所有处于runnable, waiting和syscall状态的g对象都调用此函数.
+// caller: addroots()
 static void
 addstackroots(G *gp)
 {
@@ -1487,11 +1488,10 @@ addstackroots(G *gp)
 
 	stk = (Stktop*)gp->stackbase;
 	guard = gp->stackguard;
-
-	if(gp == g)
-		runtime·throw("can't scan our own stack");
-	if((mp = gp->m) != nil && mp->helpgc)
-		runtime·throw("can't scan gchelper stack");
+	// g是正在执行GC的线程吧, 不过在哪定义的?
+	// 不过照这样写的, g应该没有allg链表里吧.
+	if(gp == g) runtime·throw("can't scan our own stack");
+	if((mp = gp->m) != nil && mp->helpgc) runtime·throw("can't scan gchelper stack");
 	if(gp->syscallstack != (uintptr)nil) {
 		// Scanning another goroutine that is about to enter or might
 		// have just exited a system call. It may be executing code such
@@ -1551,7 +1551,7 @@ addfinroots(void *v)
 }
 
 // 这就是添加传说中的根节点吗?
-// caller: gc()
+// caller: gc(), 只有一处被调用过.
 static void
 addroots(void)
 {
@@ -1564,9 +1564,13 @@ addroots(void)
 
 	// data & bss
 	// TODO(atom): load balancing
+	// ##addroot
+	// gcdata与gcbss都是全局变量
+	// data是数据段, bss是静态全局变量所在段...这里原来不是堆吗?
 	addroot((Obj){data, edata - data, (uintptr)gcdata});
 	addroot((Obj){bss, ebss - bss, (uintptr)gcbss});
 
+	// 这是遍历堆空间?
 	// MSpan.types
 	allspans = runtime·mheap.allspans;
 	for(spanidx=0; spanidx<runtime·mheap.nspan; spanidx++) {
@@ -1587,7 +1591,7 @@ addroots(void)
 			}
 		}
 	}
-
+	// 遍历栈空间...我擦, gc的目标原来不只是堆么?
 	// stacks
 	for(gp=runtime·allg; gp!=nil; gp=gp->alllink) {
 		switch(gp->status){
@@ -1597,6 +1601,7 @@ addroots(void)
 		case Gdead:
 			break;
 		case Grunning:
+			// 此时已经经过STW, 不应该有g还处于运行状态的.
 			runtime·throw("mark - world not stopped");
 		case Grunnable:
 		case Gsyscall:

@@ -68,7 +68,7 @@ uint32	runtime·needextram;
 bool	runtime·iscgo;
 M	runtime·m0;
 G	runtime·g0;	 // idle goroutine for m0
-G*	runtime·allg;
+G*	runtime·allg; // G对象链表
 G*	runtime·lastg;
 M*	runtime·allm;
 M*	runtime·extram;

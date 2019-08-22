@@ -706,7 +706,7 @@ bool	runtime·topofstack(Func*);
  */
 extern	String	runtime·emptystring;
 extern	uintptr runtime·zerobase;
-extern	G*	runtime·allg;
+extern	G*	runtime·allg; // G对象链表
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
 extern	P**	runtime·allp;
