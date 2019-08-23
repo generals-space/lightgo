@@ -18,7 +18,8 @@ struct Fin
 	PtrType *ot;
 };
 
-// Finalizer hash table.  Direct hash, linear scan, at most 3/4 full.
+// Finalizer hash table. 
+// Direct hash, linear scan, at most 3/4 full.
 // Table size is power of 3 so that hash can be key % max.
 // Key[i] == (void*)-1 denotes free but formerly occupied entry
 // (doesn't stop the linear scan).
@@ -212,8 +213,7 @@ runtime·walkfintab(void (*fn)(void*))
 		key = fintab[i].key;
 		ekey = key + fintab[i].max;
 		for(; key < ekey; key++)
-			if(*key != nil && *key != ((void*)-1))
-				fn(*key);
+			if(*key != nil && *key != ((void*)-1)) fn(*key);
 		runtime·unlock(&fintab[i]);
 	}
 }

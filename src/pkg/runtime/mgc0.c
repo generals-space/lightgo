@@ -254,9 +254,11 @@ static struct {
 	} markonly;
 } gcstats;
 
-// markonly marks an object. It returns true if the object
+// markonly marks an object. 
+// It returns true if the object
 // has been marked by this function, false otherwise.
 // This function doesn't append the object to any buffer.
+// 标记对象. 主要就是找到该对象在bitmap区域的映射地址, 添加bitMarked标记.
 static bool
 markonly(void *obj)
 {
@@ -307,12 +309,17 @@ markonly(void *obj)
 
 	// Otherwise consult span table to find beginning.
 	// (Manually inlined copy of MHeap_LookupMaybe.)
+	// k是页号吧?
 	k = (uintptr)obj>>PageShift;
 	x = k;
 	if(sizeof(void*) == 8) x -= (uintptr)runtime·mheap.arena_start>>PageShift;
+	// runtime·mheap.spans是MSpan类型指针的指针, 用于查询...???
+	// s应该是指向MSpan的地址.
 	s = runtime·mheap.spans[x];
+
 	if(s == nil || k < s->start || obj >= s->limit || s->state != MSpanInUse)
 		return false;
+
 	p = (byte*)((uintptr)s->start<<PageShift);
 	if(s->sizeclass == 0) {
 		obj = p;
@@ -334,7 +341,9 @@ found:
 	// Now we have bits, bitp, and shift correct for
 	// obj pointing at the base of the object.
 	// Only care about allocated and not marked.
+	// 如果obj已经拥有bitMarked标记, 返回false
 	if((bits & (bitAllocated|bitMarked)) != bitAllocated) return false;
+	// 如果只有一个GC工作线程, 直接添加bitMarked标记
 	if(work.nproc == 1) *bitp |= bitMarked<<shift;
 	else {
 		for(;;) {
@@ -685,15 +694,25 @@ checkptr(void *obj, uintptr objti)
 			}
 		}
 	}
-}					
+}
 
-// scanblock scans a block of n bytes starting at pointer b for references
-// to other objects, scanning any it finds recursively until there are no
-// unscanned objects left.  Instead of using an explicit recursion, it keeps
-// a work list in the Workbuf* structures and loops in the main function
-// body.  Keeping an explicit work list is easier on the stack allocator and
-// more efficient.
-//
+// ##scanblock
+// scanblock scans a block of n bytes starting at pointer b 
+// for references to other objects, 
+// scanning any it finds recursively until there are no
+// unscanned objects left. 
+// Instead of using an explicit recursion, 
+// it keeps a work list in the Workbuf* structures 
+// and loops in the main function body. 
+// Keeping an explicit work list is easier 
+// on the stack allocator and more efficient.
+// 
+// scanblock扫描一个起始地址为b的大小为n bytes的块, 
+// 目的是找到这个块引用的所有其他的对象.
+// 没有使用递归, 而是使用了一个Workbuf*结构体指针的工作列表, 然后遍历ta.
+// 维护一个列表比递归更简单(在栈分配上), 而且更高效.
+// ...应该就是广度优先与深度优先的区别吧.
+// ...超长的一个函数
 // wbuf: current work buffer
 // wp:   storage for next queued pointer (write pointer)
 // nobj: number of queued objects
@@ -745,6 +764,7 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 	chantype = nil;
 	chan_ret = nil;
 
+	// 这连条件判断都没有, 下面两个for循环用来干啥的???
 	goto next_block;
 
 	for(;;) {
@@ -1083,14 +1103,12 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 
 			if(nobj == 0) {
 				if(!keepworking) {
-					if(wbuf)
-						putempty(wbuf);
+					if(wbuf) putempty(wbuf);
 					goto endscan;
 				}
 				// Emptied our buffer: refill.
 				wbuf = getfull(wbuf);
-				if(wbuf == nil)
-					goto endscan;
+				if(wbuf == nil) goto endscan;
 				nobj = wbuf->nobj;
 				wp = wbuf->obj + wbuf->nobj;
 			}
@@ -1183,6 +1201,7 @@ debug_scanblock(byte *b, uintptr n)
 	}
 }
 
+// ##enqueue
 // Append obj to the work buffer.
 // _wbuf, _wp, _nobj are input/output parameters and are specifying the work buffer.
 static void
@@ -1192,8 +1211,7 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 	Obj *wp;
 	Workbuf *wbuf;
 
-	if(Debug > 1)
-		runtime·printf("append obj(%p %D %p)\n", obj.p, (int64)obj.n, obj.ti);
+	if(Debug > 1) runtime·printf("append obj(%p %D %p)\n", obj.p, (int64)obj.n, obj.ti);
 
 	// Align obj.b to a word boundary.
 	off = (uintptr)obj.p & (PtrSize-1);
@@ -1203,8 +1221,7 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 		obj.ti = 0;
 	}
 
-	if(obj.p == nil || obj.n == 0)
-		return;
+	if(obj.p == nil || obj.n == 0) return;
 
 	// Load work buffer state
 	wp = *_wp;
@@ -1221,8 +1238,7 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 
 	// If buffer is full, get a new one.
 	if(wbuf == nil || nobj >= nelem(wbuf->obj)) {
-		if(wbuf != nil)
-			wbuf->nobj = nobj;
+		if(wbuf != nil) wbuf->nobj = nobj;
 		wbuf = getempty(wbuf);
 		wp = wbuf->obj;
 		nobj = 0;
@@ -1238,6 +1254,8 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 	*_nobj = nobj;
 }
 
+// 在addroots()之后, 并发标记之前调用.
+// caller: gc()
 static void
 markroot(ParFor *desc, uint32 i)
 {
@@ -1348,12 +1366,13 @@ handoff(Workbuf *b)
 }
 
 // ##addroot
+// 只是简单地把参数obj添加到work.roots列表下...
 static void
 addroot(Obj obj)
 {
 	uint32 cap;
 	Obj *new;
-
+	// 为root节点容量扩容
 	if(work.nroot >= work.rootcap) {
 		cap = PageSize/sizeof(Obj);
 		if(cap < 2*work.rootcap) cap = 2*work.rootcap;
@@ -1379,8 +1398,7 @@ struct BitVector
 	uint32 data[];
 };
 
-// Scans an interface data value when the interface type indicates
-// that it is a pointer.
+// Scans an interface data value when the interface type indicates that it is a pointer.
 static void
 scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 {
@@ -1443,6 +1461,7 @@ addframeroots(Stkframe *frame, void*)
 
 	// Scan local variables if stack frame has been allocated.
 	// Use pointer information if known.
+	// 扫描本地局部变量(如果此栈帧已经被分配)
 	afterprologue = (frame->varp > (byte*)frame->sp);
 	if(afterprologue) {
 		locals = runtime·funcdata(f, FUNCDATA_GCLocals);
@@ -1451,13 +1470,11 @@ addframeroots(Stkframe *frame, void*)
 			size = frame->varp - (byte*)frame->sp;
 			addroot((Obj){frame->varp - size, size, 0});
 		} else if(locals->n < 0) {
-			// Locals size information, scan just the
-			// locals.
+			// Locals size information, scan just the locals.
 			size = -locals->n;
 			addroot((Obj){frame->varp - size, size, 0});
 		} else if(locals->n > 0) {
-			// Locals bitmap information, scan just the
-			// pointers in locals.
+			// Locals bitmap information, scan just the pointers in locals.
 			size = (locals->n*PtrSize) / BitsPerPointer;
 			scanbitvector(frame->varp - size, locals, afterprologue);
 		}
@@ -1466,10 +1483,8 @@ addframeroots(Stkframe *frame, void*)
 	// Scan arguments.
 	// Use pointer information if known.
 	args = runtime·funcdata(f, FUNCDATA_GCArgs);
-	if(args != nil && args->n > 0)
-		scanbitvector(frame->argp, args, false);
-	else
-		addroot((Obj){frame->argp, frame->arglen, 0});
+	if(args != nil && args->n > 0) scanbitvector(frame->argp, args, false);
+	else addroot((Obj){frame->argp, frame->arglen, 0});
 }
 
 // addroots操作遍历栈空间时调用.
@@ -1546,7 +1561,8 @@ addfinroots(void *v)
 	if(!runtime·mlookup(v, &base, &size, nil) || !runtime·blockspecial(base))
 		runtime·throw("mark - finalizer inconsistency");
 
-	// do not mark the finalizer block itself.  just mark the things it points at.
+	// do not mark the finalizer block itself. 
+	// just mark the things it points at.
 	addroot((Obj){base, size, 0});
 }
 
@@ -1659,6 +1675,7 @@ handlespecial(byte *p, uintptr size)
 
 // Sweep frees or collects finalizers for blocks not marked in the mark phase.
 // It clears the mark bits in preparation for the next GC round.
+// 
 static void
 sweepspan(ParFor *desc, uint32 idx)
 {
@@ -1675,16 +1692,20 @@ sweepspan(ParFor *desc, uint32 idx)
 	MSpan *s;
 
 	USED(&desc);
+	// 这个s才是本次sweep的目标吧
 	s = runtime·mheap.allspans[idx];
-	if(s->state != MSpanInUse)
-		return;
+	if(s->state != MSpanInUse) return;
+
 	arena_start = runtime·mheap.arena_start;
-	p = (byte*)(s->start << PageShift);
+	p = (byte*)(s->start << PageShift); // s的起始地址, 指针类型(start为页号)
 	cl = s->sizeclass;
 	size = s->elemsize;
 	if(cl == 0) {
+		// size等级为0, 表示是在heap分配的>32k的大对象.
+		// 这里的n应该是span包含的...对象的个数?
 		n = 1;
 	} else {
+		// 小对象
 		// Chunk full of small blocks.
 		npages = runtime·class_to_allocnpages[cl];
 		n = (npages << PageShift) / size;
@@ -1764,6 +1785,7 @@ sweepspan(ParFor *desc, uint32 idx)
 		}
 	}
 
+	// 将可回收的object链表归还给span
 	if(nfree) {
 		c->local_nsmallfree[cl] += nfree;
 		c->local_cachealloc -= nfree * size;
@@ -2139,11 +2161,10 @@ gc(struct gc_args *args)
 
 	t0 = args->start_time;
 
-	if(CollectStats)
-		runtime·memclr((byte*)&gcstats, sizeof(gcstats));
+	// 清空gcstats, 记录本次gc的数据
+	if(CollectStats) runtime·memclr((byte*)&gcstats, sizeof(gcstats));
 
-	for(mp=runtime·allm; mp; mp=mp->alllink)
-		runtime·settype_flush(mp);
+	for(mp=runtime·allm; mp; mp=mp->alllink) runtime·settype_flush(mp);
 
 	heap0 = 0;
 	obj0 = 0;

@@ -22,7 +22,8 @@ static void MHeap_FreeLocked(MHeap*, MSpan*);
 static MSpan *MHeap_AllocLarge(MHeap*, uintptr);
 static MSpan *BestFit(MSpan*, uintptr, MSpan*);
 
-// 为heap.allspans分配空间, 用来存储所有span对象指针
+// 为heap.allspans分配空间, 用来存储所有span对象指针.
+// ...貌似allspans只包含mheap->spanalloc部分, 不包含mcentral, mcache的span???
 // caller: runtime·MHeap_Init()
 // 这个函数只在其他地址出现了一次, 但并不是只调用一次, 
 // 因为ta是作为成员函数被嵌入了heap->spanalloc对象
@@ -90,12 +91,12 @@ runtime·MHeap_MapSpans(MHeap *h)
 
 	// Map spans array, PageSize at a time.
 	n = (uintptr)h->arena_used;
-	if(sizeof(void*) == 8)
-		n -= (uintptr)h->arena_start;
+	
+	if(sizeof(void*) == 8) n -= (uintptr)h->arena_start;
 	n = n / PageSize * sizeof(h->spans[0]);
 	n = ROUND(n, PageSize);
-	if(h->spans_mapped >= n)
-		return;
+
+	if(h->spans_mapped >= n) return;
 	runtime·SysMap((byte*)h->spans + h->spans_mapped, n - h->spans_mapped, &mstats.other_sys);
 	h->spans_mapped = n;
 }
