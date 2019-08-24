@@ -22,6 +22,9 @@ static bool MCentral_Grow(MCentral *c);
 static void MCentral_Free(MCentral *c, void *v);
 
 // Initialize a single central free list.
+// 初始化mcentral的两个空的链表
+// 只被调用这一次, 不过是一个for循环, 用来初始化堆中各size等级的mcentral.
+// caller: runtime·MHeap_Init() 
 void
 runtime·MCentral_Init(MCentral *c, int32 sizeclass)
 {
@@ -39,6 +42,9 @@ runtime·MCentral_Init(MCentral *c, int32 sizeclass)
 // 这个函数只被runtime·MCache_Refill()调用, 
 // 是在线程的mcache没有多余的空间来分配对象时, 尝试从mcentral获取一批空闲空间.
 // ...从传入参数来看, 好像没说要获取多少? 看心情吗?
+// ...继续分析得出, 此函数直接从mcentral的noempty链表中拿出一个span,
+// 并将pfirst指向这个span的freelist, 
+// 再把这个span放到empty链表中(freelist都分配出去了, 相当于没有剩余空间了), 就完事了.
 // caller: runtime·MCache_Refill()
 int32
 runtime·MCentral_AllocList(MCentral *c, MLink **pfirst)
@@ -56,8 +62,11 @@ runtime·MCentral_AllocList(MCentral *c, MLink **pfirst)
 			return 0;
 		}
 	}
+
 	s = c->nonempty.next;
+	// cap 总共可容纳的object的个数
 	cap = (s->npages << PageShift) / s->elemsize;
+	// n 空闲的object的个数
 	n = cap - s->ref;
 	*pfirst = s->freelist;
 	s->freelist = nil;
@@ -123,34 +132,51 @@ MCentral_Free(MCentral *c, void *v)
 }
 
 // Free n objects from a span s back into the central free list c.
-// Called from GC.
+// 释放目标span s中的n个对象, 将空间回收到mcentral的空闲列表c中.
+// 记得mcentral也是有size等级的, 且调用者必然保证了, 与span分配的对象的size等级相同.
+// caller: gc -> sweepspan()
 void
 runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end)
 {
 	int32 size;
-
+	// 话说此时应该处于gc过程中, 应该是经过了STW的, 
+	// 当前应该只有一个线程在运行, 为什么还要加锁呢?
 	runtime·lock(c);
 
 	// Move to nonempty if necessary.
+	// 如果该span完全被分配(freelist中没有元素), 相当于可以全部回收.
+	// 实际操作就是, 将这个span从emptyq链表中移除, 再放回到noempty链表中.
 	if(s->freelist == nil) {
 		runtime·MSpanList_Remove(s);
 		runtime·MSpanList_Insert(&c->nonempty, s);
 	}
 
 	// Add the objects back to s's free list.
+	// 运行到这里, 说该span中有一部分被分配, 但不是完全被分配出去了.
+	// 这里的操作就是把可回收的mlink链表附加到该span的freelist中.
 	end->next = s->freelist;
 	s->freelist = start;
 	s->ref -= n;
 	c->nfree += n;
 
 	// If s is completely freed, return it to the heap.
+	// 如果该span完全空闲, 将其归还到heap.
+	// ref表示该span中已分配的对象数量.
+	// 否则, 上面的操作已经够了, 直接解锁返回.
 	if(s->ref == 0) {
+		// 话说, 完全空闲是一种什么情况???
+		// 既然是分配过的, 却又没有占用的对象...这不白干了吗?
 		size = runtime·class_to_size[c->sizeclass];
-		runtime·MSpanList_Remove(s);
-		*(uintptr*)(s->start<<PageShift) = 1;  // needs zeroing
+		runtime·MSpanList_Remove(s); // 将这个span从emptyq链表中移除
+		// 这一步是将span直接归还给heap, 
+		// 所以下面的操作基本相当于销毁span在mcentral中的痕迹, 只把空间归还即可.
+		// needs zeroing
+		// 把该span的第一页的内容赋值为1...这是相当于清零? 能这么清???
+		*(uintptr*)(s->start<<PageShift) = 1;
 		s->freelist = nil;
 		c->nfree -= (s->npages << PageShift) / size;
 		runtime·unlock(c);
+		// 将此span下的页块标记全部取消标记
 		runtime·unmarkspan((byte*)(s->start<<PageShift), s->npages<<PageShift);
 		runtime·MHeap_Free(&runtime·mheap, s, 0);
 	} else {

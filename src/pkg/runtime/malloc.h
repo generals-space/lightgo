@@ -318,7 +318,8 @@ struct MCache
 {
 	// The following members are accessed on every malloc,
 	// so they are grouped here for better caching.
-	int32 next_sample;		// trigger heap sample after allocating this many bytes
+	// trigger heap sample after allocating this many bytes
+	int32 next_sample;
 	// bytes allocated (or freed) from cache since last lock of heap
 	// 标记此cache对象已经分配出去(不管是正在使用或是已经空闲...???)的大小
 	intptr local_cachealloc;
@@ -385,13 +386,18 @@ struct MSpan
 	MSpan	*next;		// in a span linked list
 	MSpan	*prev;		// in a span linked list
 	// starting page number
-	// 起始页的页号...应该是可以推算出来的. start << PageShift可以用来表示真正的内存地址.
-	PageID	start;		
+	// 起始页的页号...是可以推算出来的. 
+	// start << PageShift可以用来表示真正的内存地址.
+	PageID	start;
 	// number of pages in span
 	// 该span中页的数量, 同一sizeclass的MSpan对象中npages的值相同.
-	uintptr	npages;		
-	MLink	*freelist;	// list of free objects
-	uint32	ref;		// number of allocated objects in this span
+	uintptr	npages;
+	// list of free objects
+	// 该span中空闲的对象链表
+	MLink	*freelist;
+	// number of allocated objects in this span
+	// 当前span中已分配的对象的数量.
+	uint32	ref;
 	int32	sizeclass;	// size class
 	uintptr	elemsize;	// computed from sizeclass or from npages
 	uint32	state;		// MSpanInUse etc
@@ -427,16 +433,19 @@ int32	runtime·MCentral_AllocList(MCentral *c, MLink **first);
 void	runtime·MCentral_FreeList(MCentral *c, MLink *first);
 void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
 
-// Main malloc heap.
+// Main malloc heap. 堆
 // The heap itself is the "free[]" and "large" arrays,
 // but all the other global data is here too.
-// 堆
 // heap本身只存储free[]数组和large, 应该就是arena区域.
 // 但是其他全局数据也存储在这里, 应该是挂的指针, 比如spans, bitmap
 struct MHeap
 {
 	Lock;
-	MSpan free[MaxMHeapList];	// free lists of given length
+	// free lists of given length
+	// h->free数组的每个成员都是span链表
+	// 各成员中, h->free[n]中拥有n个页, 
+	// 最后一个成员成员可容纳的页数即是MaxMHeapList
+	MSpan free[MaxMHeapList];
 	MSpan large;			// free lists length >= MaxMHeapList
 	MSpan **allspans;		// MSpan指针类型, 存储所有span对象指针
 	uint32	nspan;			// 这是用来表示堆中span中的总个数?

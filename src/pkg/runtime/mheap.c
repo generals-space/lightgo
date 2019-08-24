@@ -341,10 +341,13 @@ runtime·MHeap_LookupMaybe(MHeap *h, void *v)
 }
 
 // Free the span back into the heap.
+// 将目标span收回到heap
 void
 runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct)
 {
 	runtime·lock(h);
+	// 这里能这么算吗? 可以把当前m的local_cachealloc全收回来???
+	// mcentral中的空间也能这么回收???
 	mstats.heap_alloc += m->mcache->local_cachealloc;
 	m->mcache->local_cachealloc = 0;
 	mstats.heap_inuse -= s->npages<<PageShift;
@@ -380,8 +383,9 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 
 	// Coalesce with earlier, later spans.
 	p = s->start;
-	if(sizeof(void*) == 8)
-		p -= (uintptr)h->arena_start >> PageShift;
+	// 这里p是距arena_start偏移的页数啊..
+	if(sizeof(void*) == 8) p -= (uintptr)h->arena_start >> PageShift;
+	// h->spans[p-1] 能表示span对象吗? p也不是span索引啊..
 	if(p > 0 && (t = h->spans[p-1]) != nil && t->state != MSpanInUse) {
 		if(t->npreleased == 0) {  // cant't touch this otherwise
 			tp = (uintptr*)(t->start<<PageShift);
@@ -410,7 +414,13 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	}
 
 	// Insert s into appropriate list.
+	// 将span添加到合适的链表中.
 	if(s->npages < nelem(h->free))
+		// 记得h->free数组的每个成员都是span链表
+		// 各成员中, h->free[n]中拥有n个页, 
+		// 最后一个成员成员可容纳的页数即是MaxMHeapList.
+		// 所以在if语句中, 实际是判断free各链表中是否可容纳这个span, 
+		// 如果容纳不下, 就放到large成员里
 		runtime·MSpanList_Insert(&h->free[s->npages], s);
 	else
 		runtime·MSpanList_Insert(&h->large, s);
@@ -548,7 +558,7 @@ runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 }
 
 // Initialize an empty doubly-linked list.
-// 初始化空的双向链表
+// 初始化span对象为空的双向链表
 void
 runtime·MSpanList_Init(MSpan *list)
 {
@@ -557,11 +567,14 @@ runtime·MSpanList_Init(MSpan *list)
 	list->prev = list;
 }
 
+// 将目标span从其所在的双向链表中移除
+// 可能出现在:
+// 1. span被回收, 从mcentral的empty链表中移除, 将放到noempty链表中.
 void
 runtime·MSpanList_Remove(MSpan *span)
 {
-	if(span->prev == nil && span->next == nil)
-		return;
+	// 这是什么情况...???
+	if(span->prev == nil && span->next == nil) return;
 	span->prev->next = span->next;
 	span->next->prev = span->prev;
 	span->prev = nil;
@@ -574,6 +587,10 @@ runtime·MSpanList_IsEmpty(MSpan *list)
 	return list->next == list;
 }
 
+// ##runtime·MSpanList_Insert
+// 将目标span添加到目标链表list中, 看起来是放到了链表头.
+// 可能出现在:
+// 1. span被回收, 从mcentral的empty链表中移除, 放到noempty链表中.
 void
 runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 {
@@ -586,5 +603,3 @@ runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 	span->next->prev = span;
 	span->prev->next = span;
 }
-
-

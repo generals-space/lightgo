@@ -123,6 +123,7 @@ runtime·parfordo(ParFor *desc)
 		}
 
 		// Out of work, need to steal something.
+		// 工作完成
 		idle = false;
 		for(try=0;; try++) {
 			// If we don't see any work for long enough,

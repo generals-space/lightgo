@@ -372,10 +372,10 @@ struct PtrTarget
 typedef struct BufferList BufferList;
 struct BufferList
 {
-	PtrTarget ptrtarget[IntermediateBufferCapacity];
-	Obj obj[IntermediateBufferCapacity];
-	uint32 busy;
-	byte pad[CacheLineSize];
+	PtrTarget 	ptrtarget[IntermediateBufferCapacity];
+	Obj 		obj[IntermediateBufferCapacity];
+	uint32 		busy;
+	byte 		pad[CacheLineSize];
 };
 #pragma dataflag NOPTR
 static BufferList bufferList[MaxGcproc];
@@ -896,8 +896,7 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 		case GC_EFACE:
 			eface = (Eface*)(stack_top.b + pc[1]);
 			pc += 2;
-			if(eface->type == nil)
-				continue;
+			if(eface->type == nil) continue;
 
 			// eface->type
 			t = eface->type;
@@ -910,8 +909,7 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			// eface->data
 			if(eface->data >= arena_start && eface->data < arena_used) {
 				if(t->size <= sizeof(void*)) {
-					if((t->kind & KindNoPointers))
-						continue;
+					if((t->kind & KindNoPointers)) continue;
 
 					obj = eface->data;
 					if((t->kind & ~KindNoPointers) == KindPtr)
@@ -926,8 +924,7 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 		case GC_IFACE:
 			iface = (Iface*)(stack_top.b + pc[1]);
 			pc += 2;
-			if(iface->tab == nil)
-				continue;
+			if(iface->tab == nil) continue;
 			
 			// iface->tab
 			if((void*)iface->tab >= arena_start && (void*)iface->tab < arena_used) {
@@ -1675,7 +1672,8 @@ handlespecial(byte *p, uintptr size)
 
 // Sweep frees or collects finalizers for blocks not marked in the mark phase.
 // It clears the mark bits in preparation for the next GC round.
-// 
+// sweep释放或收集在mark阶段没有被标记的块的finalizers终结器.
+// 并且清理了mark标识位, 为下一次GC做准备.
 static void
 sweepspan(ParFor *desc, uint32 idx)
 {
@@ -1684,8 +1682,8 @@ sweepspan(ParFor *desc, uint32 idx)
 	byte *p;
 	MCache *c;
 	byte *arena_start;
-	MLink head, *end;
-	int32 nfree;
+	MLink head, *end; 	// 将找到的可释放的小对象组成链表, 一起归还
+	int32 nfree; 		// nfree表示找到的可释放的小对象的个数
 	byte *type_data;
 	byte compression;
 	uintptr type_data_inc;
@@ -1711,7 +1709,7 @@ sweepspan(ParFor *desc, uint32 idx)
 		n = (npages << PageShift) / size;
 	}
 	nfree = 0;
-	end = &head;
+	end = &head; // 初始时链表尾部与头部处于同一位置
 	c = m->mcache;
 	
 	type_data = (byte*)s->types.data;
@@ -1727,6 +1725,8 @@ sweepspan(ParFor *desc, uint32 idx)
 	// Sweep through n objects of given size starting at p.
 	// This thread owns the span now, so it can manipulate
 	// the block bitmap without atomic operations.
+	// 对n个对象遍历操作.
+	// 目前当前线程拥有这个span的控制权, 对其bitmap标记的修改无需原子操作
 	for(; n > 0; n--, p += size, type_data+=type_data_inc) {
 		uintptr off, *bitp, shift, bits;
 
@@ -1734,14 +1734,12 @@ sweepspan(ParFor *desc, uint32 idx)
 		bitp = (uintptr*)arena_start - off/wordsPerBitmapWord - 1;
 		shift = off % wordsPerBitmapWord;
 		bits = *bitp>>shift;
-
-		if((bits & bitAllocated) == 0)
-			continue;
-
+		// 该block未被分配, 跳过
+		if((bits & bitAllocated) == 0) continue;
+		// 该block已经被标记过
 		if((bits & bitMarked) != 0) {
 			if(DebugMark) {
-				if(!(bits & bitSpecial))
-					runtime·printf("found spurious mark on %p\n", p);
+				if(!(bits & bitSpecial)) runtime·printf("found spurious mark on %p\n", p);
 				*bitp &= ~(bitSpecial<<shift);
 			}
 			*bitp &= ~(bitMarked<<shift);
@@ -1752,8 +1750,7 @@ sweepspan(ParFor *desc, uint32 idx)
 		// In DebugMark mode, the bit has been coopted so
 		// we have to assume all blocks are special.
 		if(DebugMark || (bits & bitSpecial) != 0) {
-			if(handlespecial(p, size))
-				continue;
+			if(handlespecial(p, size)) continue;
 		}
 
 		// Mark freed; restore block boundary bit.
@@ -1761,8 +1758,10 @@ sweepspan(ParFor *desc, uint32 idx)
 
 		if(cl == 0) {
 			// Free large span.
+			// 大对象, 直接归还给heap
 			runtime·unmarkspan(p, 1<<PageShift);
-			*(uintptr*)p = (uintptr)0xdeaddeaddeaddeadll;	// needs zeroing
+			// needs zeroing
+			*(uintptr*)p = (uintptr)0xdeaddeaddeaddeadll;
 			runtime·MHeap_Free(&runtime·mheap, s, 1);
 			c->local_nlargefree++;
 			c->local_largefree += size;
@@ -1776,15 +1775,16 @@ sweepspan(ParFor *desc, uint32 idx)
 				*(byte*)type_data = 0;
 				break;
 			}
-			if(size > sizeof(uintptr))
-				((uintptr*)p)[1] = (uintptr)0xdeaddeaddeaddeadll;	// mark as "needs to be zeroed"
-			
+			// mark as "needs to be zeroed"
+			if(size > sizeof(uintptr)) ((uintptr*)p)[1] = (uintptr)0xdeaddeaddeaddeadll;	
+			// 将可回收的小对象object组成链表
 			end->next = (MLink*)p;
 			end = (MLink*)p;
 			nfree++;
 		}
 	}
 
+	// 如果nfree大于0, 表示找了可回收的object(存放在p链表中).
 	// 将可回收的object链表归还给span
 	if(nfree) {
 		c->local_nsmallfree[cl] += nfree;
@@ -2175,6 +2175,7 @@ gc(struct gc_args *args)
 	}
 
 	// disable gc during mallocs in parforalloc
+	// ...这还要啥disable啊, 现在就是gc啊
 	m->locks++;
 	if(work.markfor == nil) work.markfor = runtime·parforalloc(MaxGcproc);
 	if(work.sweepfor == nil) work.sweepfor = runtime·parforalloc(MaxGcproc);
@@ -2192,7 +2193,7 @@ gc(struct gc_args *args)
 	// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, cpus, 8).
 	work.nproc = runtime·gcprocs();
 	addroots();
-	// 设置并⾏ mark、 sweep 属性, markroot与sweepspan都是函数
+	// 设置markfor, sweepfor并⾏mark、sweep 属性, markroot与sweepspan都是函数
 	runtime·parforsetup(work.markfor, work.nproc, work.nroot, nil, false, markroot);
 	runtime·parforsetup(work.sweepfor, work.nproc, runtime·mheap.nspan, nil, true, sweepspan);
 	if(work.nproc > 1) {
@@ -2203,7 +2204,7 @@ gc(struct gc_args *args)
 	t1 = runtime·nanotime();
 
 	gchelperstart();
-	// 并行mark
+	// 并行mark, 执行上面设置的markroot操作
 	runtime·parfordo(work.markfor);
 	scanblock(nil, nil, 0, true);
 
@@ -2211,10 +2212,13 @@ gc(struct gc_args *args)
 		for(i=0; i<work.nroot; i++) debug_scanblock(work.roots[i].p, work.roots[i].n);
 		runtime·atomicstore(&work.debugmarkdone, 1);
 	}
+
 	t2 = runtime·nanotime();
-	// 并行sweep
+
+	// 并行sweep, 执行上面设置的sweepspan操作
 	runtime·parfordo(work.sweepfor);
 	bufferList[m->helpgc].busy = 0;
+
 	t3 = runtime·nanotime();
 
 	if(work.nproc > 1) runtime·notesleep(&work.alldone);
@@ -2510,8 +2514,7 @@ runtime·checkfreed(void *v, uintptr n)
 
 	bits = *b>>shift;
 	if((bits & bitAllocated) != 0) {
-		runtime·printf("checkfreed %p+%p: off=%p have=%p\n",
-			v, n, off, bits & bitMask);
+		runtime·printf("checkfreed %p+%p: off=%p have=%p\n", v, n, off, bits & bitMask);
 		runtime·throw("checkfreed: not freed");
 	}
 }
@@ -2543,7 +2546,9 @@ runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 	}
 }
 
+// ##runtime·unmarkspan
 // unmark the span of memory at v of length n bytes.
+// 从地址v开始的n bytes的内存块在bitmap中的标识位清空为0.
 void
 runtime·unmarkspan(void *v, uintptr n)
 {
@@ -2553,20 +2558,24 @@ runtime·unmarkspan(void *v, uintptr n)
 		runtime·throw("markspan: bad pointer");
 
 	p = v;
-	off = p - (uintptr*)runtime·mheap.arena_start;  // word offset
-	if(off % wordsPerBitmapWord != 0)
-		runtime·throw("markspan: unaligned pointer");
+
+	// word offset
+	// 还是寻找在bitmap中的映射
+	off = p - (uintptr*)runtime·mheap.arena_start;
+	if(off % wordsPerBitmapWord != 0) runtime·throw("markspan: unaligned pointer");
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
+	// n原来是byte数量, 现在变成了指针数量.
 	n /= PtrSize;
-	if(n%wordsPerBitmapWord != 0)
-		runtime·throw("unmarkspan: unaligned length");
-	// Okay to use non-atomic ops here, because we control
-	// the entire span, and each bitmap word has bits for only
-	// one span, so no other goroutines are changing these
-	// bitmap words.
+
+	// 地址v对应的bitmap地址应该按字对齐.
+	if(n%wordsPerBitmapWord != 0) runtime·throw("unmarkspan: unaligned length");
+	// Okay to use non-atomic ops here, 
+	// because we control the entire span, 
+	// and each bitmap word has bits for only one span, 
+	// so no other goroutines are changing these bitmap words.
+	// 将bitmap中每个字都设置为0
 	n /= wordsPerBitmapWord;
-	while(n-- > 0)
-		*b-- = 0;
+	while(n-- > 0) *b-- = 0;
 }
 
 bool
@@ -2574,8 +2583,7 @@ runtime·blockspecial(void *v)
 {
 	uintptr *b, off, shift;
 
-	if(DebugMark)
-		return true;
+	if(DebugMark) return true;
 
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
@@ -2589,8 +2597,7 @@ runtime·setblockspecial(void *v, bool s)
 {
 	uintptr *b, off, shift, bits, obits;
 
-	if(DebugMark)
-		return;
+	if(DebugMark) return;
 
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
@@ -2598,17 +2605,14 @@ runtime·setblockspecial(void *v, bool s)
 
 	for(;;) {
 		obits = *b;
-		if(s)
-			bits = obits | (bitSpecial<<shift);
-		else
-			bits = obits & ~(bitSpecial<<shift);
+		if(s) bits = obits | (bitSpecial<<shift);
+		else bits = obits & ~(bitSpecial<<shift);
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
 		} else {
 			// more than one goroutine is potentially running: use atomic op
-			if(runtime·casp((void**)b, (void*)obits, (void*)bits))
-				break;
+			if(runtime·casp((void**)b, (void*)obits, (void*)bits)) break;
 		}
 	}
 }
