@@ -43,6 +43,8 @@ runtime·parforalloc2(uint32 nthrmax, ParFor *desc)
 	FLUSH(&desc);
 }
 
+// runtime·parforsetup(work.markfor, work.nproc, work.nroot, nil, false, markroot);
+// runtime·parforsetup(work.sweepfor, work.nproc, runtime·mheap.nspan, nil, true, sweepspan);
 void
 runtime·parforsetup(ParFor *desc, uint32 nthr, uint32 n, void *ctx, bool wait, void (*body)(ParFor*, uint32))
 {
@@ -100,6 +102,7 @@ runtime·parfordo(ParFor *desc)
 	}
 
 	// If single-threaded, just execute the for serially.
+	// desc->nthr为work.nproc, 即执行GC的线程数量.
 	if(desc->nthr==1) {
 		for(i=0; i<desc->cnt; i++) desc->body(desc, i);
 		return;

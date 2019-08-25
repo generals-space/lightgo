@@ -183,8 +183,11 @@ extern byte ebss[];
 extern byte gcdata[];
 extern byte gcbss[];
 
-static G *fing;
-static FinBlock *finq; // list of finalizers that are to be executed
+// 用来执行finalizer的协程链表
+static G *fing; 
+// list of finalizers that are to be executed
+// 等待执行的finalizer链表
+static FinBlock *finq; 
 static FinBlock *finc; // cache of free blocks
 static FinBlock *allfin; // list of all blocks
 static Lock finlock;
@@ -213,9 +216,9 @@ static struct {
 	byte	*chunk;
 	uintptr	nchunk;
 
-	Obj	*roots;
+	Obj	*roots; // 此数组下存储着nroot个obj
 	uint32	nroot;
-	uint32	rootcap;
+	uint32	rootcap; // nroot <= rootcap, 为roots可容纳的最大root数量.
 } work;
 
 enum {
@@ -1251,7 +1254,8 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 	*_nobj = nobj;
 }
 
-// 在addroots()之后, 并发标记之前调用.
+// 在addroots()之后调用.
+// desc为work.markfor, i为任务索引, 这里是[0 到 (work.nroot-1)]
 // caller: gc()
 static void
 markroot(ParFor *desc, uint32 i)
@@ -1674,6 +1678,7 @@ handlespecial(byte *p, uintptr size)
 // It clears the mark bits in preparation for the next GC round.
 // sweep释放或收集在mark阶段没有被标记的块的finalizers终结器.
 // 并且清理了mark标识位, 为下一次GC做准备.
+// desc为work.sweepfor, idx为任务索引, 这里是[0 到 (runtime·mheap.nspan-1)]
 static void
 sweepspan(ParFor *desc, uint32 idx)
 {
@@ -2123,9 +2128,14 @@ runtime·gc(int32 force)
 	m->locks--;
 
 	// now that gc is done, kick off finalizer thread if needed
+	// 现在gc已经完成, 如果有需要, 则启动finalizer线程.
+	// finq 等待执行的finalizer链表
 	if(finq != nil) {
 		runtime·lock(&finlock);
 		// kick off or wake up goroutine to run queued finalizers
+		// fing 用来执行finalizer的线程链表, G*类型
+		// 如果finq不空ni, 但fing为nil, 就创建一个G协程, 来运行runfinqv.
+		// 而funfinqv其实就是runqinq函数.
 		if(fing == nil)
 			fing = runtime·newproc1(&runfinqv, nil, 0, 0, runtime·gc);
 		else if(fingwait) {
@@ -2206,6 +2216,10 @@ gc(struct gc_args *args)
 	gchelperstart();
 	// 并行mark, 执行上面设置的markroot操作
 	runtime·parfordo(work.markfor);
+	// ...这参数都是nil, 效果是啥???
+	// 对了, 在parfordo中循环调用的markfor, 也就是markroot函数中,
+	// 最后一句就是scanblock.
+	// 那么, 这里的scanblock...是查漏补缺的? 但好像也没什么实际作用啊.
 	scanblock(nil, nil, 0, true);
 
 	if(DebugMark) {
@@ -2378,8 +2392,7 @@ runfinq(void)
 			continue;
 		}
 		runtime·unlock(&finlock);
-		if(raceenabled)
-			runtime·racefingo();
+		if(raceenabled) runtime·racefingo();
 		for(; fb; fb=next) {
 			next = fb->next;
 			for(i=0; i<fb->cnt; i++) {
@@ -2394,8 +2407,7 @@ runfinq(void)
 					frame = runtime·mallocgc(framesz, 0, FlagNoScan|FlagNoInvokeGC);
 					framecap = framesz;
 				}
-				if(f->fint == nil)
-					runtime·throw("missing type in runfinq");
+				if(f->fint == nil) runtime·throw("missing type in runfinq");
 				if(f->fint->kind == KindPtr) {
 					// direct use of pointer
 					*(void**)frame = f->arg;

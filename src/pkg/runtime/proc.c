@@ -172,6 +172,7 @@ extern void main·main(void);
 
 static FuncVal scavenger = {runtime·MHeap_Scavenger};
 
+// 设置initDone为runtime·unlockOSThread()
 static FuncVal initDone = { runtime·unlockOSThread };
 
 // The main goroutine.
@@ -181,24 +182,32 @@ runtime·main(void)
 	Defer d;
 	
 	// Max stack size is 1 GB on 64-bit, 250 MB on 32-bit.
-	// Using decimal instead of binary GB and MB because
-	// they look nicer in the stack overflow failure message.
+	// Using decimal instead of binary GB and MB 
+	// because they look nicer in the stack overflow failure message.
+	// 64位系统上栈空间最大为1G, 32位上则是250M.
+	// 这里用了10进制而不是2进制(1000而不是1024), 
+	// 这样在出现栈溢出时, 错误消息比较好看.
 	if(sizeof(void*) == 8)
 		runtime·maxstacksize = 1000000000;
 	else
 		runtime·maxstacksize = 250000000;
-
+	// 创建监控线程
 	newm(sysmon, nil);
 
-	// Lock the main goroutine onto this, the main OS thread,
-	// during initialization.  Most programs won't care, but a few
+	// Lock the main goroutine onto this, 
+	// the main OS thread, during initialization. 
+	// Most programs won't care, but a few
 	// do require certain calls to be made by the main thread.
 	// Those can arrange for main.main to run in the main thread
 	// by calling runtime.LockOSThread during initialization
 	// to preserve the lock.
+	// 调用runtime·lockOSThread, 在初始化阶段将主协程绑定在当前m对象上.
+	// 大部分操作可能并无所谓, 但有一些事情必须要主线程来做.
+	// 初始化期间持有线程锁, 然后将main·main放在主线程中运行...
 	runtime·lockOSThread();
-	
+
 	// Defer unlock so that runtime.Goexit during init does the unlock too.
+	// initDone就在上面定义, 值为runtime·unlockOSThread()函数
 	d.fn = &initDone;
 	d.siz = 0;
 	d.link = g->defer;
@@ -207,8 +216,7 @@ runtime·main(void)
 	d.free = false;
 	g->defer = &d;
 
-	if(m != &runtime·m0)
-		runtime·throw("runtime·main not on m0");
+	if(m != &runtime·m0) runtime·throw("runtime·main not on m0");
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
 	main·init();
 
@@ -216,21 +224,20 @@ runtime·main(void)
 		runtime·throw("runtime: bad defer entry after init");
 	g->defer = d.link;
 	runtime·unlockOSThread();
-
+	// 这里是用户编写的main()函数, 由编译器指向.
 	main·main();
-	if(raceenabled)
-		runtime·racefini();
+	if(raceenabled) runtime·racefini();
 
 	// Make racy client program work: if panicking on
 	// another goroutine at the same time as main returns,
 	// let the other goroutine finish printing the panic trace.
 	// Once it does, it will exit. See issue 3934.
-	if(runtime·panicking)
-		runtime·park(nil, nil, "panicwait");
+	if(runtime·panicking) runtime·park(nil, nil, "panicwait");
 
+	// runtime·exit()为汇编代码, 针对不同系统平台各自编写.
 	runtime·exit(0);
-	for(;;)
-		*(int32*)runtime·main = 0;
+	// ...这里是清理runtime·main吧? 可是都exit了, 这里为什么还能运行???
+	for(;;) *(int32*)runtime·main = 0;
 }
 
 void
@@ -330,18 +337,21 @@ mcommoninit(M *mp)
 }
 
 // Mark gp ready to run.
+// 将gp标记为ready状态(gp->status需要是Gwaiting状态)
 void
 runtime·ready(G *gp)
 {
 	// Mark runnable.
-	m->locks++;  // disable preemption because it can be holding p in a local var
+	// disable preemption because it can be holding p in a local var
+	m->locks++;
 	if(gp->status != Gwaiting) {
 		runtime·printf("goroutine %D has status %d\n", gp->goid, gp->status);
 		runtime·throw("bad g->status in ready");
 	}
 	gp->status = Grunnable;
 	runqput(m->p, gp);
-	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0)  // TODO: fast atomic
+	// TODO: fast atomic
+	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0)
 		wakep();
 	m->locks--;
 	// restore the preemption request in case we've cleared it in newstack
@@ -441,13 +451,14 @@ runtime·stoptheworld(void)
 	P *p;
 	bool wait;
 
-	runtime·lock(&runtime·sched);
+	runtime·lock(&runtime·sched); // 加锁
 	runtime·sched.stopwait = runtime·gomaxprocs;
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 	preemptall();
 	// stop current P
 	m->p->status = Pgcstop;
 	runtime·sched.stopwait--;
+
 	// try to retake all P's in Psyscall status
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
@@ -461,7 +472,7 @@ runtime·stoptheworld(void)
 		runtime·sched.stopwait--;
 	}
 	wait = runtime·sched.stopwait > 0;
-	runtime·unlock(&runtime·sched);
+	runtime·unlock(&runtime·sched); // 解锁
 
 	// wait for remaining P's to stop voluntarily
 	if(wait) {
@@ -487,6 +498,7 @@ mhelpgc(void)
 	m->helpgc = -1;
 }
 
+// ##runtime·starttheworld
 void
 runtime·starttheworld(void)
 {
@@ -531,8 +543,7 @@ runtime·starttheworld(void)
 		if(p->m) {
 			mp = p->m;
 			p->m = nil;
-			if(mp->nextp)
-				runtime·throw("starttheworld: inconsistent mp->nextp");
+			if(mp->nextp) runtime·throw("starttheworld: inconsistent mp->nextp");
 			mp->nextp = p;
 			runtime·notewakeup(&mp->park);
 		} else {
@@ -553,8 +564,8 @@ runtime·starttheworld(void)
 		newm(mhelpgc, nil);
 	}
 	m->locks--;
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
+	// restore the preemption request in case we've cleared it in newstack
+	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 }
 
 // Called to start an M.
@@ -1710,9 +1721,14 @@ runtime·malg(int32 stacksize)
 // Put it on the queue of g's waiting to run.
 // The compiler turns a go statement into a call to this.
 // Cannot split the stack because it assumes that the arguments
-// are available sequentially after &fn; they would not be
-// copied if a stack split occurred.  It's OK for this to call
-// functions that split the stack.
+// are available sequentially after &fn; 
+// they would not be copied if a stack split occurred. 
+// It's OK for this to call functions that split the stack.
+// 创建一个g对象, 用来运行fn, 传入参数为siz bytes, 将g对象放到waiting队列等待执行.
+// 编译器会将go func()语句转换成对这个函数的调用.
+// 调用栈不可分割, 因为这里假设传入的参数紧随在fn的地址之后,
+// 栈分割发生时就无法被正确获取到.
+// ...最后一句是啥意思
 #pragma textflag NOSPLIT
 void
 runtime·newproc(int32 siz, FuncVal* fn, ...)
@@ -1727,9 +1743,13 @@ runtime·newproc(int32 siz, FuncVal* fn, ...)
 }
 
 // Create a new g running fn with narg bytes of arguments starting
-// at argp and returning nret bytes of results.  callerpc is the
-// address of the go statement that created this.  The new g is put
-// on the queue of g's waiting to run.
+// at argp and returning nret bytes of results. 
+// callerpc is the address of the go statement that created this. 
+// The new g is put on the queue of g's waiting to run.
+// 创建一个新的g对象, 用来执行fn函数, 传入的参数起始地址为argp, 一共narg bytes,
+// 并且返回nret bytes的结果.
+// callerpc是主调函数的地址, pc即程序计数器, 对g切换是有用的.
+// 新创建的g对象会放到waiting队列等待执行.
 G*
 runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
 {
@@ -1737,8 +1757,10 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	G *newg;
 	int32 siz;
 
-//runtime·printf("newproc1 %p %p narg=%d nret=%d\n", fn->fn, argp, narg, nret);
-	m->locks++;  // disable preemption because it can be holding p in a local var
+	//runtime·printf("newproc1 %p %p narg=%d nret=%d\n", fn->fn, argp, narg, nret);
+	// disable preemption because it can be holding p in a local var
+	// 禁止抢占
+	m->locks++; 
 	siz = narg + nret;
 	siz = (siz+7) & ~7;
 
@@ -1781,15 +1803,14 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	newg->status = Grunnable;
 	newg->goid = runtime·xadd64(&runtime·sched.goidgen, 1);
 	newg->panicwrap = 0;
-	if(raceenabled)
-		newg->racectx = runtime·racegostart((void*)callerpc);
+	if(raceenabled) newg->racectx = runtime·racegostart((void*)callerpc);
 	runqput(m->p, newg);
 
 	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0 && fn->fn != runtime·main)  // TODO: fast atomic
 		wakep();
 	m->locks--;
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
+	// restore the preemption request in case we've cleared it in newstack
+	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 	return newg;
 }
 
@@ -1901,9 +1922,14 @@ runtime·gomaxprocsfunc(int32 n)
 	return ret;
 }
 
-// lockOSThread is called by runtime.LockOSThread and runtime.lockOSThread below
-// after they modify m->locked. Do not allow preemption during this call,
+// lockOSThread is called by runtime.LockOSThread 
+// and runtime.lockOSThread below after they modify m->locked. 
+// Do not allow preemption during this call,
 // or else the m might be different in this function than in the caller.
+// caller: runtime·LockOSThread(), runtime·lockOSThread() 就在下面
+// 调用此函数时需要禁止抢占, 否则这里的m对象与调用者的m就不相同了.
+// 所以禁用抢占是为了防止m切换???
+// 这个函数看起来就是将m和g绑定啊...
 #pragma textflag NOSPLIT
 static void
 lockOSThread(void)
@@ -1927,15 +1953,17 @@ runtime·lockOSThread(void)
 }
 
 
-// unlockOSThread is called by runtime.UnlockOSThread and runtime.unlockOSThread below
-// after they update m->locked. Do not allow preemption during this call,
+// unlockOSThread is called by runtime.UnlockOSThread
+// and runtime.unlockOSThread below after they update m->locked. 
+// Do not allow preemption during this call,
 // or else the m might be in different in this function than in the caller.
+// caller: runtime·UnlockOSThread(), runtime·unlockOSThread()
+// 与lockOSThread()相同, 调用此函数也需要禁止抢占.
 #pragma textflag NOSPLIT
 static void
 unlockOSThread(void)
 {
-	if(m->locked != 0)
-		return;
+	if(m->locked != 0) return;
 	m->lockedg = nil;
 	g->lockedm = nil;
 }
