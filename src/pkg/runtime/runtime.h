@@ -130,7 +130,7 @@ enum
 	Pidle,
 	Prunning,
 	Psyscall,
-	Pgcstop,
+	Pgcstop, // runtime·stoptheworld()的时候会将正在运行p设置为这个状态.
 	Pdead,
 };
 enum
@@ -716,7 +716,9 @@ extern	uintptr runtime·zerobase;
 extern	G*	runtime·allg; // G对象链表
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
-extern	P**	runtime·allp;
+// P指针链表, 在runtime·schedinit()中按(MaxGomaxprocs+1)申请的空间
+// 就是说这个链表可容纳MaxGomaxprocs+1个P对象.
+extern	P**	runtime·allp; 
 extern	int32	runtime·gomaxprocs;
 extern	uint32	runtime·needextram;
 extern	uint32	runtime·panicking;

@@ -48,12 +48,16 @@ struct Sched {
 	Lock	gflock;
 	G*	gfree;
 
-	uint32	gcwaiting;	// gc is waiting to run
+	// gc is waiting to run
+	// 取值0或1, 在gc操作前后的runtime·stoptheworld(), runtime·starttheworld()
+	// 还有一个runtime·freezetheworld()函数会设置这个值.
+	// 一般在stoptheworld/freezetheworld时会将其设置为1, starttheworld则会设置为0.
+	uint32	gcwaiting;
 	int32	stopwait;
 	Note	stopnote;
 	uint32	sysmonwait;
 	Note	sysmonnote;
-	uint64	lastpoll;
+	uint64	lastpoll; // 这个值是一个时间值, 纳秒nanotime()
 
 	// cpu profiling rate
 	// cpu数据采集的速率...hz是表示赫兹吗...
@@ -62,6 +66,7 @@ struct Sched {
 
 // The max value of GOMAXPROCS.
 // There are no fundamental restrictions on the value.
+// 通过GOMAXPROCS可设置的P的最大值, 超过这个值不会报错, 而是降低到这个值.
 enum { MaxGomaxprocs = 1<<8 };
 
 Sched	runtime·sched;
@@ -156,10 +161,10 @@ runtime·schedinit(void)
 	procs = 1;
 	p = runtime·getenv("GOMAXPROCS");
 	if(p != nil && (n = runtime·atoi(p)) > 0) {
-		if(n > MaxGomaxprocs)
-			n = MaxGomaxprocs;
+		if(n > MaxGomaxprocs) n = MaxGomaxprocs;
 		procs = n;
 	}
+	// 这是按最大值申请的空间啊...
 	runtime·allp = runtime·malloc((MaxGomaxprocs+1)*sizeof(runtime·allp[0]));
 	procresize(procs);
 	// 正式开启GC. 这里表示runtime启动完成.
@@ -428,14 +433,14 @@ runtime·freezetheworld(void)
 {
 	int32 i;
 
-	if(runtime·gomaxprocs == 1)
-		return;
+	if(runtime·gomaxprocs == 1) return;
 	// stopwait and preemption requests can be lost
 	// due to races with concurrently executing threads,
 	// so try several times
 	for(i = 0; i < 5; i++) {
 		// this should tell the scheduler to not start any new goroutines
 		runtime·sched.stopwait = 0x7fffffff;
+		// 这里用CAS原子操作, 在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
 		runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 		// this should stop running goroutines
 		// no running goroutines
@@ -458,6 +463,7 @@ runtime·stoptheworld(void)
 
 	runtime·lock(&runtime·sched); // 加锁
 	runtime·sched.stopwait = runtime·gomaxprocs;
+	// 这里用CAS原子操作, 在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 	preemptall();
 	// stop current P
@@ -1909,8 +1915,7 @@ runtime·gomaxprocsfunc(int32 n)
 {
 	int32 ret;
 
-	if(n > MaxGomaxprocs)
-		n = MaxGomaxprocs;
+	if(n > MaxGomaxprocs) n = MaxGomaxprocs;
 	runtime·lock(&runtime·sched);
 	ret = runtime·gomaxprocs;
 	if(n <= 0 || n == ret) {
