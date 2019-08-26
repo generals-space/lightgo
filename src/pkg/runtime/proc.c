@@ -55,7 +55,9 @@ struct Sched {
 	Note	sysmonnote;
 	uint64	lastpoll;
 
-	int32	profilehz;	// cpu profiling rate
+	// cpu profiling rate
+	// cpu数据采集的速率...hz是表示赫兹吗...
+	int32	profilehz;
 };
 
 // The max value of GOMAXPROCS.
@@ -337,7 +339,9 @@ mcommoninit(M *mp)
 }
 
 // Mark gp ready to run.
-// 将gp标记为ready状态(gp->status需要是Gwaiting状态)
+// 将gp标记为Grunnable状态(gp->status需要是Gwaiting状态),
+// 并将gp通过runqput()放到待执行队列中.
+// 看样子是单个g对象, 并不是一个链表.
 void
 runtime·ready(G *gp)
 {
@@ -349,6 +353,7 @@ runtime·ready(G *gp)
 		runtime·throw("bad g->status in ready");
 	}
 	gp->status = Grunnable;
+	// 将gp对象放到当前m绑定的p对象的runq待执行队列中.
 	runqput(m->p, gp);
 	// TODO: fast atomic
 	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0)
@@ -1112,6 +1117,9 @@ gcstopm(void)
 
 // Schedules gp to run on the current M.
 // Never returns.
+// 调度指定的gp对象在当前m上开始执行.
+// gp对象的status必须为Grunnable.
+// 无返回值.
 static void
 execute(G *gp)
 {
@@ -1124,14 +1132,14 @@ execute(G *gp)
 	gp->status = Grunning;
 	gp->preempt = false;
 	gp->stackguard0 = gp->stackguard;
+	// 相互绑定
 	m->p->schedtick++;
 	m->curg = gp;
 	gp->m = m;
 
 	// Check whether the profiler needs to be turned on or off.
 	hz = runtime·sched.profilehz;
-	if(m->profilehz != hz)
-		runtime·resetcpuprofiler(hz);
+	if(m->profilehz != hz) runtime·resetcpuprofiler(hz);
 
 	runtime·gogo(&gp->sched);
 }
@@ -1386,6 +1394,7 @@ runtime·gosched0(G *gp)
 	gp->m = nil;
 	m->curg = nil;
 	runtime·lock(&runtime·sched);
+	// 将gp放到全局runq队列中...这也是加锁的原因吧.
 	globrunqput(gp);
 	runtime·unlock(&runtime·sched);
 	if(m->lockedg) {
@@ -1403,8 +1412,7 @@ runtime·gosched0(G *gp)
 void
 runtime·goexit(void)
 {
-	if(raceenabled)
-		runtime·racegoend();
+	if(raceenabled) runtime·racegoend();
 	runtime·mcall(goexit0);
 }
 
@@ -2730,6 +2738,8 @@ pidleget(void)
 
 // Put g on local runnable queue.
 // TODO(dvyukov): consider using lock-free queue.
+// 将目标g对象放到本地p对象的待执行队列(runq成员)
+// 与此相对 globrunqput()是将g放到全局 runq 执行队列中.
 static void
 runqput(P *p, G *gp)
 {
@@ -2740,13 +2750,13 @@ retry:
 	h = p->runqhead;
 	t = p->runqtail;
 	s = p->runqsize;
+	// 这里是 p->runq 队列快满了要扩容吧
 	if(t == h-1 || (h == 0 && t == s-1)) {
 		runqgrow(p);
 		goto retry;
 	}
 	p->runq[t++] = gp;
-	if(t == s)
-		t = 0;
+	if(t == s) t = 0;
 	p->runqtail = t;
 	runtime·unlock(p);
 }
@@ -2769,8 +2779,7 @@ runqget(P *p)
 		return nil;
 	}
 	gp = p->runq[h++];
-	if(h == s)
-		h = 0;
+	if(h == s) h = 0;
 	p->runqhead = h;
 	runtime·unlock(p);
 	return gp;

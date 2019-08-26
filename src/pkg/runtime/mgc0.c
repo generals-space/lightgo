@@ -183,7 +183,7 @@ extern byte ebss[];
 extern byte gcdata[];
 extern byte gcbss[];
 
-// 用来执行finalizer的协程链表
+// 用来执行finalizer的协程 ~~链表~~, 不对, 好像只有一个
 static G *fing; 
 // list of finalizers that are to be executed
 // 等待执行的finalizer链表
@@ -2111,7 +2111,7 @@ runtime·gc(int32 force)
 		g->status = Gwaiting;
 		g->waitreason = "garbage collection";
 		// mgc上下面定义的函数名, 是实际执行GC的函数.
-		// runtime·mcall是汇编代码, 原型为void mcall(void (*fn)(G*))
+		// runtime·mcall 是汇编代码, 原型为void mcall(void (*fn)(G*))
 		// 作用是切换到m->g0的上下文, 并调用mgc(g).
 		// 注意参数g应该就是此处的局部变量g.
 		runtime·mcall(mgc);
@@ -2133,18 +2133,24 @@ runtime·gc(int32 force)
 	if(finq != nil) {
 		runtime·lock(&finlock);
 		// kick off or wake up goroutine to run queued finalizers
-		// fing 用来执行finalizer的线程链表, G*类型
+		// fing 用来执行finalizer的线程对象, 指针类型
 		// 如果finq不空ni, 但fing为nil, 就创建一个G协程, 来运行runfinqv.
 		// 而funfinqv其实就是runqinq函数.
 		if(fing == nil)
 			fing = runtime·newproc1(&runfinqv, nil, 0, 0, runtime·gc);
 		else if(fingwait) {
+			// 如果fingwait, 表示此时fing中的g对象都为Gwaiting状态.
+			// 这里设置其值为0, 并调用runtime·ready()将其转换为Grunnable状态.
+			// ...runtime·newproc1()创建的g对象的状态就是Grunnable.
 			fingwait = 0;
+			// 不过runtime·ready()貌似是只设置单个g对象的状态, 难道fing就只有一个?
 			runtime·ready(fing);
 		}
 		runtime·unlock(&finlock);
 	}
 	// give the queued finalizers, if any, a chance to run
+	// 使已经在排队的finalizer有机会执行...
+	// 话说startworld并不表示重新开始调度吗???
 	runtime·gosched();
 }
 

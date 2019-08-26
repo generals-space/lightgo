@@ -307,9 +307,13 @@ struct	M
 	G*	gsignal;	// signal-handling G
 	uintptr	tls[4];		// thread-local storage (for x86 extern register)
 	void	(*mstartfn)(void);
-	G*	curg;		// current running goroutine
+	// current running goroutine
+	// 当前正在运行的g对象
+	G*	curg;
 	G*	caughtsig;	// goroutine running during fatal signal
-	P*	p;		// attached P for executing Go code (nil if not executing Go code)
+	// attached P for executing Go code (nil if not executing Go code)
+	// 这里应该是单个p对象, 一个m只绑定一个p
+	P*	p;
 	P*	nextp;
 	int32	id;
 	int32	mallocing; // 类似于锁的变量, 1表示此m对象正在分配内存, 0表示分配完成.
