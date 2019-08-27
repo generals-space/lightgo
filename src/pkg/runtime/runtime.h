@@ -939,16 +939,27 @@ void	runtime·unlock(Lock*);
  * subsequent noteclear must be called only after
  * previous notesleep has returned, e.g. it's disallowed
  * to call noteclear straight after notewakeup.
+ * 在一次性事件中休眠或唤醒. 在调用notesleep()和notewakeup()之前,
+ * 必须先调用noteclear()初始化Note对象.
+ * 然后, 只有一个线程可以调用notesleep(), 也只有一个线程可以调用notewakeup()
+ * 一旦notewakeup()被调用, notesleep()就会返回, 且以后notesleep()都会立即返回.
+ * 我想, 要想再次实现这种休眠与唤醒, 需要再次初始化Note对象, 重新来过吧.
+ * 另外, noteclear()只能在上一次的notesleep()返回后才能调用,
+ * 即, 调用notewakeup()后不可立即调用noteclear(), 需要等到notesleep()返回后才行.
  *
- * notetsleep is like notesleep but wakes up after
- * a given number of nanoseconds even if the event
- * has not yet happened. 
- * if a goroutine uses notetsleep to
- * wake up early, it must wait to call noteclear until it
- * can be sure that no other goroutine is calling notewakeup.
- *
+ * notetsleep is like notesleep but wakes up after a given number of nanoseconds 
+ * even if the event has not yet happened. 
+ * if a goroutine uses notetsleep to wake up early,
+ * it must wait to call noteclear until 
+ * it can be sure that no other goroutine is calling notewakeup.
+ * notetsleep与notesleep相似, 但ta会在一个给定时间内(单位为纳秒)返回,
+ * 即使目标事件并没有发生.
+ * 如果一个协程使用notetsleep()希望能够在调用wakeup()前提前结束,
+ * 那ta必须...啥, 直到能够确认没有其他协程会调用notewakeup()
  * notesleep/notetsleep are generally called on g0,
  * notetsleepg is similar to notetsleep but is called on user g.
+ * notesleep/notetsleep一般在g0上调用,
+ * 而notetsleepg与notetsleep类似, 但是是在用户级协程g对象上调用.
  */
 void	runtime·noteclear(Note*);
 void	runtime·notesleep(Note*);
