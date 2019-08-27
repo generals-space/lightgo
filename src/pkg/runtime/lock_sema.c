@@ -173,8 +173,7 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 
 	// Register for wakeup on n->waitm.
 	if(!runtime·casp((void**)&n->key, nil, m)) {  // must be LOCKED (got wakeup already)
-		if(n->key != LOCKED)
-			runtime·throw("notetsleep - waitm out of sync");
+		if(n->key != LOCKED) runtime·throw("notetsleep - waitm out of sync");
 		return true;
 	}
 
@@ -195,8 +194,7 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 
 		// Interrupted or timed out.  Still registered.  Semaphore not acquired.
 		ns = deadline - runtime·nanotime();
-		if(ns <= 0)
-			break;
+		if(ns <= 0) break;
 		// Deadline hasn't arrived.  Keep sleeping.
 	}
 
@@ -208,8 +206,7 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 		mp = runtime·atomicloadp((void**)&n->key);
 		if(mp == m) {
 			// No wakeup yet; unregister if possible.
-			if(runtime·casp((void**)&n->key, mp, nil))
-				return false;
+			if(runtime·casp((void**)&n->key, mp, nil)) return false;
 		} else if(mp == (M*)LOCKED) {
 			// Wakeup happened so semaphore is available.
 			// Grab it to avoid getting out of sync.
@@ -221,16 +218,16 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 	}
 }
 
+// ns 纳秒时间长度
+// caller: runtime·stoptheworld()
 bool
 runtime·notetsleep(Note *n, int64 ns)
 {
 	bool res;
 
-	if(g != m->g0 && !m->gcing)
-		runtime·throw("notetsleep not on g0");
+	if(g != m->g0 && !m->gcing) runtime·throw("notetsleep not on g0");
 
-	if(m->waitsema == 0)
-		m->waitsema = runtime·semacreate();
+	if(m->waitsema == 0) m->waitsema = runtime·semacreate();
 
 	res = notetsleep(n, ns, 0, nil);
 	return res;

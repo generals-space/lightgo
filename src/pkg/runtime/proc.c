@@ -440,7 +440,7 @@ runtime·freezetheworld(void)
 	for(i = 0; i < 5; i++) {
 		// this should tell the scheduler to not start any new goroutines
 		runtime·sched.stopwait = 0x7fffffff;
-		// 这里用CAS原子操作, 在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
+		// 这里用CAS原子操作, 而在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
 		runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 		// this should stop running goroutines
 		// no running goroutines
@@ -462,15 +462,18 @@ runtime·stoptheworld(void)
 	bool wait;
 
 	runtime·lock(&runtime·sched); // 加锁
+	// 这里stopwait表示当前go程序启动的P的数量(经过schedinit, 这个值应该就在1-GOMAXPROCS之间)
 	runtime·sched.stopwait = runtime·gomaxprocs;
-	// 这里用CAS原子操作, 在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
+	// 这里用CAS原子操作, 而在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 	preemptall();
 	// stop current P
+	// 1. 停止当前的P, 将其状态转换成Pgcstop
 	m->p->status = Pgcstop;
 	runtime·sched.stopwait--;
 
 	// try to retake all P's in Psyscall status
+	// 2. 将陷入系统调用的P也转换成Pgcstop状态
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
 		s = p->status;
@@ -478,6 +481,7 @@ runtime·stoptheworld(void)
 			runtime·sched.stopwait--;
 	}
 	// stop idle P's
+	// 3. 将空闲的P转换成Pgcstop
 	while(p = pidleget()) {
 		p->status = Pgcstop;
 		runtime·sched.stopwait--;
@@ -486,13 +490,16 @@ runtime·stoptheworld(void)
 	runtime·unlock(&runtime·sched); // 解锁
 
 	// wait for remaining P's to stop voluntarily
+	// 如果wait为true, 表示仍有其他状态的p对象, 等待ta们自动停止.
 	if(wait) {
 		for(;;) {
 			// wait for 100us, then try to re-preempt in case of any races
+			// 每次等待100us, 然后尝试抢占
 			if(runtime·notetsleep(&runtime·sched.stopnote, 100*1000)) {
 				runtime·noteclear(&runtime·sched.stopnote);
 				break;
 			}
+			// 发起抢占请求, 尝试停止所有正在运行的goroutine
 			preemptall();
 		}
 	}
@@ -568,8 +575,9 @@ runtime·starttheworld(void)
 		// If GC could have used another helper proc, start one now,
 		// in the hope that it will be available next time.
 		// It would have been even better to start it before the collection,
-		// but doing so requires allocating memory, so it's tricky to
-		// coordinate.  This lazy approach works out in practice:
+		// but doing so requires allocating memory, 
+		// so it's tricky to coordinate. 
+		// This lazy approach works out in practice:
 		// we don't mind if the first couple gc rounds don't have quite
 		// the maximum number of procs.
 		newm(mhelpgc, nil);
@@ -2471,8 +2479,7 @@ retake(int64 now)
 	n = 0;
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p==nil)
-			continue;
+		if(p==nil) continue;
 		pd = &pdesc[i];
 		s = p->status;
 		if(s == Psyscall) {
@@ -2505,8 +2512,7 @@ retake(int64 now)
 				pd->schedwhen = now;
 				continue;
 			}
-			if(pd->schedwhen + 10*1000*1000 > now)
-				continue;
+			if(pd->schedwhen + 10*1000*1000 > now) continue;
 			preemptone(p);
 		}
 	}
@@ -2514,10 +2520,17 @@ retake(int64 now)
 }
 
 // Tell all goroutines that they have been preempted and they should stop.
-// This function is purely best-effort.  It can fail to inform a goroutine if a
-// processor just started running it.
+// This function is purely best-effort. 
+// It can fail to inform a goroutine if a processor just started running it.
 // No locks need to be held.
 // Returns true if preemption request was issued to at least one goroutine.
+// preempt all: 告诉所有的正在运行的goroutines(其实遍历的是p对象链表), 他们...被抢占了, 需要停止.
+// 1. 这个函数纯粹就是尽最大努力, 并不保证结果.
+// 当一个P刚开始运行一个goroutine时, 这个函数对这个goroutine的通知可能会失败.
+// 2. 无需持有锁.
+// 3. 只要有一个goroutine被通知到了, 结果就是true
+// ta只是用for循环对每个处于running状态的p对象调用preemptone(p),
+// 然后返回结果, 没有额外操作.
 static bool
 preemptall(void)
 {
@@ -2526,34 +2539,45 @@ preemptall(void)
 	bool res;
 
 	res = false;
+	// 遍历p队列
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p == nil || p->status != Prunning)
-			continue;
+		if(p == nil || p->status != Prunning) continue;
 		res |= preemptone(p);
 	}
 	return res;
 }
 
 // Tell the goroutine running on processor P to stop.
-// This function is purely best-effort.  It can incorrectly fail to inform the
-// goroutine.  It can send inform the wrong goroutine.  Even if it informs the
-// correct goroutine, that goroutine might ignore the request if it is
+// This function is purely best-effort. 
+// It can incorrectly fail to inform the goroutine. 
+// It can send inform the wrong goroutine. 
+// Even if it informs the correct goroutine, 
+// that goroutine might ignore the request if it is
 // simultaneously executing runtime·newstack.
-// No lock needs to be held.
+// No lock needs to be held. 
 // Returns true if preemption request was issued.
+// preempt one 告知目标p上正在运行的goroutine停止(被抢占)
+// 1. ta同样只是尽最大努力, 并不保证结果, 很可能错误的没有通知到.
+// 也可能通知到别的gorotine(协程切换的时候吧..)
+// 即使通知到了, 目标goroutine也可能会忽略, 
+// 比如ta正在执行runtime·newstack()操作.
+// 2. 无需持有锁
+// 3. 如果抢占请求被通知到了, 就返回true.
 static bool
 preemptone(P *p)
 {
 	M *mp;
 	G *gp;
 
+	// 既然是抢占, 当然是我抢占别人啊.
+	// m就是调用者本身所在的M对象吧, 肯定不能抢啊.
 	mp = p->m;
-	if(mp == nil || mp == m)
-		return false;
+	if(mp == nil || mp == m) return false;
+
 	gp = mp->curg;
-	if(gp == nil || gp == mp->g0)
-		return false;
+	if(gp == nil || gp == mp->g0) return false;
+	// 设置一个p->m->g对象的状态标记就可以了.
 	gp->preempt = true;
 	gp->stackguard0 = StackPreempt;
 	return true;

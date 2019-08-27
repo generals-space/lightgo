@@ -147,29 +147,31 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 		return true;
 	}
 
-	if(runtime·atomicload((uint32*)&n->key) != 0)
-		return true;
+	if(runtime·atomicload((uint32*)&n->key) != 0) return true;
 
 	deadline = runtime·nanotime() + ns;
 	for(;;) {
 		runtime·futexsleep((uint32*)&n->key, 0, ns);
-		if(runtime·atomicload((uint32*)&n->key) != 0)
-			break;
+
+		if(runtime·atomicload((uint32*)&n->key) != 0) break;
+		
 		now = runtime·nanotime();
-		if(now >= deadline)
-			break;
+		
+		if(now >= deadline) break;
+
 		ns = deadline - now;
 	}
 	return runtime·atomicload((uint32*)&n->key) != 0;
 }
 
+// ns 纳秒时间长度
+// caller: runtime·stoptheworld()
 bool
 runtime·notetsleep(Note *n, int64 ns)
 {
 	bool res;
-
-	if(g != m->g0 && !m->gcing)
-		runtime·throw("notetsleep not on g0");
+	// g0是特殊的g对象, 在m中, g0可以拥有调度堆栈
+	if(g != m->g0 && !m->gcing) runtime·throw("notetsleep not on g0");
 
 	res = notetsleep(n, ns, 0, 0);
 	return res;
@@ -182,8 +184,7 @@ runtime·notetsleepg(Note *n, int64 ns)
 {
 	bool res;
 
-	if(g == m->g0)
-		runtime·throw("notetsleepg on g0");
+	if(g == m->g0) runtime·throw("notetsleepg on g0");
 
 	runtime·entersyscallblock();
 	res = notetsleep(n, ns, 0, 0);

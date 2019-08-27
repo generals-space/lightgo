@@ -253,7 +253,8 @@ struct	G
 {
 	// stackguard0 can be set to StackPreempt as opposed to stackguard
 	// cannot move - also known to linker, libmach, runtime/cgo
-	uintptr	stackguard0;	
+	// stackguard0 被设置为 StackPreempt, 表示当前g对象被抢占(对比 preempt 字段)
+	uintptr	stackguard0;
 	uintptr	stackbase;	// cannot move - also known to libmach, runtime/cgo
 	uint32	panicwrap;	// cannot move - also known to linker
 	uint32	selgen;		// valid sudog pointer
@@ -265,7 +266,7 @@ struct	G
 	uintptr	syscallpc;	// if status==Gsyscall, syscallpc = sched.pc to use during gc
 	uintptr	syscallguard;	// if status==Gsyscall, syscallguard = stackguard to use during gc
 	// same as stackguard0, but not set to StackPreempt
-	uintptr	stackguard;	
+	uintptr	stackguard;
 	uintptr	stack0;
 	uintptr	stacksize;
 	G*	alllink;	// on allg
@@ -277,7 +278,10 @@ struct	G
 	bool	ispanic;
 	bool	issystem;	// do not output in stack dump
 	bool	isbackground;	// ignore in deadlock detector
-	bool	preempt;	// preemption signal, duplicates stackguard0 = StackPreempt
+	// preemption signal, duplicates stackguard0 = StackPreempt
+	// 如果当前协程被抢占(如调用 preemptone()时), 则这个字段为true, 
+	// 同时 stackguard0 字段也会被设置为 StackPreempt
+	bool	preempt;
 	int8	raceignore;	// ignore race detection events
 	M*	m;		// for debuggers, but offset not hard-coded
 	M*	lockedm;
@@ -295,7 +299,8 @@ struct	G
 };
 struct	M
 {
-	G*	g0;		// goroutine with scheduling stack
+	// goroutine with scheduling stack
+	G*	g0;
 	void*	moreargp;	// argument pointer for more stack
 	Gobuf	morebuf;	// gobuf arg to morestack
 
@@ -929,18 +934,18 @@ void	runtime·unlock(Lock*);
  * must call noteclear to initialize the Note.
  * then, exactly one thread can call notesleep
  * and exactly one thread can call notewakeup (once).
- * once notewakeup has been called, the notesleep
- * will return.  future notesleep will return immediately.
+ * once notewakeup has been called, the notesleep will return. 
+ * future notesleep will return immediately.
  * subsequent noteclear must be called only after
  * previous notesleep has returned, e.g. it's disallowed
  * to call noteclear straight after notewakeup.
  *
  * notetsleep is like notesleep but wakes up after
  * a given number of nanoseconds even if the event
- * has not yet happened.  if a goroutine uses notetsleep to
+ * has not yet happened. 
+ * if a goroutine uses notetsleep to
  * wake up early, it must wait to call noteclear until it
- * can be sure that no other goroutine is calling
- * notewakeup.
+ * can be sure that no other goroutine is calling notewakeup.
  *
  * notesleep/notetsleep are generally called on g0,
  * notetsleepg is similar to notetsleep but is called on user g.
