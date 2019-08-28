@@ -182,10 +182,10 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 		runtime·semasleep(-1);
 		return true;
 	}
-
+	// 计时开始
 	deadline = runtime·nanotime() + ns;
 	for(;;) {
-		// Registered.  Sleep.
+		// Registered. Sleep.
 		if(runtime·semasleep(ns) >= 0) {
 			// Acquired semaphore, semawakeup unregistered us.
 			// Done.
@@ -194,14 +194,19 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 
 		// Interrupted or timed out.  Still registered.  Semaphore not acquired.
 		ns = deadline - runtime·nanotime();
+		// 如果deadline时间已到, 则braek
 		if(ns <= 0) break;
-		// Deadline hasn't arrived.  Keep sleeping.
+		// Deadline hasn't arrived. Keep sleeping.
+		// 如果未到, 则继续沉睡.
 	}
 
-	// Deadline arrived.  Still registered.  Semaphore not acquired.
+	// Deadline arrived. Still registered. Semaphore not acquired.
 	// Want to give up and return, but have to unregister first,
 	// so that any notewakeup racing with the return does not
 	// try to grant us the semaphore when we don't expect it.
+	// deadline时间到, 仍在注册状态, 且现在未持有信号量.
+	// 现在想放弃并返回, 但首先需要先注销, 
+	// 这样任何
 	for(;;) {
 		mp = runtime·atomicloadp((void**)&n->key);
 		if(mp == m) {
@@ -220,11 +225,12 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 
 // ns 纳秒时间长度
 // caller: runtime·stoptheworld()
+// 只有g0对象可调用.
 bool
 runtime·notetsleep(Note *n, int64 ns)
 {
 	bool res;
-
+	// 只有g0, 且只在m处于gc操作时才可调用.
 	if(g != m->g0 && !m->gcing) runtime·throw("notetsleep not on g0");
 
 	if(m->waitsema == 0) m->waitsema = runtime·semacreate();

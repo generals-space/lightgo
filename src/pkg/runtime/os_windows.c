@@ -189,12 +189,10 @@ int32
 runtime·semasleep(int64 ns)
 {
 	// store ms in ns to save stack space
-	if(ns < 0)
-		ns = INFINITE;
+	if(ns < 0) ns = INFINITE;
 	else {
 		ns = runtime·timediv(ns, 1000000, nil);
-		if(ns == 0)
-			ns = 1;
+		if(ns == 0) ns = 1;
 	}
 	if(runtime·stdcall(runtime·WaitForSingleObject, 2, m->waitsema, (uintptr)ns) != 0)
 		return -1;  // timeout

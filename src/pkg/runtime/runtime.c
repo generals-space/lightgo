@@ -12,8 +12,9 @@ enum {
 
 /*
  * We assume that all architectures turn faults and the like
- * into apparent calls to runtime.sigpanic.  If we see a "call"
- * to runtime.sigpanic, we do not back up the PC to find the
+ * into apparent calls to runtime.sigpanic. 
+ * If we see a "call" to runtime.sigpanic, 
+ * we do not back up the PC to find the
  * line number of the CALL instruction, because there is no CALL.
  */
 void	runtime·sigpanic(void);
@@ -29,14 +30,12 @@ runtime·gotraceback(bool *crash)
 {
 	byte *p;
 
-	if(crash != nil)
-		*crash = false;
+	if(crash != nil) *crash = false;
 	p = runtime·getenv("GOTRACEBACK");
-	if(p == nil || p[0] == '\0')
-		return 1;	// default is on
+	// default is on
+	if(p == nil || p[0] == '\0') return 1;
 	if(runtime·strcmp(p, (byte*)"crash") == 0) {
-		if(crash != nil)
-			*crash = true;
+		if(crash != nil) *crash = true;
 		return 2;	// extra information
 	}
 	return runtime·atoi(p);
@@ -51,10 +50,8 @@ runtime·mcmp(byte *s1, byte *s2, uintptr n)
 	for(i=0; i<n; i++) {
 		c1 = s1[i];
 		c2 = s2[i];
-		if(c1 < c2)
-			return -1;
-		if(c1 > c2)
-			return +1;
+		if(c1 < c2) return -1;
+		if(c1 > c2) return +1;
 	}
 	return 0;
 }
@@ -64,8 +61,7 @@ byte*
 runtime·mchr(byte *p, byte c, byte *ep)
 {
 	for(; p < ep; p++)
-		if(*p == c)
-			return p;
+		if(*p == c) return p;
 	return nil;
 }
 // 如果用ida pro对go程序进行反编译, 可以发现在入口处会对argc和argv进行赋值.
@@ -401,8 +397,7 @@ runtime·parsedebugvars(void)
 	intgo i, n;
 
 	p = runtime·getenv("GODEBUG");
-	if(p == nil)
-		return;
+	if(p == nil) return;
 	for(;;) {
 		for(i=0; i<nelem(dbgvar); i++) {
 			n = runtime·findnull((byte*)dbgvar[i].name);
@@ -410,16 +405,20 @@ runtime·parsedebugvars(void)
 				*dbgvar[i].value = runtime·atoi(p+n+1);
 		}
 		p = runtime·strstr(p, (byte*)",");
-		if(p == nil)
-			break;
+		if(p == nil) break;
 		p++;
 	}
 }
 
 // Poor mans 64-bit division.
-// This is a very special function, do not use it if you are not sure what you are doing.
-// int64 division is lowered into _divv() call on 386, which does not fit into nosplit functions.
+// This is a very special function, 
+// do not use it if you are not sure what you are doing.
+// int64 division is lowered into _divv() call on 386, 
+// which does not fit into nosplit functions.
 // Handles overflow in a time-specific manner.
+// 寒酸的64位除法实现.
+// 这是一个十分特殊的函数, 谨慎使用.
+// 
 #pragma textflag NOSPLIT
 int32
 runtime·timediv(int64 v, int32 div, int32 *rem)
@@ -427,10 +426,10 @@ runtime·timediv(int64 v, int32 div, int32 *rem)
 	int32 res, bit;
 
 	if(v >= (int64)div*0x7fffffffLL) {
-		if(rem != nil)
-			*rem = 0;
+		if(rem != nil) *rem = 0;
 		return 0x7fffffff;
 	}
+	
 	res = 0;
 	for(bit = 30; bit >= 0; bit--) {
 		if(v >= ((int64)div<<bit)) {
@@ -438,7 +437,6 @@ runtime·timediv(int64 v, int32 div, int32 *rem)
 			res += 1<<bit;
 		}
 	}
-	if(rem != nil)
-		*rem = v;
+	if(rem != nil) *rem = v;
 	return res;
 }

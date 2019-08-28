@@ -22,6 +22,9 @@ static Sigset sigset_all = { ~(uint32)0, ~(uint32)0 };
 // Futexsleep atomically checks if *addr == val and if so, sleeps on addr.
 // Futexwakeup wakes up threads sleeping on addr.
 // Futexsleep is allowed to wake up spuriously.
+// futexsleep()原子地检查 *addr == val 是否为true, 如果为true, 就在addr上陷入休眠.
+// futexwakeup()则是将在addr处休眠的协程唤醒.
+// futexsleep()允许被误唤醒...唤醒错了???
 
 enum
 {
@@ -33,6 +36,9 @@ enum
 //	if(*addr == val) sleep
 // Might be woken up spuriously; that's allowed.
 // Don't sleep longer than ns; ns < 0 means forever.
+// 原子地检查 *addr == val 是否为true, 如果是, 则休眠
+// 允许被误唤醒
+// 休眠时间最长为 ns 纳秒, 如果 ns < 0, 表示永久休眠.
 #pragma textflag NOSPLIT
 void
 runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
@@ -40,11 +46,12 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 	Timespec ts;
 
 	// Some Linux kernels have a bug where futex of
-	// FUTEX_WAIT returns an internal error code
-	// as an errno.  Libpthread ignores the return value
-	// here, and so can we: as it says a few lines up,
+	// FUTEX_WAIT returns an internal error code as an errno. 
+	// Libpthread ignores the return value here,
+	// and so can we: as it says a few lines up,
 	// spurious wakeups are allowed.
 
+	// ns小于0, 则永久休眠
 	if(ns < 0) {
 		runtime·futex(addr, FUTEX_WAIT, val, nil, nil, 0);
 		return;
@@ -63,11 +70,10 @@ runtime·futexwakeup(uint32 *addr, uint32 cnt)
 
 	ret = runtime·futex(addr, FUTEX_WAKE, cnt, nil, nil, 0);
 
-	if(ret >= 0)
-		return;
+	if(ret >= 0) return;
 
-	// I don't know that futex wakeup can return
-	// EAGAIN or EINTR, but if it does, it would be
+	// I don't know that futex wakeup can return EAGAIN or EINTR, 
+	// but if it does, it would be
 	// safe to loop and call futex again.
 	runtime·printf("futexwakeup addr=%p returned %D\n", addr, ret);
 	*(int32*)0x1006 = 0x1006;

@@ -148,7 +148,7 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 	}
 
 	if(runtime·atomicload((uint32*)&n->key) != 0) return true;
-
+	// 计时开始
 	deadline = runtime·nanotime() + ns;
 	for(;;) {
 		runtime·futexsleep((uint32*)&n->key, 0, ns);
@@ -161,6 +161,8 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 
 		ns = deadline - now;
 	}
+	// deadline时间到
+	
 	return runtime·atomicload((uint32*)&n->key) != 0;
 }
 
