@@ -43,6 +43,7 @@ struct Sched {
 	// Global runnable queue.
 	G*	runqhead;
 	G*	runqtail;
+	// runq队列的长度, 表示挂在全局待运行队列的g对象的数量
 	int32	runqsize;
 
 	// Global cache of dead G's.
@@ -998,8 +999,7 @@ startm(P *p, bool spinning)
 		p = pidleget();
 		if(p == nil) {
 			runtime·unlock(&runtime·sched);
-			if(spinning)
-				runtime·xadd(&runtime·sched.nmspinning, -1);
+			if(spinning) runtime·xadd(&runtime·sched.nmspinning, -1);
 			return;
 		}
 	}
@@ -1007,15 +1007,12 @@ startm(P *p, bool spinning)
 	runtime·unlock(&runtime·sched);
 	if(mp == nil) {
 		fn = nil;
-		if(spinning)
-			fn = mspinning;
+		if(spinning) fn = mspinning;
 		newm(fn, p);
 		return;
 	}
-	if(mp->spinning)
-		runtime·throw("startm: m is spinning");
-	if(mp->nextp)
-		runtime·throw("startm: m has p");
+	if(mp->spinning) runtime·throw("startm: m is spinning");
+	if(mp->nextp) runtime·throw("startm: m has p");
 	mp->spinning = spinning;
 	mp->nextp = p;
 	runtime·notewakeup(&mp->park);
@@ -1063,16 +1060,21 @@ handoffp(P *p)
 
 // Tries to add one more P to execute G's.
 // Called when a G is made runnable (newproc, ready).
+// 尝试再添加一个p对象来执行g任务
 static void
 wakep(void)
 {
 	// be conservative about spinning threads
-	if(!runtime·cas(&runtime·sched.nmspinning, 0, 1))
-		return;
+	// 对于spin线程要保守一些
+	// 如果存在spin状态的m, 直接返回.
+	// 否则就创建一个新的m
+	if(!runtime·cas(&runtime·sched.nmspinning, 0, 1)) return;
+	// ...不是说添加p对象吗, 怎么startm了
 	startm(nil, true);
 }
 
-// Stops execution of the current m that is locked to a g until the g is runnable again.
+// Stops execution of the current m that is locked to a g 
+// until the g is runnable again.
 // Returns with acquired P.
 static void
 stoplockedm(void)
@@ -1119,6 +1121,7 @@ startlockedm(G *gp)
 // Stops the current m for stoptheworld.
 // Returns when the world is restarted.
 // STW期间, 停止当前m, 直到starttheworld时再返回.
+// caller: findrunnable(), schedule()
 static void
 gcstopm(void)
 {
@@ -1131,10 +1134,13 @@ gcstopm(void)
 		m->spinning = false;
 		runtime·xadd(&runtime·sched.nmspinning, -1);
 	}
+	// 解除与当前m绑定的p对象并将其返回, 此时p的状态为idle
 	p = releasep();
 
 	runtime·lock(&runtime·sched);
 	p->status = Pgcstop;
+	// stopwait减1, 此时如果其值等于0, 就可以唤醒在stopnote休眠的函数了.
+	// 比如runtime·stoptheworld()
 	if(--runtime·sched.stopwait == 0) 
 		runtime·notewakeup(&runtime·sched.stopnote);
 	runtime·unlock(&runtime·sched);
@@ -1189,6 +1195,7 @@ top:
 	// local runq
 	gp = runqget(m->p);
 	if(gp) return gp;
+
 	// global runq
 	if(runtime·sched.runqsize) {
 		runtime·lock(&runtime·sched);
@@ -1288,15 +1295,19 @@ resetspinning(void)
 	int32 nmspinning;
 
 	if(m->spinning) {
+		// 解除当前m的spin状态
 		m->spinning = false;
 		nmspinning = runtime·xadd(&runtime·sched.nmspinning, -1);
-		if(nmspinning < 0)
-			runtime·throw("findrunnable: negative nmspinning");
+
+		if(nmspinning < 0) runtime·throw("findrunnable: negative nmspinning");
 	} else
 		nmspinning = runtime·atomicload(&runtime·sched.nmspinning);
 
-	// M wakeup policy is deliberately somewhat conservative (see nmspinning handling),
+	// M wakeup policy is deliberately somewhat conservative 
+	// (see nmspinning handling),
 	// so see if we need to wakeup another P here.
+	// m对象的wakeup策略是有意保守一些的,
+	// 所以这里需要确认是否有必要唤醒另一个p.
 	if (nmspinning == 0 && runtime·atomicload(&runtime·sched.npidle) > 0)
 		wakep();
 }
@@ -1309,8 +1320,8 @@ injectglist(G *glist)
 	int32 n;
 	G *gp;
 
-	if(glist == nil)
-		return;
+	if(glist == nil) return;
+
 	runtime·lock(&runtime·sched);
 	for(n = 0; glist; n++) {
 		gp = glist;
@@ -1335,6 +1346,7 @@ schedule(void)
 	if(m->locks) runtime·throw("schedule: holding locks");
 
 top:
+	// stoptheworld/freezetheworld调用时会将此值设置为1
 	if(runtime·sched.gcwaiting) {
 		gcstopm();
 		goto top;
@@ -1344,13 +1356,21 @@ top:
 	// Check the global runnable queue once in a while to ensure fairness.
 	// Otherwise two goroutines can completely occupy the local runqueue
 	// by constantly respawning each other.
+	// 按照一定频率检测全局待运行队列以保证公平性.
+	// 否则两个协程可以不断在本地待运行队列互相重新创建, 这样就没有机会运行其他队列中的任务了.
 	tick = m->p->schedtick;
 	// This is a fancy way to say tick%61==0,
-	// it uses 2 MUL instructions instead of a single DIV and so is faster on modern processors.
+	// it uses 2 MUL instructions instead of a single DIV 
+	// and so is faster on modern processors.
+	// 这是一个实现了与tick%61==0相同功能的, 比较fancy(花哨)的方式.
+	// ta使用了2个乘法指令, 代替了1个除法指令, 在现代CPU中, 速度更快.
 	if(tick - (((uint64)tick*0x4325c53fu)>>36)*61 == 0 && runtime·sched.runqsize > 0) {
 		runtime·lock(&runtime·sched);
+		// 从全局待运行任务队列中获取一个任务g对象, 
+		// 并将其放到m->p的本地待执行队列中.
 		gp = globrunqget(m->p, 1);
 		runtime·unlock(&runtime·sched);
+
 		if(gp) resetspinning();
 	}
 	if(gp == nil) {
@@ -2726,22 +2746,27 @@ globrunqput(G *gp)
 
 // Try get a batch of G's from the global runnable queue.
 // Sched must be locked.
+// 尝试从全局待运行队列获取一组g对象链表, 链表中g对象的数量最多为max.
+// 调用者必须对sched对象加锁
 static G*
 globrunqget(P *p, int32 max)
 {
 	G *gp, *gp1;
 	int32 n;
 
-	if(runtime·sched.runqsize == 0)
-		return nil;
+	// ...全局待运行队列为0
+	if(runtime·sched.runqsize == 0) return nil;
+	// ...要把runq中的任务平均分给每个p吗
 	n = runtime·sched.runqsize/runtime·gomaxprocs+1;
-	if(n > runtime·sched.runqsize)
-		n = runtime·sched.runqsize;
-	if(max > 0 && n > max)
-		n = max;
+	// 下面这种情况应该是gomaxprocs = 1时吧
+	if(n > runtime·sched.runqsize) n = runtime·sched.runqsize;
+
+	if(max > 0 && n > max) n = max;
 	runtime·sched.runqsize -= n;
-	if(runtime·sched.runqsize == 0)
-		runtime·sched.runqtail = nil;
+
+	if(runtime·sched.runqsize == 0) runtime·sched.runqtail = nil;
+	// 要返回的p链表, 从sched的runqhead开始.
+	// 同时将这个链表中的g成员通过qunqput添加到p的本地待执行队列中.
 	gp = runtime·sched.runqhead;
 	runtime·sched.runqhead = gp->schedlink;
 	n--;
