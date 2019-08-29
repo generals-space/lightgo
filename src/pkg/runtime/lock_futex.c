@@ -106,6 +106,9 @@ runtime·unlock(Lock *l)
 }
 
 // One-time notifications.
+// n->key = 0表示可以在此休眠,
+// 在sleep函数中会判断n->key的值, 
+// 如果不为0, 则表示被唤醒, 可以返回了.
 void
 runtime·noteclear(Note *n)
 {
@@ -125,9 +128,12 @@ runtime·notewakeup(Note *n)
 	runtime·futexwakeup((uint32*)&n->key, 1);
 }
 
+// 休眠直到某个协程调用了wakeup将其唤醒.
+// 唤醒的标识就是n->key不等于0...???
 void
 runtime·notesleep(Note *n)
 {
+	// 只能在g0上调用.
 	if(g != m->g0) runtime·throw("notesleep not on g0");
 	while(runtime·atomicload((uint32*)&n->key) == 0)
 		runtime·futexsleep((uint32*)&n->key, 0, -1);
@@ -143,10 +149,13 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 
 	if(ns < 0) {
 		while(runtime·atomicload((uint32*)&n->key) == 0)
+			// -1表示不设超时, 只能由wakeup唤醒
 			runtime·futexsleep((uint32*)&n->key, 0, -1);
+		// 被唤醒, 返回true
 		return true;
 	}
-
+	
+	// n->key不等于0, 说明已被唤醒???
 	if(runtime·atomicload((uint32*)&n->key) != 0) return true;
 	// 计时开始
 	deadline = runtime·nanotime() + ns;
@@ -154,7 +163,7 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 		runtime·futexsleep((uint32*)&n->key, 0, ns);
 
 		if(runtime·atomicload((uint32*)&n->key) != 0) break;
-		
+
 		now = runtime·nanotime();
 		
 		if(now >= deadline) break;
@@ -167,6 +176,8 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 }
 
 // ns 纳秒时间长度
+// 在runtime.h底部介绍了 runtime·notetsleep() 与 runtime·notesleep() 相似
+// 但这两个明显实现方式不同...
 // caller: runtime·stoptheworld()
 bool
 runtime·notetsleep(Note *n, int64 ns)

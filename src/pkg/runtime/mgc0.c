@@ -2240,8 +2240,11 @@ gc(struct gc_args *args)
 	bufferList[m->helpgc].busy = 0;
 
 	t3 = runtime·nanotime();
-
+	
+	// 如果执行GC的协程数量多于1个, 那就等待直到ta们全部完成.
+	// ...如果只有1个就不用了? 只有一个协程时运行到这里说明sweepfor已经完成了是吗???
 	if(work.nproc > 1) runtime·notesleep(&work.alldone);
+	
 	// 统计数据
 	cachestats();
 	// 计算下一次GC触发的时间...好像不能说是时间, 而是空间吧.

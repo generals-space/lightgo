@@ -26,6 +26,8 @@ static Sigset sigset_all = { ~(uint32)0, ~(uint32)0 };
 // futexwakeup()则是将在addr处休眠的协程唤醒.
 // futexsleep()允许被误唤醒...唤醒错了???
 
+// linux的futex系统调用是单个函数, 通过WAIT/WAKE两个标识位实现休眠和唤醒两种不同的操作.
+// 这里把对futex的调用封装成了两个函数
 enum
 {
 	FUTEX_WAIT = 0,
@@ -36,7 +38,7 @@ enum
 //	if(*addr == val) sleep
 // Might be woken up spuriously; that's allowed.
 // Don't sleep longer than ns; ns < 0 means forever.
-// 原子地检查 *addr == val 是否为true, 如果是, 则休眠
+// 原子地检查 *addr == val 是否为true, 如果是, 则继续休眠
 // 允许被误唤醒
 // 休眠时间最长为 ns 纳秒, 如果 ns < 0, 表示永久休眠.
 #pragma textflag NOSPLIT
@@ -51,7 +53,7 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 	// and so can we: as it says a few lines up,
 	// spurious wakeups are allowed.
 
-	// ns小于0, 则永久休眠
+	// ns小于0, 则永久休眠, 直到被唤醒.
 	if(ns < 0) {
 		runtime·futex(addr, FUTEX_WAIT, val, nil, nil, 0);
 		return;
@@ -63,6 +65,8 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 }
 
 // If any procs are sleeping on addr, wake up at most cnt.
+// wakeup可以唤醒在addr处休眠的进程, 可能不只一个,
+// cnt可以指定此次操作能够唤醒多少个休眠中的进程.
 void
 runtime·futexwakeup(uint32 *addr, uint32 cnt)
 {
@@ -73,8 +77,9 @@ runtime·futexwakeup(uint32 *addr, uint32 cnt)
 	if(ret >= 0) return;
 
 	// I don't know that futex wakeup can return EAGAIN or EINTR, 
-	// but if it does, it would be
-	// safe to loop and call futex again.
+	// but if it does, 
+	// it would be safe to loop and call futex again.
+	// ...这里很难理解
 	runtime·printf("futexwakeup addr=%p returned %D\n", addr, ret);
 	*(int32*)0x1006 = 0x1006;
 }

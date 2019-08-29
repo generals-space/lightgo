@@ -208,13 +208,16 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 	// 现在想放弃并返回, 但首先需要先注销, 
 	// 这样任何
 	for(;;) {
+		// 获取n对象锁定的目标地址
 		mp = runtime·atomicloadp((void**)&n->key);
 		if(mp == m) {
 			// No wakeup yet; unregister if possible.
+			// 原子cas操作, 如果n对象锁定的是当前m(即mp), 尝试将其设置为nil, 视为解锁.
 			if(runtime·casp((void**)&n->key, mp, nil)) return false;
 		} else if(mp == (M*)LOCKED) {
 			// Wakeup happened so semaphore is available.
 			// Grab it to avoid getting out of sync.
+			// wakeup唤醒事件发生, 此时信号量可用, 尝试获取ta以防止同步异常
 			if(runtime·semasleep(-1) < 0)
 				runtime·throw("runtime: unable to acquire - semaphore out of sync");
 			return true;

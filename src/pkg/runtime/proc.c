@@ -466,7 +466,9 @@ runtime·stoptheworld(void)
 	runtime·sched.stopwait = runtime·gomaxprocs;
 	// 这里用CAS原子操作, 而在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
+	// 发起抢占请求, 尝试停止所有正在运行的goroutine
 	preemptall();
+
 	// stop current P
 	// 1. 停止当前的P, 将其状态转换成Pgcstop
 	m->p->status = Pgcstop;
@@ -490,11 +492,13 @@ runtime·stoptheworld(void)
 	runtime·unlock(&runtime·sched); // 解锁
 
 	// wait for remaining P's to stop voluntarily
-	// 如果wait为true, 表示仍有其他状态的p对象, 等待ta们自动停止.
+	// 如果wait为true, 表示仍有其他状态的p对象, 比如正在使用CPU计算
 	if(wait) {
 		for(;;) {
 			// wait for 100us, then try to re-preempt in case of any races
-			// 每次等待100us, 然后尝试抢占
+			// 每次等待100us, 然后尝试抢占.
+			// if条件为true, 说明某个协程调用了 runtime·notewakeup() 而被唤醒
+			// 为false则说明100us时间到, 超时结束.
 			if(runtime·notetsleep(&runtime·sched.stopnote, 100*1000)) {
 				runtime·noteclear(&runtime·sched.stopnote);
 				break;
@@ -503,7 +507,9 @@ runtime·stoptheworld(void)
 			preemptall();
 		}
 	}
+	// stopwait还未清零, STW操作失败
 	if(runtime·sched.stopwait) runtime·throw("stoptheworld: not stopped");
+	// 或者p链表中还有状态未成为 Pgcstop 的, 也表示失败.
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
 		if(p->status != Pgcstop) runtime·throw("stoptheworld: not stopped");

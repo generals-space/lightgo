@@ -916,7 +916,7 @@ extern uint32 runtime·worldsema;
  * 互斥锁Mutex实现
  * 在没有竞争的情况下, 与自旋锁一样快(只有一些用户层的操作),
  * 但存在竞争时, ta会在内核层休眠.
- * 0值Lock实例对象是没有加锁的(没必要对Lock实例对象进行初始化)
+ * 0值的Lock实例对象是没有加锁的(不需要对Lock实例对象进行初始化)
  * 目前看到两处runtime·lock的实现: lock_futex.c, lock_sema.c
  * 编译时, 不同的系统平台会选择不同的方式, 
  * linux, freebsd, dragonfly选择futex实现
@@ -964,11 +964,16 @@ void	runtime·unlock(Lock*);
 void	runtime·noteclear(Note*);
 void	runtime·notesleep(Note*);
 void	runtime·notewakeup(Note*);
-bool	runtime·notetsleep(Note*, int64);  // false - timeout
-bool	runtime·notetsleepg(Note*, int64);  // false - timeout
+// false - timeout
+// 以下两个函数, 返回false时都表示超时时间到而返回, 而不是因为被唤醒.
+bool	runtime·notetsleep(Note*, int64);
+// false - timeout
+bool	runtime·notetsleepg(Note*, int64);
 
 /*
  * low-level synchronization for implementing the above
+ * 底层同步机制, 为上面的noteXXX与lockXXX提供了支持.
+ * win平台使用的sema, linux使用的是futex.
  */
 uintptr	runtime·semacreate(void);
 int32	runtime·semasleep(int64);
@@ -1009,8 +1014,10 @@ void	runtime·parfordo(ParFor *desc);
  * low level C-called
  */
 // for mmap, we only pass the lower 32 bits of file offset to the 
-// assembly routine; the higher bits (if required), should be provided
-// by the assembly routine as 0.
+// assembly routine; the higher bits (if required), 
+// should be provided by the assembly routine as 0.
+// 底层C调用
+// ...啥意思???
 uint8*	runtime·mmap(byte*, uintptr, int32, int32, int32, uint32);
 void	runtime·munmap(byte*, uintptr);
 void	runtime·madvise(byte*, uintptr, int32);
