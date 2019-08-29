@@ -37,6 +37,7 @@ struct Sched {
 
 	P*	pidle;  // idle P's
 	uint32	npidle;
+	// m.spinning == true的m的数量
 	uint32	nmspinning;
 
 	// Global runnable queue.
@@ -599,15 +600,14 @@ runtime·mstart(void)
 {
 #ifdef GOOS_windows
 #ifdef GOARCH_386
-	// It is used by windows-386 only. Unfortunately, seh needs
-	// to be located on os stack, and mstart runs on os stack
-	// for both m0 and m.
+	// It is used by windows-386 only. 
+	// Unfortunately, seh needs to be located on os stack, 
+	// and mstart runs on os stack for both m0 and m.
 	SEH seh;
 #endif
 #endif
 
-	if(g != m->g0)
-		runtime·throw("bad runtime·mstart");
+	if(g != m->g0) runtime·throw("bad runtime·mstart");
 
 	// Record top of stack for use by mcall.
 	// Once we call schedule we're never coming back,
@@ -615,21 +615,22 @@ runtime·mstart(void)
 	runtime·gosave(&m->g0->sched);
 	m->g0->sched.pc = (uintptr)-1;  // make sure it is never used
 	m->g0->stackguard = m->g0->stackguard0;  // cgo sets only stackguard0, copy it to stackguard
+
 #ifdef GOOS_windows
 #ifdef GOARCH_386
 	m->seh = &seh;
 #endif
 #endif
+
 	runtime·asminit();
 	runtime·minit();
 
 	// Install signal handlers; after minit so that minit can
 	// prepare the thread to be able to handle the signals.
-	if(m == &runtime·m0)
-		runtime·initsig();
-	
-	if(m->mstartfn)
-		m->mstartfn();
+	// 装载信号处理函数
+	if(m == &runtime·m0) runtime·initsig();
+
+	if(m->mstartfn) m->mstartfn();
 
 	if(m->helpgc) {
 		m->helpgc = 0;
@@ -640,9 +641,9 @@ runtime·mstart(void)
 	}
 	schedule();
 
-	// TODO(brainman): This point is never reached, because scheduler
-	// does not release os threads at the moment. But once this path
-	// is enabled, we must remove our seh here.
+	// TODO(brainman): This point is never reached, 
+	// because scheduler does not release os threads at the moment. 
+	// But once this path is enabled, we must remove our seh here.
 }
 
 // When running with cgo, we call _cgo_thread_start
@@ -948,22 +949,24 @@ newm(void(*fn)(void), P *p)
 
 // Stops execution of the current m until new work is available.
 // Returns with acquired P.
+// 结束当前m, 直到有新任务需要执行.
 static void
 stopm(void)
 {
-	if(m->locks)
-		runtime·throw("stopm holding locks");
-	if(m->p)
-		runtime·throw("stopm holding p");
+	if(m->locks) runtime·throw("stopm holding locks");
+	if(m->p) runtime·throw("stopm holding p");
 	if(m->spinning) {
+		// 如果当前m处于自旋, 那么结束自旋, 同时将全局调度器的nmspinning字段减1
 		m->spinning = false;
 		runtime·xadd(&runtime·sched.nmspinning, -1);
 	}
 
 retry:
 	runtime·lock(&runtime·sched);
-	mput(m);
+	// 将m放到全局调度器的空闲队列 runtime·sched.midle 中
+	mput(m); 
 	runtime·unlock(&runtime·sched);
+
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
 	if(m->helpgc) {
@@ -1115,23 +1118,27 @@ startlockedm(G *gp)
 
 // Stops the current m for stoptheworld.
 // Returns when the world is restarted.
+// STW期间, 停止当前m, 直到starttheworld时再返回.
 static void
 gcstopm(void)
 {
 	P *p;
-
-	if(!runtime·sched.gcwaiting)
+	// 只在gc操作过程中执行此函数
+	if(!runtime·sched.gcwaiting) 
 		runtime·throw("gcstopm: not waiting for gc");
 	if(m->spinning) {
+		// 如果m处于自旋, 则移除其自旋状态, 并将调度器中的自旋记录减1.
 		m->spinning = false;
 		runtime·xadd(&runtime·sched.nmspinning, -1);
 	}
 	p = releasep();
+
 	runtime·lock(&runtime·sched);
 	p->status = Pgcstop;
-	if(--runtime·sched.stopwait == 0)
+	if(--runtime·sched.stopwait == 0) 
 		runtime·notewakeup(&runtime·sched.stopnote);
 	runtime·unlock(&runtime·sched);
+
 	stopm();
 }
 
@@ -1166,6 +1173,7 @@ execute(G *gp)
 
 // Finds a runnable goroutine to execute.
 // Tries to steal from other P's, get g from global queue, poll network.
+// caller: schedule() 只有这一个调用者.
 static G*
 findrunnable(void)
 {
@@ -1180,15 +1188,13 @@ top:
 	}
 	// local runq
 	gp = runqget(m->p);
-	if(gp)
-		return gp;
+	if(gp) return gp;
 	// global runq
 	if(runtime·sched.runqsize) {
 		runtime·lock(&runtime·sched);
 		gp = globrunqget(m->p, 0);
 		runtime·unlock(&runtime·sched);
-		if(gp)
-			return gp;
+		if(gp) return gp;
 	}
 	// poll network
 	gp = runtime·netpoll(false);  // non-blocking
@@ -1326,8 +1332,7 @@ schedule(void)
 	G *gp;
 	uint32 tick;
 
-	if(m->locks)
-		runtime·throw("schedule: holding locks");
+	if(m->locks) runtime·throw("schedule: holding locks");
 
 top:
 	if(runtime·sched.gcwaiting) {
@@ -1346,16 +1351,15 @@ top:
 		runtime·lock(&runtime·sched);
 		gp = globrunqget(m->p, 1);
 		runtime·unlock(&runtime·sched);
-		if(gp)
-			resetspinning();
+		if(gp) resetspinning();
 	}
 	if(gp == nil) {
 		gp = runqget(m->p);
-		if(gp && m->spinning)
-			runtime·throw("schedule: spinning with local work");
+		if(gp && m->spinning) runtime·throw("schedule: spinning with local work");
 	}
 	if(gp == nil) {
-		gp = findrunnable();  // blocks until work is available
+		// blocks until work is available
+		gp = findrunnable(); 
 		resetspinning();
 	}
 
@@ -2335,6 +2339,7 @@ acquirep(P *p)
 }
 
 // Disassociate p and the current m.
+// 将当前m与其p对象解绑, 将这个p标记为idle状态并返回
 static P*
 releasep(void)
 {
@@ -2360,8 +2365,7 @@ incidlelocked(int32 v)
 {
 	runtime·lock(&runtime·sched);
 	runtime·sched.nmidlelocked += v;
-	if(v > 0)
-		checkdead();
+	if(v > 0) checkdead();
 	runtime·unlock(&runtime·sched);
 }
 
@@ -2375,8 +2379,7 @@ checkdead(void)
 
 	// -1 for sysmon
 	run = runtime·sched.mcount - runtime·sched.nmidle - runtime·sched.nmidlelocked - 1;
-	if(run > 0)
-		return;
+	if(run > 0) return;
 	if(run < 0) {
 		runtime·printf("checkdead: nmidle=%d nmidlelocked=%d mcount=%d\n",
 			runtime·sched.nmidle, runtime·sched.nmidlelocked, runtime·sched.mcount);
@@ -2384,8 +2387,7 @@ checkdead(void)
 	}
 	grunning = 0;
 	for(gp = runtime·allg; gp; gp = gp->alllink) {
-		if(gp->isbackground)
-			continue;
+		if(gp->isbackground) continue;
 		s = gp->status;
 		if(s == Gwaiting)
 			grunning++;
@@ -2394,8 +2396,9 @@ checkdead(void)
 			runtime·throw("checkdead: runnable g");
 		}
 	}
-	if(grunning == 0)  // possible if main goroutine calls runtime·Goexit()
-		runtime·exit(0);
+	// possible if main goroutine calls runtime·Goexit()
+	if(grunning == 0) runtime·exit(0);
+
 	m->throwing = -1;  // do not dump full stacks
 	runtime·throw("all goroutines are asleep - deadlock!");
 }
@@ -2570,6 +2573,8 @@ preemptall(void)
 // 比如ta正在执行runtime·newstack()操作.
 // 2. 无需持有锁
 // 3. 如果抢占请求被通知到了, 就返回true.
+// 那么问题来了, 这里顶多只设置了g对象的标识位就返回了, 
+// g应该并不是立刻停止运行吧? 从哪一时刻真正停止呢???
 static bool
 preemptone(P *p)
 {
@@ -2679,6 +2684,8 @@ runtime·schedtrace(bool detailed)
 
 // Put mp on midle list.
 // Sched must be locked.
+// 将mp放到midle链表中(链表头部)
+// 调用此函数时必须对sched全局调度器加锁
 static void
 mput(M *mp)
 {

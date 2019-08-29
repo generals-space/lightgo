@@ -20,8 +20,7 @@ runtime·initsig(void)
 	// First call: basic setup.
 	for(i = 0; i<NSIG; i++) {
 		t = &runtime·sigtab[i];
-		if((t->flags == 0) || (t->flags & SigDefault))
-			continue;
+		if((t->flags == 0) || (t->flags & SigDefault)) continue;
 
 		// For some signals, we respect an inherited SIG_IGN handler
 		// rather than insist on installing our own default handler.
