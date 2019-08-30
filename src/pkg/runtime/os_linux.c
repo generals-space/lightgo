@@ -84,6 +84,7 @@ runtime·futexwakeup(uint32 *addr, uint32 cnt)
 	*(int32*)0x1006 = 0x1006;
 }
 
+// runtime·sched_getaffinity()是汇编代码, 是名为 sched_getaffinity()的系统调用.
 extern runtime·sched_getaffinity(uintptr pid, uintptr len, uintptr *buf);
 static int32
 getproccount(void)

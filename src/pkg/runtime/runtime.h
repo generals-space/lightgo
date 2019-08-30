@@ -274,7 +274,8 @@ struct	G
 	int16	status;
 	int64	goid;
 	int8*	waitreason;	// if status==Gwaiting
-	G*	schedlink;
+	// 貌似这个链表指针指向下一个待调度执行的g对象.
+	G*	schedlink; 
 	bool	ispanic;
 	bool	issystem;	// do not output in stack dump
 	bool	isbackground;	// ignore in deadlock detector
@@ -293,7 +294,9 @@ struct	G
 	uintptr	sigcode0;
 	uintptr	sigcode1;
 	uintptr	sigpc;
-	uintptr	gopc;		// pc of go statement that created this goroutine
+	// pc of go statement that created this goroutine
+	// 创建此g对象的go()语句的pc(程序计数器)
+	uintptr	gopc;
 	uintptr	racectx;
 	uintptr	end[];
 };

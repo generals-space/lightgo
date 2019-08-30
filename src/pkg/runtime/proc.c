@@ -33,7 +33,9 @@ struct Sched {
 	int32	nmidle;	 // number of idle m's waiting for work
 	int32	nmidlelocked; // number of locked m's waiting for work
 	int32	mcount;	 // number of m's that have been created
-	int32	maxmcount;	// maximum number of m's allowed (or die)
+	// maximum number of m's allowed (or die)
+	// 可创建的m的最大数量, 在 runtime·schedinit()中声明, 值为1w
+	int32	maxmcount;
 
 	P*	pidle;  // idle P's
 	uint32	npidle;
@@ -132,6 +134,8 @@ static bool haveexperiment(int8*);
 //	call runtime·mstart
 //
 // The new G calls runtime·main.
+// 看样子是先创建任务对象g, 再启动m去执行ta.
+// 可以见 asm_amd64.s中定义的第一个函数 _rt0_go()
 void
 runtime·schedinit(void)
 {
@@ -1308,6 +1312,7 @@ resetspinning(void)
 	// so see if we need to wakeup another P here.
 	// m对象的wakeup策略是有意保守一些的,
 	// 所以这里需要确认是否有必要唤醒另一个p.
+	// ...啥意思???
 	if (nmspinning == 0 && runtime·atomicload(&runtime·sched.npidle) > 0)
 		wakep();
 }
@@ -1337,6 +1342,8 @@ injectglist(G *glist)
 
 // One round of scheduler: find a runnable goroutine and execute it.
 // Never returns.
+// 一轮调度, 找到一个待执行的goroutine并运行ta
+// caller: runtime·mstart(), park0(), runtime·gosched0, goexit0(), exitsyscall0().
 static void
 schedule(void)
 {
@@ -1346,6 +1353,7 @@ schedule(void)
 	if(m->locks) runtime·throw("schedule: holding locks");
 
 top:
+	// 如果当前处于gc等待过程中, 就不要继续向下执行了.
 	// stoptheworld/freezetheworld调用时会将此值设置为1
 	if(runtime·sched.gcwaiting) {
 		gcstopm();
@@ -1373,10 +1381,15 @@ top:
 
 		if(gp) resetspinning();
 	}
+	// 如果未到从全局队列取g的时机, 或是没能从全局队列获取到,
+	// 那么就尝试从当前m->p的本地待执行队列中获取.
 	if(gp == nil) {
+		// 
 		gp = runqget(m->p);
 		if(gp && m->spinning) runtime·throw("schedule: spinning with local work");
 	}
+	// 如果全局队列和本地队列都没有取到任务g
+	// 那么调用findrunnable()阻塞直到有新任务出现.
 	if(gp == nil) {
 		// blocks until work is available
 		gp = findrunnable(); 
@@ -1389,7 +1402,7 @@ top:
 		startlockedm(gp);
 		goto top;
 	}
-
+	// 在当前m上运行gp任务, 此时gp的状态必须为runnable
 	execute(gp);
 }
 
@@ -1450,8 +1463,12 @@ runtime·gosched0(G *gp)
 
 // Finishes execution of the current goroutine.
 // Need to mark it as nosplit, because it runs with sp > stackbase (as runtime·lessstack).
-// Since it does not return it does not matter.  But if it is preempted
-// at the split stack check, GC will complain about inconsistent sp.
+// Since it does not return it does not matter. 
+// But if it is preempted at the split stack check,
+// GC will complain about inconsistent sp.
+// 结束运行当前的goroutine
+// 因为并没有返回值, 所以没关系.
+// 
 #pragma textflag NOSPLIT
 void
 runtime·goexit(void)
@@ -1461,6 +1478,8 @@ runtime·goexit(void)
 }
 
 // runtime·goexit continuation on g0.
+// 由runtime·goexit()调用mcall将代码切换到g0上执行.
+// gp对象即为当前m的g0.
 static void
 goexit0(G *gp)
 {
@@ -1472,7 +1491,7 @@ goexit0(G *gp)
 	if(m->locked & ~LockExternal) {
 		runtime·printf("invalid m->locked = %d\n", m->locked);
 		runtime·throw("internal lockOSThread error");
-	}	
+	}
 	m->locked = 0;
 	runtime·unwindstack(gp, nil);
 	gfput(m->p, gp);
@@ -2829,14 +2848,16 @@ retry:
 }
 
 // Get g from local runnable queue.
+// 从指定p对象的本地待执行队列中获取一个g任务.
+// 逻辑很简单.
 static G*
 runqget(P *p)
 {
 	G *gp;
 	int32 t, h, s;
+	// 本地待执行队列为空, 返回nil
+	if(p->runqhead == p->runqtail) return nil;
 
-	if(p->runqhead == p->runqtail)
-		return nil;
 	runtime·lock(p);
 	h = p->runqhead;
 	t = p->runqtail;
@@ -2846,7 +2867,9 @@ runqget(P *p)
 		return nil;
 	}
 	gp = p->runq[h++];
+
 	if(h == s) h = 0;
+
 	p->runqhead = h;
 	runtime·unlock(p);
 	return gp;
@@ -2854,7 +2877,8 @@ runqget(P *p)
 
 // Grow local runnable queue.
 // TODO(dvyukov): consider using fixed-size array
-// and transfer excess to the global list (local queue can grow way too big).
+// and transfer excess to the global list 
+// (local queue can grow way too big).
 static void
 runqgrow(P *p)
 {
@@ -3052,8 +3076,8 @@ haveexperiment(int8 *name)
 	for(i=0; i<sizeof(experiment); i++) {
 		if((i == 0 || experiment[i-1] == ',') && experiment[i] == name[0]) {
 			for(j=0; name[j]; j++)
-				if(experiment[i+j] != name[j])
-					goto nomatch;
+				if(experiment[i+j] != name[j]) goto nomatch;
+
 			if(experiment[i+j] != '\0' && experiment[i+j] != ',')
 				goto nomatch;
 			return 1;
