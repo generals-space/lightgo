@@ -54,6 +54,7 @@ runtime·netpollclose(uintptr fd)
 
 // polls for ready network connections
 // returns list of goroutines that become runnable
+// 
 G*
 runtime·netpoll(bool block)
 {
@@ -62,11 +63,10 @@ runtime·netpoll(bool block)
 	int32 n, i, waitms, mode;
 	G *gp;
 
-	if(epfd == -1)
-		return nil;
+	if(epfd == -1) return nil;
 	waitms = -1;
-	if(!block)
-		waitms = 0;
+	if(!block) waitms = 0;
+
 retry:
 	n = runtime·epollwait(epfd, events, nelem(events), waitms);
 	if(n < 0) {
@@ -79,17 +79,16 @@ retry:
 	gp = nil;
 	for(i = 0; i < n; i++) {
 		ev = &events[i];
-		if(ev->events == 0)
-			continue;
+		if(ev->events == 0) continue;
+
 		mode = 0;
 		if(ev->events & (EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR))
 			mode += 'r';
 		if(ev->events & (EPOLLOUT|EPOLLHUP|EPOLLERR))
 			mode += 'w';
-		if(mode)
-			runtime·netpollready(&gp, (void*)ev->data, mode);
+
+		if(mode) runtime·netpollready(&gp, (void*)ev->data, mode);
 	}
-	if(block && gp == nil)
-		goto retry;
+	if(block && gp == nil) goto retry;
 	return gp;
 }

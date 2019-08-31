@@ -382,10 +382,17 @@ struct P
 
 	int32	id;
 	uint32	status;		// one of Pidle/Prunning/...
+	// 这是一个指向下一个p的指针, 组成链表.
 	P*	link;
-	uint32	schedtick;	// incremented on every scheduler call
-	uint32	syscalltick;	// incremented on every system call
-	M*	m;		// back-link to associated M (nil if idle)
+	// incremented on every scheduler call
+	// 每次被调度器调度时加1, execute()
+	uint32	schedtick;
+	// incremented on every system call
+	// 每次系统调用时加1, runtime·exitsyscall()
+	uint32	syscalltick;
+	// back-link to associated M (nil if idle)
+	// 反向引用绑定的m对象, 如果p处于 idle状态则为nil
+	M*	m;
 	MCache*	mcache;
 
 	// Queue of runnable goroutines.
