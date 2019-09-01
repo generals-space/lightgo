@@ -2553,7 +2553,7 @@ sysmon(void)
 				// 陷入休眠, 等待被唤醒, 比如 starttheworld
 				runtime·notesleep(&runtime·sched.sysmonnote);
 				runtime·noteclear(&runtime·sched.sysmonnote);
-				// 一次被唤醒后, 重置 idle 和 delay
+				// 一次休眠然后被唤醒后, 重置 idle 和 delay
 				idle = 0;
 				delay = 20;
 			} else

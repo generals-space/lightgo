@@ -14,7 +14,7 @@ TEXT _rt0_go(SB),NOSPLIT,$0
 	ANDQ	$~15, SP
 	MOVQ	AX, 16(SP)
 	MOVQ	BX, 24(SP)
-	
+
 	// create istack out of the given (operating system) stack.
 	// _cgo_init may update stackguard.
 	MOVQ	$runtime·g0(SB), DI

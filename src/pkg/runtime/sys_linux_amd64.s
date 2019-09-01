@@ -80,7 +80,7 @@ TEXT runtime·raise(SB),NOSPLIT,$12
 	MOVL	$186, AX	// syscall - gettid
 	SYSCALL
 	MOVL	AX, DI	// arg 1 tid
-	MOVL	sig+0(FP), SI	// arg 2
+	MOVL	sig+0(FP), SI	// arg 2 传入的信号
 	MOVL	$200, AX	// syscall - tkill
 	SYSCALL
 	RET

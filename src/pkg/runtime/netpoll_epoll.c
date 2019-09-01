@@ -13,14 +13,19 @@ int32	runtime·epollctl(int32 epfd, int32 op, int32 fd, EpollEvent *ev);
 int32	runtime·epollwait(int32 epfd, EpollEvent *ev, int32 nev, int32 timeout);
 void	runtime·closeonexec(int32 fd);
 
+// epfd 是全局变量, 难道整个进程只需要1个??? 
+// nginx中也是这么用的么???
 static int32 epfd = -1;  // epoll descriptor
 
+// caller: netpoll.goc -> runtime_pollServerInit()
+// runtime_pollServerInit() 由 net/fd_poll_runtime.go -> Init() 调用
+// ...不过, 看起来 fd_poll_runtime.go 是标准库, 
+// 能直接调用 runtime 的内置函数吗?
 void
 runtime·netpollinit(void)
 {
 	epfd = runtime·epollcreate1(EPOLL_CLOEXEC);
-	if(epfd >= 0)
-		return;
+	if(epfd >= 0) return;
 	epfd = runtime·epollcreate(1024);
 	if(epfd >= 0) {
 		runtime·closeonexec(epfd);
@@ -54,7 +59,8 @@ runtime·netpollclose(uintptr fd)
 
 // polls for ready network connections
 // returns list of goroutines that become runnable
-// 
+// 轮询查找已经准备好的网络连接
+// 返回状态变为 runnable 的 goroutine 列表
 G*
 runtime·netpoll(bool block)
 {
