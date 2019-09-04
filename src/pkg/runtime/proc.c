@@ -581,6 +581,7 @@ runtime·starttheworld(void)
 		p1 = p;
 	}
 	if(runtime·sched.sysmonwait) {
+		// ...我call, sysmonwait 可不是 bool 类型, 也能这么干?
 		runtime·sched.sysmonwait = false;
 		runtime·notewakeup(&runtime·sched.sysmonnote);
 	}
@@ -2547,7 +2548,9 @@ sysmon(void)
 			(runtime·sched.gcwaiting || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs)) { 
 			// TODO: fast atomic
 			runtime·lock(&runtime·sched);
+			// ...再次检查, 而且这次还是原子地获取 gcwaiting 的值
 			if(runtime·atomicload(&runtime·sched.gcwaiting) || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {
+				// 只有这一个地方将 sysmonwait 设置为 1
 				runtime·atomicstore(&runtime·sched.sysmonwait, 1);
 				runtime·unlock(&runtime·sched);
 				// 陷入休眠, 等待被唤醒, 比如 starttheworld
