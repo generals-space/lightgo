@@ -39,7 +39,7 @@ struct Sched {
 
 	P*	pidle;  // idle P's
 	uint32	npidle;
-	// m.spinning == true的m的数量
+	// m.spinning == true 的m的数量
 	uint32	nmspinning;
 
 	// Global runnable queue.
@@ -1008,6 +1008,7 @@ retry:
 	m->nextp = nil;
 }
 
+// caller: startm()
 static void
 mspinning(void)
 {
@@ -1015,7 +1016,11 @@ mspinning(void)
 }
 
 // Schedules some M to run the p (creates an M if necessary).
-// If p==nil, tries to get an idle P, if no idle P's returns false.
+// If p==nil, tries to get an idle P, 
+// if no idle P's returns false.
+// 调度一些m对象以运行目标p, 如果m不足则创建.
+// 如果 p == nil, 尝试获取一个空闲的p对象,
+// 如果获取不到, 则返回 false...这个函数好像没有返回值吧
 static void
 startm(P *p, bool spinning)
 {
@@ -1026,19 +1031,28 @@ startm(P *p, bool spinning)
 	if(p == nil) {
 		p = pidleget();
 		if(p == nil) {
+			// 这里是没获取到空闲状态的p
 			runtime·unlock(&runtime·sched);
+			// ...但是这句是啥意思, 明明没有绑定m和p
+			// 而且还是减1操作???
 			if(spinning) runtime·xadd(&runtime·sched.nmspinning, -1);
 			return;
 		}
 	}
 	mp = mget();
 	runtime·unlock(&runtime·sched);
+
+	// 如果没能获取到m, 则创建新的m以运行目标p
 	if(mp == nil) {
 		fn = nil;
+		// mspinning() 的定义就在上面
+		// 只是简单地把 m->spinning 的值赋为 true
+		// 不过...m是哪个m? 是怎么确定的?
 		if(spinning) fn = mspinning;
 		newm(fn, p);
 		return;
 	}
+	// 从全局调度器中获取到了一个m
 	if(mp->spinning) runtime·throw("startm: m is spinning");
 	if(mp->nextp) runtime·throw("startm: m has p");
 	mp->spinning = spinning;
@@ -1047,21 +1061,31 @@ startm(P *p, bool spinning)
 }
 
 // Hands off P from syscall or locked M.
+// 将处于 syscall 或是 locked 状态的m对象绑定的p
+// 移交给新的m对象.
 static void
 handoffp(P *p)
 {
 	// if it has local work, start it straight away
+	// 如果目标p的本地任务队列不为空, 则立刻绑定一个m, 
+	// 且是非 spinning 状态, 以开始运行.
 	if(p->runqhead != p->runqtail || runtime·sched.runqsize) {
 		startm(p, false);
 		return;
 	}
 	// no local work, check that there are no spinning/idle M's,
 	// otherwise our help is not required
+	// 运行到这, 说明p中没有任务. 
+	// 先找找有没有处于 spinning 状态的m, 或是存在其他的空闲p.
+	// 如果有, 那也没有必要再做之后的操作了.
+	// starm() 会获取一个可用的m来与p绑定的.
+	// 不过 spinning 为true是有什么目的吗???
 	if(runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) == 0 &&  // TODO: fast atomic
 		runtime·cas(&runtime·sched.nmspinning, 0, 1)) {
 		startm(p, true);
 		return;
 	}
+
 	runtime·lock(&runtime·sched);
 	if(runtime·sched.gcwaiting) {
 		p->status = Pgcstop;
@@ -2545,11 +2569,13 @@ sysmon(void)
 		// 1. schedtrace <= 0, 不过目前并没有看见哪里有设置这个值
 		// 2. 当前进程处于gc流程, 或是所有的p都处于 idle 状态, 总之就是都没在干活.
 		if(runtime·debug.schedtrace <= 0 &&
-			(runtime·sched.gcwaiting || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs)) { 
+			(runtime·sched.gcwaiting || 
+				runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs)) { 
 			// TODO: fast atomic
 			runtime·lock(&runtime·sched);
 			// ...再次检查, 而且这次还是原子地获取 gcwaiting 的值
-			if(runtime·atomicload(&runtime·sched.gcwaiting) || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {
+			if(runtime·atomicload(&runtime·sched.gcwaiting) || 
+				runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {
 				// 只有这一个地方将 sysmonwait 设置为 1
 				runtime·atomicstore(&runtime·sched.sysmonwait, 1);
 				runtime·unlock(&runtime·sched);
@@ -2606,8 +2632,11 @@ struct Pdesc
 	uint32	syscalltick;
 	int64	syscallwhen;
 };
+// pdesc 没有地方初始化, 所以第一次使用时需要判断各字段的空值情况
 static Pdesc pdesc[MaxGomaxprocs];
 
+// 参数 now 为绝对时间 nanotime
+// caller: sysmon() 
 static uint32
 retake(int64 now)
 {
@@ -2626,14 +2655,19 @@ retake(int64 now)
 			// Retake P from syscall if it's there for more than 1 sysmon tick (20us).
 			// But only if there is other work to do.
 			t = p->syscalltick;
+			// if 条件为真, 说明是这个p对应的 pd 第一次被调用, 就当作初始化了
 			if(pd->syscalltick != t) {
 				pd->syscalltick = t;
 				pd->syscallwhen = now;
 				continue;
 			}
+			// 如果该p的本地任务队列只有一个成员,
+			// 且有m对象处于 spinning (没活干) 或是p对象处于 idle 状态
+			// 总之, 没必要抢占当前的p, 把任务分配给那些空闲的worker更好.
 			if(p->runqhead == p->runqtail &&
 				runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0)
 				continue;
+
 			// Need to decrement number of idle locked M's
 			// (pretending that one more is running) before the CAS.
 			// Otherwise the M from which we retake can exit the syscall,
@@ -2646,7 +2680,14 @@ retake(int64 now)
 			incidlelocked(1);
 		} else if(s == Prunning) {
 			// Preempt G if it's running for more than 10ms.
+			// 如果该p被调度处于 running 状态超过了 10ms
+			// 就抢占ta的g对象, 以免对单个任务陷入长时间运行,
+			// 而造成其他任务没有机会执行的问题.
+
+			// 注意: 对 running 状态的p的抢占并不会影响本次 retake() 执行的结果
+			// 因为此函数的返回值为 n, 这一部分的代码并不会对 n 有修改.
 			t = p->schedtick;
+			// if 条件为真, 说明是这个p对应的 pd 第一次被调用, 就当作初始化了
 			if(pd->schedtick != t) {
 				pd->schedtick = t;
 				pd->schedwhen = now;
