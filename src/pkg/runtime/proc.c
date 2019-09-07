@@ -31,7 +31,10 @@ struct Sched {
 
 	M*	midle;	 // idle m's waiting for work
 	int32	nmidle;	 // number of idle m's waiting for work
-	int32	nmidlelocked; // number of locked m's waiting for work
+	// number of locked m's waiting for work
+	// 只有在 incidlelocked(v) 函数中才会在对这个字段进行加减操作
+	// m 有 idle 的状态, 也有 locked 的状态, 不冲突, 可共存
+	int32	nmidlelocked; 
 	int32	mcount;	 // number of m's that have been created
 	// maximum number of m's allowed (or die)
 	// 可创建的m的最大数量, 在 runtime·schedinit()中声明, 值为1w
@@ -54,10 +57,11 @@ struct Sched {
 	Lock	gflock;
 	G*	gfree;
 
-	// gc is waiting to run
-	// 取值0或1, 在gc操作前后的runtime·stoptheworld(), runtime·starttheworld()
-	// 还有一个runtime·freezetheworld()函数会设置这个值.
-	// 一般在stoptheworld/freezetheworld时会将其设置为1, starttheworld则会设置为0.
+    // 取值0或1, 在gc操作前后的 runtime·stoptheworld(),
+    // 及 runtime·starttheworld()
+    // 还有一个 runtime·freezetheworld() 函数会设置这个值.
+    // 一般在 stoptheworld/freezetheworld 时会将其设置为1,
+    // starttheworld 则会设置为0.
 	uint32	gcwaiting;
 	int32	stopwait;
 	Note	stopnote;
@@ -486,7 +490,7 @@ runtime·stoptheworld(void)
 	bool wait;
 
 	runtime·lock(&runtime·sched); // 加锁
-	// 这里stopwait表示当前go程序启动的P的数量(经过schedinit, 这个值应该就在1-GOMAXPROCS之间)
+	// stopwait 表示当前go程序启动的P的数量(经过 schedinit, 这个值应该就在1-GOMAXPROCS之间)
 	runtime·sched.stopwait = runtime·gomaxprocs;
 	// 这里用CAS原子操作, 而在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
@@ -516,7 +520,11 @@ runtime·stoptheworld(void)
 	runtime·unlock(&runtime·sched); // 解锁
 
 	// wait for remaining P's to stop voluntarily
-	// 如果wait为true, 表示仍有其他状态的p对象, 比如正在使用CPU计算
+    // 如果wait为true, 表示仍有其他状态的p对象, 比如正在使用CPU计算.
+    // 就算通过 preemptall() 抢占了g对象, 也不是立刻就停止执行,
+    // 而是需要等待下一次调度, 使p放弃g, 当发生这样的操作时,
+    // 所处的函数会判断 stopwait 的值是否为0, 如果是, 则发起唤醒操作,
+    // 这样 stoptheworld 才能继续下去.
 	if(wait) {
 		for(;;) {
 			// wait for 100us, then try to re-preempt in case of any races
@@ -571,7 +579,8 @@ runtime·starttheworld(void)
 	p1 = nil;
 	while(p = pidleget()) {
 		// procresize() puts p's with work at the beginning of the list.
-		// Once we reach a p without a run queue, the rest don't have one either.
+		// Once we reach a p without a run queue, 
+		// the rest don't have one either.
 		if(p->runqhead == p->runqtail) {
 			pidleput(p);
 			break;
@@ -1061,8 +1070,8 @@ startm(P *p, bool spinning)
 }
 
 // Hands off P from syscall or locked M.
-// 将处于 syscall 或是 locked 状态的m对象绑定的p
-// 移交给新的m对象.
+// 将处于 syscall 或是 locked 状态的m对象绑定的p移交给新的m对象.
+// 如果处于gc过程中, 就不再做这些移交的操作, 置p为 Pcstop, 然后尝试唤醒STW.
 static void
 handoffp(P *p)
 {
@@ -1075,18 +1084,26 @@ handoffp(P *p)
 	}
 	// no local work, check that there are no spinning/idle M's,
 	// otherwise our help is not required
-	// 运行到这, 说明p中没有任务. 
+	// 运行到这, 说明p的本地队列中没有任务.
 	// 先找找有没有处于 spinning 状态的m, 或是存在其他的空闲p.
 	// 如果有, 那也没有必要再做之后的操作了.
 	// starm() 会获取一个可用的m来与p绑定的.
-	// 不过 spinning 为true是有什么目的吗???
-	if(runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) == 0 &&  // TODO: fast atomic
+	// 不过 spinning 为true? 是有什么目的吗???
+	if(runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) == 0 &&  
+		// TODO: fast atomic
 		runtime·cas(&runtime·sched.nmspinning, 0, 1)) {
 		startm(p, true);
 		return;
 	}
 
 	runtime·lock(&runtime·sched);
+	// 如果当前正处于gc中, 应当一步一步将p停止.
+	// 要知道, 在 runtime·stoptheworld() 中, 将处于
+	// 空闲的, 或是陷入系统调用的p对象的状态修改为了 Pgcstop.
+	// stopwait 的值最初为 gomaxprocs, 每将一个p置为 Pgcstop, 这个值减1.
+	// 最后剩下处于 running 状态的p没办法强制停止, 只能在 stopnote 上休眠.
+	// 等被 sysmon 监控进程协助调度, p的g被回收, 与m解绑, 就运行到了这里.
+	// 当 stopwait 值为0时表示所有p都已经停止了, 就可以唤醒休眠的 stoptheworld 了.
 	if(runtime·sched.gcwaiting) {
 		p->status = Pgcstop;
 		if(--runtime·sched.stopwait == 0)
@@ -1094,6 +1111,9 @@ handoffp(P *p)
 		runtime·unlock(&runtime·sched);
 		return;
 	}
+    // 运行到这, 说明p的本地队列中没有任务, 调度器里又没有其他空闲的p
+    // 但是全局队列中仍有任务.
+    // ...还是调用 startm()
 	if(runtime·sched.runqsize) {
 		runtime·unlock(&runtime·sched);
 		startm(p, false);
@@ -1101,11 +1121,17 @@ handoffp(P *p)
 	}
 	// If this is the last running P and nobody is polling network,
 	// need to wakeup another M to poll network.
-	if(runtime·sched.npidle == runtime·gomaxprocs-1 && runtime·atomicload64(&runtime·sched.lastpoll) != 0) {
+    // 如果只有当前这一个p处于 running 状态
+    // ...不过, 是从哪里看到 polling network 相关的东西的???
+	if(runtime·sched.npidle == runtime·gomaxprocs-1 && 
+		runtime·atomicload64(&runtime·sched.lastpoll) != 0) {
 		runtime·unlock(&runtime·sched);
 		startm(p, false);
 		return;
 	}
+    // 运行到这里, 说明未处于gc, 也没能绑定一个m,
+    // 本地队列和全局队列都没有额外任务需要运行.
+    // 将p放到全局调度器的空闲链表中.
 	pidleput(p);
 	runtime·unlock(&runtime·sched);
 }
@@ -1368,6 +1394,8 @@ resetspinning(void)
 
 // Injects the list of runnable G's into the scheduler.
 // Can run concurrently with GC.
+// 将 glist 任务列表放入全局调度器的任务队列, 将其全部标记为 runnable,
+// 同时如果全局调度器中还有处于 idle 状态的p, 就创建更多的m来运行这些任务吧.
 static void
 injectglist(G *glist)
 {
@@ -1384,7 +1412,7 @@ injectglist(G *glist)
 		globrunqput(gp);
 	}
 	runtime·unlock(&runtime·sched);
-
+	// 如果全局队列中还有处于 idle 状态的p, 就创建更多的m来运行这些任务.
 	for(; n && runtime·sched.npidle; n--)
 		startm(nil, false);
 }
@@ -2492,6 +2520,7 @@ releasep(void)
 	return p;
 }
 
+// ...很简单, 容易理解.
 static void
 incidlelocked(int32 v)
 {
@@ -2605,6 +2634,8 @@ sysmon(void)
 				// another M returns from syscall, finishes running its G,
 				// observes that there is no work to do and no other running M's
 				// and reports deadlock.
+				// 先将处于 locked 状态的m的数量减1(假设m的数量大于1)
+				// 否则可能会出现, 
 				incidlelocked(-1);
 				injectglist(gp);
 				incidlelocked(1);
@@ -2612,6 +2643,8 @@ sysmon(void)
 		}
 		// retake P's blocked in syscalls
 		// and preempt long running G's
+		// retake 回收陷入系统调用的p对象, 
+		// 同时也抢占运行时间比较长的g任务.
 		if(retake(now))
 			idle = 0;
 		else
@@ -2635,6 +2668,11 @@ struct Pdesc
 // pdesc 没有地方初始化, 所以第一次使用时需要判断各字段的空值情况
 static Pdesc pdesc[MaxGomaxprocs];
 
+// retake 回收陷入系统调用的p对象, 
+// 同时也抢占运行时间比较长的g任务(防止某一个任务占用CPU太久影响其他任务的执行)
+// 返回值 n 为
+// 注意对 running 状态的p的g任务的抢占并不计在 n 中, 因为抢占操作只是一个通知,
+// 实际当p不再运行g, 需要等待到下一次调度.
 // 参数 now 为绝对时间 nanotime
 // caller: sysmon() 
 static uint32

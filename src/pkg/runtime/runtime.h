@@ -324,9 +324,20 @@ struct	M
 	P*	p;
 	P*	nextp;
 	int32	id;
-	int32	mallocing; // 类似于锁的变量, 1表示此m对象正在分配内存, 0表示分配完成.
+	// 话说 G和P都有各自的枚举状态, M就没有.
+	// 下面这些貌似是可以重合的, 所以不能只用一个 status 字段来表示???
+	// 类似于锁的变量, 1表示此m对象正在分配内存, 0表示分配完成.
+	int32	mallocing; 
 	int32	throwing;
 	int32	gcing;
+	// 对 m->locks 的++和--操作总是成对出现, 
+	// 偶尔在--操作后, 会对 locks 的值与0做一下判断, 不可以小于0(会抛出异常).
+	// 加锁的情况并没有特别的规定, 貌似 gc, 系统调用, 或是 futex 锁
+	// 都会加减 locks 值.
+	// 但至少在自减后等于0时, 可以认为没有其他情况占用 locks,
+	// 所以与0值的比较一般会伴随着对g的 preempt 字段的判断.
+	// 也就是说, 在处于对 locks 加锁的这些操作中时, g是不可以被抢占的.
+	// locks 貌似就是用来检测是否可以设置 preempt 的.
 	int32	locks;
 	int32	dying;
 	int32	profilehz;
