@@ -278,7 +278,9 @@ struct	G
 	G*	schedlink; 
 	bool	ispanic;
 	bool	issystem;	// do not output in stack dump
-	bool	isbackground;	// ignore in deadlock detector
+	// ignore in deadlock detector
+	// 如下g处于 isbackground 状态, 将不受死锁检测
+	bool	isbackground;
 	// preemption signal, duplicates stackguard0 = StackPreempt
 	// 如果当前协程被抢占(如调用 preemptone()时), 则这个字段为true, 
 	// 同时 stackguard0 字段也会被设置为 StackPreempt
@@ -399,7 +401,7 @@ struct P
 	// 每次被调度器调度时加1, execute()
 	uint32	schedtick;
 	// incremented on every system call
-	// 每次系统调用时加1, runtime·exitsyscall()
+	// 每次系统调用(完成)时加1, runtime·exitsyscall()
 	uint32	syscalltick;
 	// back-link to associated M (nil if idle)
 	// 反向引用绑定的m对象, 如果p处于 idle状态则为nil

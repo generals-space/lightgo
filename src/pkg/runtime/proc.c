@@ -590,7 +590,7 @@ runtime·starttheworld(void)
 		p1 = p;
 	}
 	if(runtime·sched.sysmonwait) {
-		// ...我call, sysmonwait 可不是 bool 类型, 也能这么干?
+		// runtime.h 中有声明, 将true和false定义为1和0
 		runtime·sched.sysmonwait = false;
 		runtime·notewakeup(&runtime·sched.sysmonnote);
 	}
@@ -994,7 +994,8 @@ stopm(void)
 	if(m->locks) runtime·throw("stopm holding locks");
 	if(m->p) runtime·throw("stopm holding p");
 	if(m->spinning) {
-		// 如果当前m处于自旋, 那么结束自旋, 同时将全局调度器的nmspinning字段减1
+		// 如果当前m处于自旋, 那么结束自旋, 
+		// 同时将全局调度器的nmspinning字段减1
 		m->spinning = false;
 		runtime·xadd(&runtime·sched.nmspinning, -1);
 	}
@@ -1396,6 +1397,8 @@ resetspinning(void)
 // Can run concurrently with GC.
 // 将 glist 任务列表放入全局调度器的任务队列, 将其全部标记为 runnable,
 // 同时如果全局调度器中还有处于 idle 状态的p, 就创建更多的m来运行这些任务吧.
+// 最后部分, 如果存在空闲的p, 就多创建一些m来运行这些任务.
+// ...可以与GC并行运行??? 怎么可能???
 static void
 injectglist(G *glist)
 {
@@ -1591,10 +1594,16 @@ save(void *pc, uintptr sp)
 // Record that it's not using the cpu anymore.
 // This is called only from the go syscall library and cgocall,
 // not from the low-level system calls used by the runtime.
-//
+// 协程g将要陷入系统调用, 这里记录ta将不再占用cpu.
+// 此函数只在golang的syscall库和cgocall函数时调用.
+// 
 // Entersyscall cannot split the stack: the runtime·gosave must
-// make g->sched refer to the caller's stack segment, because
-// entersyscall is going to return immediately after.
+// make g->sched refer to the caller's stack segment, 
+// because entersyscall is going to return immediately after.
+// entersyscall 不能被分割栈, runtime·gosave() 必定将
+// g->sched 赋值为调用方的栈, 因为 entersyscall 将会马上返回.
+// caller: runtime·cgocall(), runtime·cgocallbackg()
+// 还有其他的一些调用方, 大都是汇编的调用.
 #pragma textflag NOSPLIT
 void
 ·entersyscall(int32 dummy)
@@ -1610,13 +1619,15 @@ void
 	g->syscallstack = g->stackbase;
 	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
-	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
+	if(g->syscallsp < g->syscallguard-StackGuard || 
+		g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
 		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscall");
 	}
 
-	if(runtime·atomicload(&runtime·sched.sysmonwait)) {  // TODO: fast atomic
+	// TODO: fast atomic
+	if(runtime·atomicload(&runtime·sched.sysmonwait)) { 
 		runtime·lock(&runtime·sched);
 		if(runtime·atomicload(&runtime·sched.sysmonwait)) {
 			runtime·atomicstore(&runtime·sched.sysmonwait, 0);
@@ -1631,7 +1642,8 @@ void
 	runtime·atomicstore(&m->p->status, Psyscall);
 	if(runtime·sched.gcwaiting) {
 		runtime·lock(&runtime·sched);
-		if (runtime·sched.stopwait > 0 && runtime·cas(&m->p->status, Psyscall, Pgcstop)) {
+		if (runtime·sched.stopwait > 0 && 
+			runtime·cas(&m->p->status, Psyscall, Pgcstop)) {
 			if(--runtime·sched.stopwait == 0)
 				runtime·notewakeup(&runtime·sched.stopnote);
 		}
@@ -1684,29 +1696,38 @@ void
 // Arrange for it to run on a cpu again.
 // This is called only from the go syscall library, not
 // from the low-level system calls used by the runtime.
+// 协程g从ta的系统调用中返回, 安排ta在某个cpu上继续运行.
+// 
 #pragma textflag NOSPLIT
 void
 runtime·exitsyscall(void)
 {
 	m->locks++;  // see comment in entersyscall
 
-	if(g->isbackground)  // do not consider blocked scavenger for deadlock detection
-		incidlelocked(-1);
+	// do not consider blocked scavenger for deadlock detection
+	if(g->isbackground) incidlelocked(-1);
 
+	// exitsyscallfast 为m重新绑定p对象, 绑定成功则为true
 	if(exitsyscallfast()) {
 		// There's a cpu for us, so we can run.
+		// 运行到这里, 表示m获取到了一个p(cpu)对象
 		m->p->syscalltick++;
 		g->status = Grunning;
 		// Garbage collector isn't running (since we are),
 		// so okay to clear gcstack and gcsp.
+		// ...这tm写叉了吧, 清理的明明是syscall的东西
 		g->syscallstack = (uintptr)nil;
 		g->syscallsp = (uintptr)nil;
 		m->locks--;
+		// 一般在判断g的 preempt 时都会先判断一个m的 locks 值是否为0
+		// 但这里没有, 是能保证此时 locks 值一定为0吗???
 		if(g->preempt) {
-			// restore the preemption request in case we've cleared it in newstack
+			// restore the preemption request 
+			// in case we've cleared it in newstack
 			g->stackguard0 = StackPreempt;
 		} else {
-			// otherwise restore the real stackguard, we've spoiled it in entersyscall/entersyscallblock
+			// otherwise restore the real stackguard, 
+			// we've spoiled it in entersyscall/entersyscallblock
 			g->stackguard0 = g->stackguard;
 		}
 		return;
@@ -1714,6 +1735,7 @@ runtime·exitsyscall(void)
 
 	m->locks--;
 
+	// 运行到这里, 说明当前m并没有成功绑定到一个p(毕竟p是有限且相对固定的)
 	// Call the scheduler.
 	runtime·mcall(exitsyscall0);
 
@@ -1723,11 +1745,18 @@ runtime·exitsyscall(void)
 	// Must wait until now because until gosched returns
 	// we don't know for sure that the garbage collector
 	// is not running.
+	// 调度器返回, 那么可以开始执行了.
+	// 删除...这里的注释应该也是错的.
+	// 删除 syscall 栈信息
 	g->syscallstack = (uintptr)nil;
 	g->syscallsp = (uintptr)nil;
 	m->p->syscalltick++;
 }
 
+// 从系统调用中返回时, 为当前m重新绑定p, 可以是上一个绑定过的p,
+// 也可以从调度器中重新获取另一个空闲的p.
+// 绑定成功返回true, 否则返回false.
+// caller: runtime·exitsyscall() 
 #pragma textflag NOSPLIT
 static bool
 exitsyscallfast(void)
@@ -1735,29 +1764,37 @@ exitsyscallfast(void)
 	P *p;
 
 	// Freezetheworld sets stopwait but does not retake P's.
+	// 这是啥意思??? 
 	if(runtime·sched.stopwait) {
 		m->p = nil;
 		return false;
 	}
 
 	// Try to re-acquire the last P.
-	if(m->p && m->p->status == Psyscall && runtime·cas(&m->p->status, Psyscall, Prunning)) {
+	// 尝试绑定上一个p(上一个p一直保留在m->p, 只是改了一下状态而已)
+	// 但不一定成功.
+	if(m->p && m->p->status == Psyscall && 
+		runtime·cas(&m->p->status, Psyscall, Prunning)) {
 		// There's a cpu for us, so we can run.
+		// 真的找回了这个cpu(就是p对象), 那么重新绑定
 		m->mcache = m->p->mcache;
 		m->p->m = m;
 		return true;
 	}
 	// Try to get any other idle P.
+	// 尝试获取一个另外的空闲的p
 	m->p = nil;
 	if(runtime·sched.pidle) {
 		runtime·lock(&runtime·sched);
 		p = pidleget();
+		// sysmonwait 只有一个地方被设置为1, 然后陷入休眠: sysmon()
 		if(p && runtime·atomicload(&runtime·sched.sysmonwait)) {
 			runtime·atomicstore(&runtime·sched.sysmonwait, 0);
 			runtime·notewakeup(&runtime·sched.sysmonnote);
 		}
 		runtime·unlock(&runtime·sched);
 		if(p) {
+			// 把p与当前的m绑定
 			acquirep(p);
 			return true;
 		}
@@ -2532,6 +2569,12 @@ incidlelocked(int32 v)
 
 // Check for deadlock situation.
 // The check is based on number of running M's, if 0 -> deadlock.
+// 检测死锁. 注意最后一句的报错信息, 写代码的时候经常看到, 
+// 所以 run 的值很大可能是0.
+// 需要了解ta的检测机制.
+// 1. 某些m状态同时处于 idle, locked 两种状态
+// 2. 更普遍的情况是, 
+// incidlelocked(-1) 和 incidlelocked(1) 
 static void
 checkdead(void)
 {
@@ -2539,33 +2582,48 @@ checkdead(void)
 	int32 run, grunning, s;
 
 	// -1 for sysmon
+	// run 是有任务正在执行的数量, 有一个m用于执行 sysmon, 需要额外减去.
 	run = runtime·sched.mcount - runtime·sched.nmidle - runtime·sched.nmidlelocked - 1;
+	// 注释掉
+	// runtime·printf("checkdead(): mcount=%d nmidle=%d nmidlelocked=%d\n",
+	// runtime·sched.mcount, runtime·sched.nmidle, runtime·sched.nmidlelocked);
 	if(run > 0) return;
+	// ...这是存在m同时处于 idle 和 locked 两种状态吧, 否则不可能小于0
 	if(run < 0) {
 		runtime·printf("checkdead: nmidle=%d nmidlelocked=%d mcount=%d\n",
 			runtime·sched.nmidle, runtime·sched.nmidlelocked, runtime·sched.mcount);
 		runtime·throw("checkdead: inconsistent counts");
 	}
+	// ...运行到这里说明 run 是0了吧
+	// grunning 表示...处于 waiting 状态的m的数量? 
+	// ...那为啥叫running
 	grunning = 0;
 	for(gp = runtime·allg; gp; gp = gp->alllink) {
 		if(gp->isbackground) continue;
+		// 除了下面这些, 还有 Gidle, Gdead
 		s = gp->status;
 		if(s == Gwaiting)
 			grunning++;
 		else if(s == Grunnable || s == Grunning || s == Gsyscall) {
+			// 因为 run == 0, 所以目前所有的g任务中不应该存在 
+			// 这些状态(因为没有m在运行).
 			runtime·printf("checkdead: find g %D in status %d\n", gp->goid, s);
 			runtime·throw("checkdead: runnable g");
 		}
 	}
 	// possible if main goroutine calls runtime·Goexit()
+	// 如果主协程调用了 runtime·Goexit() 可能出现为0的情况.
 	if(grunning == 0) runtime·exit(0);
-
+	// 记得这个报错一般出现在锁没有被释放, 或是通道一直被阻塞的时候.
+	// 所以 run 的值很大可能是0.
 	m->throwing = -1; // do not dump full stacks
 	runtime·throw("all goroutines are asleep - deadlock!");
 }
 
 // 监控线程
-// 由 runtime·main() 通过 newm() 方法调用.
+// 监控线程也有可能休眠, 比如在gc时, 或是所有p都空闲的时候,
+// 因为那个时候没有监控的必要.
+// caller: 由 runtime·main() 通过 newm() 方法调用.
 static void
 sysmon(void)
 {
@@ -2596,7 +2654,9 @@ sysmon(void)
 		runtime·usleep(delay);
 
 		// 1. schedtrace <= 0, 不过目前并没有看见哪里有设置这个值
-		// 2. 当前进程处于gc流程, 或是所有的p都处于 idle 状态, 总之就是都没在干活.
+		// 2. 当前进程处于gc流程, 或是所有的p都处于 idle 状态
+		// 这种情况下, 也没有必要监控了, 反正大家都没在干活...
+		// 于是会陷入休眠, 直接其他地方获取了一个空闲的p, 重新开始参与任务的执行.
 		if(runtime·debug.schedtrace <= 0 &&
 			(runtime·sched.gcwaiting || 
 				runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs)) { 
@@ -2608,7 +2668,10 @@ sysmon(void)
 				// 只有这一个地方将 sysmonwait 设置为 1
 				runtime·atomicstore(&runtime·sched.sysmonwait, 1);
 				runtime·unlock(&runtime·sched);
-				// 陷入休眠, 等待被唤醒, 比如 starttheworld
+				// 陷入休眠, 等待被唤醒, 因为目前没有监控的必要.
+				// 在 starttheworld, exitsyscallfast 中会为空闲的p
+				// 赋予新的任务, 于是被唤醒, 重新开始监控流程.
+				// 当然, 每一次重开监控, idle 和 delay 的值都会归零重新计算.
 				runtime·notesleep(&runtime·sched.sysmonnote);
 				runtime·noteclear(&runtime·sched.sysmonnote);
 				// 一次休眠然后被唤醒后, 重置 idle 和 delay
@@ -2635,7 +2698,13 @@ sysmon(void)
 				// observes that there is no work to do and no other running M's
 				// and reports deadlock.
 				// 先将处于 locked 状态的m的数量减1(假设m的数量大于1)
-				// 否则可能会出现, 
+				// 否则可能会出现这样的情况: 
+				// injectglist 将gp任务链表放入全局调度器的任务队列(标记ta们为 runnable ),
+				// 在末尾会启动额外的m来运行这些任务(如果存在 idle 的p).
+				// 但在启动新m之前, 对全局调度器解锁的瞬间, 有可能一些m对象从 syscall 中返回,
+				// 或是已经运行完了ta的g任务, 
+				// 发现已经没有其他任务了, 也没有其他正在 running 的m, 
+				// 就会报 deadlock.
 				incidlelocked(-1);
 				injectglist(gp);
 				incidlelocked(1);
@@ -2892,7 +2961,7 @@ runtime·schedtrace(bool detailed)
 
 // Put mp on midle list.
 // Sched must be locked.
-// 将 mp 放到全局调度器的 midle 链表头部
+// 将 mp 放到全局调度器的 midle 链表头部, 并将其标记为 idle
 // 调用此函数时必须对sched全局调度器加锁
 static void
 mput(M *mp)
