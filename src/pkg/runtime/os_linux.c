@@ -158,7 +158,8 @@ runtime·newosproc(M *mp, void *stk)
 	runtime·rtsigprocmask(SIG_SETMASK, &oset, nil, sizeof oset);
 
 	if(ret < 0) {
-		runtime·printf("runtime: failed to create new OS thread (have %d already; errno=%d)\n", runtime·mcount(), -ret);
+		runtime·printf("runtime: failed to create new OS thread (have %d already; errno=%d)\n", 
+			runtime·mcount(), -ret);
 		runtime·throw("runtime.newosproc");
 	}
 }
@@ -240,7 +241,10 @@ runtime·sigpanic(void)
 		runtime·printf("unexpected fault address %p\n", g->sigcode1);
 		runtime·throw("fault");
 	case SIGSEGV:
-		if((g->sigcode0 == 0 || g->sigcode0 == SEGV_MAPERR || g->sigcode0 == SEGV_ACCERR) && g->sigcode1 < 0x1000) {
+		if((g->sigcode0 == 0 || 
+			g->sigcode0 == SEGV_MAPERR || 
+			g->sigcode0 == SEGV_ACCERR) && 
+			g->sigcode1 < 0x1000) {
 			if(g->sigpc == 0)
 				runtime·panicstring("call of nil func value");
 			runtime·panicstring("invalid memory address or nil pointer dereference");

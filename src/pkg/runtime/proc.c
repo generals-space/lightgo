@@ -93,7 +93,7 @@ G	runtime·g0;	 // idle goroutine for m0
 G*	runtime·allg; // G对象链表
 G*	runtime·lastg;
 M*	runtime·allm;
-M*	runtime·extram;
+M*	runtime·extram; // 这个m链表貌似和 cgo 调用相关.
 int8*	runtime·goos;
 int32	runtime·ncpu;
 // 在 runtime·gomaxprocsfunc(n)中设置为n
@@ -440,8 +440,9 @@ runtime·helpgc(int32 nproc)
 	runtime·lock(&runtime·sched);
 	pos = 0;
 	// one M is currently running
-	for(n = 1; n < nproc; n++) {  
+	for(n = 1; n < nproc; n++) { 
 		if(runtime·allp[pos]->mcache == m->mcache) pos++;
+
 		// 从sched获取一个空闲的m对象
 		mp = mget();
 		if(mp == nil) runtime·throw("runtime·gcprocs inconsistency");
@@ -453,7 +454,8 @@ runtime·helpgc(int32 nproc)
 	runtime·unlock(&runtime·sched);
 }
 
-// Similar to stoptheworld but best-effort and can be called several times.
+// Similar to stoptheworld but best-effort 
+// and can be called several times.
 // There is no reverse operation, used during crashing.
 // This function must not lock any mutexes.
 void
@@ -468,7 +470,8 @@ runtime·freezetheworld(void)
 	for(i = 0; i < 5; i++) {
 		// this should tell the scheduler to not start any new goroutines
 		runtime·sched.stopwait = 0x7fffffff;
-		// 这里用CAS原子操作, 而在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
+		// 这里用CAS原子操作, 而在runtime·starttheworld()中,
+		// 由于只有一个协程在运行, 就直接赋值为0了.
 		runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 		// this should stop running goroutines
 		// no running goroutines
@@ -490,9 +493,11 @@ runtime·stoptheworld(void)
 	bool wait;
 
 	runtime·lock(&runtime·sched); // 加锁
-	// stopwait 表示当前go程序启动的P的数量(经过 schedinit, 这个值应该就在1-GOMAXPROCS之间)
+	// stopwait 表示当前go程序启动的P的数量
+	// 经过 schedinit, 这个值应该就在1-GOMAXPROCS之间
 	runtime·sched.stopwait = runtime·gomaxprocs;
-	// 这里用CAS原子操作, 而在runtime·starttheworld()中由于只有一个协程在运行, 就直接赋值为0了.
+	// 这里用CAS原子操作, 而在runtime·starttheworld()中
+	// 由于只有一个协程在运行, 就直接赋值为0了.
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 	// 发起抢占请求, 尝试停止所有正在运行的goroutine
 	preemptall();
@@ -663,7 +668,8 @@ runtime·mstart(void)
 	// prepare the thread to be able to handle the signals.
 	// 装载信号处理函数
 	if(m == &runtime·m0) runtime·initsig();
-
+	// mstart 被 newm 调用时可能会提供 mstartfn 函数
+	// 执行完成目标 fn 后, 该m会加入到g的抢夺队列.
 	if(m->mstartfn) m->mstartfn();
 
 	if(m->helpgc) {
@@ -695,15 +701,19 @@ struct CgoThreadStart
 
 // Allocate a new m unassociated with any thread.
 // Can use p for allocation context if needed.
+// 创建一个全新的m对象, 不与任何线程绑定.
+// caller: newm(), runtime·newextram()
 M*
 runtime·allocm(P *p)
 {
 	M *mp;
 	static Type *mtype;  // The Go type M
 
-	m->locks++;  // disable GC because it can be called from sysmon
-	if(m->p == nil)
-		acquirep(p);  // temporarily borrow p for mallocs in this function
+	// disable GC because it can be called from sysmon
+	m->locks++; 
+	// temporarily borrow p for mallocs in this function
+	if(m->p == nil) acquirep(p); 
+
 	if(mtype == nil) {
 		Eface e;
 		runtime·gc_m_ptr(&e);
@@ -715,16 +725,19 @@ runtime·allocm(P *p)
 
 	// In case of cgo, pthread_create will make us a stack.
 	// Windows will layout sched stack on OS stack.
+	// 该函数用于 cgo 时(runtime·newextram 应该就是专门用于 cgo 调用的)
+	// 
 	if(runtime·iscgo || Windows)
 		mp->g0 = runtime·malg(-1);
 	else
 		mp->g0 = runtime·malg(8192);
 
-	if(p == m->p)
-		releasep();
+	if(p == m->p) releasep();
+
 	m->locks--;
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
+	// restore the preemption request 
+	// in case we've cleared it in newstack
+	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 
 	return mp;
 }
@@ -821,8 +834,11 @@ runtime·needm(byte x)
 }
 
 // newextram allocates an m and puts it on the extra list.
-// It is called with a working local m, so that it can do things
-// like call schedlock and allocate.
+// It is called with a working local m, 
+// so that it can do things like call schedlock and allocate.
+// caller: runtime·cgocall() runtime·cgocallbackg()
+// 而且在函数内部有一次递归调用.
+// 应该可以说这就是为了 cgo 调用而存在的吧?
 void
 runtime·newextram(void)
 {
@@ -834,6 +850,7 @@ runtime·newextram(void)
 	// The sched.pc will never be returned to, but setting it to
 	// runtime.goexit makes clear to the traceback routines where
 	// the goroutine stack ends.
+	// 创建 extra 的g和m对象, 并将其双向绑定.
 	mp = runtime·allocm(nil);
 	gp = runtime·malg(4096);
 	gp->sched.pc = (uintptr)runtime·goexit;
@@ -929,6 +946,7 @@ lockextra(bool nilokay)
 	void (*yield)(void);
 
 	for(;;) {
+		// mp 为 extram 链表头
 		mp = runtime·atomicloadp(&runtime·extram);
 		if(mp == MLOCKED) {
 			yield = runtime·osyield;
@@ -1088,7 +1106,7 @@ handoffp(P *p)
 	// 运行到这, 说明p的本地队列中没有任务.
 	// 先找找有没有处于 spinning 状态的m, 或是存在其他的空闲p.
 	// 如果有, 那也没有必要再做之后的操作了.
-	// starm() 会获取一个可用的m来与p绑定的.
+	// startm() 会获取一个可用的m来与p绑定的.
 	// 不过 spinning 为true? 是有什么目的吗???
 	if(runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) == 0 &&  
 		// TODO: fast atomic
@@ -1173,11 +1191,16 @@ stoplockedm(void)
 	runtime·noteclear(&m->park);
 	if(m->lockedg->status != Grunnable)
 		runtime·throw("stoplockedm: not runnable");
+	// 将m绑定下一个p
 	acquirep(m->nextp);
 	m->nextp = nil;
 }
 
 // Schedules the locked m to run the locked gp.
+// 由 schedule 调用, 是在发现 gp->lockedm 时.
+// gp已经与某个m绑定, 且不是当前m, 但缺少p所以没办法执行.
+// 所以调度者指示当前m让出p给ta们, 让ta们先执行.
+// caller: schedule()
 static void
 startlockedm(G *gp)
 {
@@ -1185,15 +1208,19 @@ startlockedm(G *gp)
 	P *p;
 
 	mp = gp->lockedm;
-	if(mp == m)
-		runtime·throw("startlockedm: locked to me");
-	if(mp->nextp)
-		runtime·throw("startlockedm: m has p");
+	// mp不应该是当前m, 否则就没有让不让这一说了.
+	if(mp == m) runtime·throw("startlockedm: locked to me");
+	if(mp->nextp) runtime·throw("startlockedm: m has p");
+
 	// directly handoff current P to the locked m
 	incidlelocked(-1);
 	p = releasep();
 	mp->nextp = p;
+	// 由于mp原来是缺少p而无法执行的, 所以一定处于休眠状态
+	// 现在有了p, 可以唤醒ta了.
 	runtime·notewakeup(&mp->park);
+	// mp已经可以被调度了, stopm 操作的是当前的m
+	// m会因为失去了自己的p而无法执行, 只能阻塞等待.
 	stopm();
 }
 
@@ -1244,7 +1271,7 @@ execute(G *gp)
 	gp->status = Grunning;
 	gp->preempt = false;
 	gp->stackguard0 = gp->stackguard;
-	// 相互绑定
+	// g与m相互绑定
 	m->p->schedtick++;
 	m->curg = gp;
 	gp->m = m;
@@ -1423,7 +1450,8 @@ injectglist(G *glist)
 // One round of scheduler: find a runnable goroutine and execute it.
 // Never returns.
 // 一轮调度, 找到一个待执行的goroutine并运行ta
-// caller: runtime·mstart(), park0(), runtime·gosched0, goexit0(), exitsyscall0().
+// caller: runtime·mstart(), park0(), runtime·gosched0, 
+// goexit0(), exitsyscall0().
 static void
 schedule(void)
 {
@@ -1464,7 +1492,6 @@ top:
 	// 如果未到从全局队列取g的时机, 或是没能从全局队列获取到,
 	// 那么就尝试从当前m->p的本地待执行队列中获取.
 	if(gp == nil) {
-		// 
 		gp = runqget(m->p);
 		if(gp && m->spinning) runtime·throw("schedule: spinning with local work");
 	}
@@ -1475,19 +1502,26 @@ top:
 		gp = findrunnable(); 
 		resetspinning();
 	}
-
+	// 如果发现这个g被锁定在某个m上, 
+	// 则将自己的p转交给那个锁定的m, 让ta来执行gp任务.
+	// 而当前的m本身则需要阻塞以等待另一个p对象
+	// ...真...舍己为人啊
+	// 而且, gp是从某个队列获取到的, 说明当前并没有p可以让ta执行.
 	if(gp->lockedm) {
 		// Hands off own p to the locked m,
 		// then blocks waiting for a new p.
+		// startlockedm 中调用了 stopm, 会阻塞当前m, 等待新任务
 		startlockedm(gp);
 		goto top;
 	}
-	// 在当前m上运行gp任务, 此时gp的状态必须为runnable
+	// 在当前m上运行gp任务, 此时gp的状态必须为 runnable
 	execute(gp);
 }
 
-// Puts the current goroutine into a waiting state and unlocks the lock.
-// The goroutine can be made runnable again by calling runtime·ready(gp).
+// Puts the current goroutine into a waiting state 
+// and unlocks the lock.
+// The goroutine can be made runnable again 
+// by calling runtime·ready(gp).
 void
 runtime·park(void(*unlockf)(Lock*), Lock *lock, int8 *reason)
 {
@@ -1558,8 +1592,8 @@ runtime·goexit(void)
 }
 
 // runtime·goexit continuation on g0.
-// 由runtime·goexit()调用mcall将代码切换到g0上执行.
-// gp对象即为当前m的g0.
+// 由 runtime·goexit() 调用 mcall 将代码切换到 g0 上执行.
+// gp对象即为当前m的 g0 .
 static void
 goexit0(G *gp)
 {
@@ -1708,6 +1742,7 @@ runtime·exitsyscall(void)
 	if(g->isbackground) incidlelocked(-1);
 
 	// exitsyscallfast 为m重新绑定p对象, 绑定成功则为true
+	// 注意, 进入此if块后必定会 return
 	if(exitsyscallfast()) {
 		// There's a cpu for us, so we can run.
 		// 运行到这里, 表示m获取到了一个p(cpu)对象
@@ -1788,6 +1823,7 @@ exitsyscallfast(void)
 		runtime·lock(&runtime·sched);
 		p = pidleget();
 		// sysmonwait 只有一个地方被设置为1, 然后陷入休眠: sysmon()
+		// 既然p有任务来了, sysmon 也没必要再休眠了.
 		if(p && runtime·atomicload(&runtime·sched.sysmonwait)) {
 			runtime·atomicstore(&runtime·sched.sysmonwait, 0);
 			runtime·notewakeup(&runtime·sched.sysmonnote);
@@ -1804,6 +1840,8 @@ exitsyscallfast(void)
 
 // runtime·exitsyscall slow path on g0.
 // Failed to acquire P, enqueue gp as runnable.
+// caller: runtime·exitsyscall()
+// 调用方在先调用 exitsyscallfast() 失败的情况下调用此函数.
 static void
 exitsyscall0(G *gp)
 {
@@ -1822,9 +1860,11 @@ exitsyscall0(G *gp)
 	}
 	runtime·unlock(&runtime·sched);
 	if(p) {
+		// 把p与当前的m绑定
 		acquirep(p);
 		execute(gp);  // Never returns.
 	}
+	// 此处表示没能获取p
 	if(m->lockedg) {
 		// Wait until another thread schedules gp and so m again.
 		stoplockedm();
@@ -1841,8 +1881,7 @@ syscall·runtime_BeforeFork(void)
 	// Fork can hang if preempted with signals frequently enough (see issue 5517).
 	// Ensure that we stay on the same M where we disable profiling.
 	m->locks++;
-	if(m->profilehz != 0)
-		runtime·resetcpuprofiler(0);
+	if(m->profilehz != 0) runtime·resetcpuprofiler(0);
 }
 
 // Called from syscall package after fork in parent.
@@ -1852,8 +1891,7 @@ syscall·runtime_AfterFork(void)
 	int32 hz;
 
 	hz = runtime·sched.profilehz;
-	if(hz != 0)
-		runtime·resetcpuprofiler(hz);
+	if(hz != 0) runtime·resetcpuprofiler(hz);
 	m->locks--;
 }
 
@@ -1909,7 +1947,8 @@ runtime·malg(int32 stacksize)
 // are available sequentially after &fn; 
 // they would not be copied if a stack split occurred. 
 // It's OK for this to call functions that split the stack.
-// 创建一个g对象, 用来运行fn, 传入参数为siz bytes, 将g对象放到waiting队列等待执行.
+// 创建一个g对象, 用来运行fn, 传入参数为siz bytes, 
+// 将g对象放到 waiting 队列等待执行.
 // 编译器会将go func()语句转换成对这个函数的调用.
 // 调用栈不可分割, 因为这里假设传入的参数紧随在fn的地址之后,
 // 栈分割发生时就无法被正确获取到.
@@ -1934,7 +1973,7 @@ runtime·newproc(int32 siz, FuncVal* fn, ...)
 // 创建一个新的g对象, 用来执行fn函数, 传入的参数起始地址为argp, 一共narg bytes,
 // 并且返回nret bytes的结果.
 // callerpc是主调函数的地址, pc即程序计数器, 对g切换是有用的.
-// 新创建的g对象会放到waiting队列等待执行.
+// 新创建的g对象会放到 waiting 队列等待执行.
 G*
 runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
 {
