@@ -200,8 +200,9 @@ struct Complex128
 	float64	imag;
 };
 
+// must not move anything
 struct	Slice
-{				// must not move anything
+{
 	byte*	array;		// actual data
 	uintgo	len;		// number of elements
 	uintgo	cap;		// allocated number of elements
@@ -354,10 +355,16 @@ struct	M
 	M*	schedlink;
 	uint32	machport;	// Return address for Mach IPC (OS X)
 	MCache*	mcache;
+	
+	// stackcache 数组中已使用的数量
 	int32	stackinuse;
+	// 下一个可用的 stackcache 成员索引, 
+	// 不会超过 StackCacheSize
 	uint32	stackcachepos;
+	// stackcache 中可用成员的数量
 	uint32	stackcachecnt;
 	void*	stackcache[StackCacheSize];
+
 	G*	lockedg;
 	uintptr	createstack[32];// Stack that created this thread.
 	uint32	freglo[16];	// D[i] lsb and F[i]

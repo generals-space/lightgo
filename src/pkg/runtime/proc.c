@@ -351,7 +351,8 @@ static void
 mcommoninit(M *mp)
 {
 	// If there is no mcache runtime·callers() will crash,
-	// and we are most likely in sysmon thread so the stack is senseless anyway.
+	// and we are most likely in sysmon thread 
+	// so the stack is senseless anyway.
 	if(m->mcache)
 		runtime·callers(1, mp->createstack, nelem(mp->createstack));
 
@@ -716,6 +717,9 @@ runtime·allocm(P *p)
 
 	if(mtype == nil) {
 		Eface e;
+		// 这个函数在 mgc0.go 中定义, 
+		// 作用就是把e变量看作m指针, 并将其内容清空.
+		// 相当于 memset 了.
 		runtime·gc_m_ptr(&e);
 		mtype = ((PtrType*)e.type)->elem;
 	}
@@ -726,7 +730,8 @@ runtime·allocm(P *p)
 	// In case of cgo, pthread_create will make us a stack.
 	// Windows will layout sched stack on OS stack.
 	// 该函数用于 cgo 时(runtime·newextram 应该就是专门用于 cgo 调用的)
-	// 
+	// 或是 win 平台下, 不分配栈空间.
+	// 如果是在 linux 平台下, 则分配 8kb(即`ulimit -s`的值)
 	if(runtime·iscgo || Windows)
 		mp->g0 = runtime·malg(-1);
 	else
@@ -1896,9 +1901,16 @@ syscall·runtime_AfterFork(void)
 }
 
 // Hook used by runtime·malg to call runtime·stackalloc on the
-// scheduler stack.  This exists because runtime·stackalloc insists
-// on being called on the scheduler stack, to avoid trying to grow
-// the stack while allocating a new stack segment.
+// scheduler stack. 
+// This exists because runtime·stackalloc insists
+// on being called on the scheduler stack, 
+// to avoid trying to grow the stack 
+// while allocating a new stack segment.
+// 为普通g对象gp分配栈空间.
+// 由于是通过 runtime·mcall() 调用, 所以当前g对象其实为g0.
+// 如果是为 m->g0 分配栈空间, 则可以不经过此函数, 
+// 而是直接调用 runtime·stackalloc()
+// caller: runtime·malg() 
 static void
 mstackalloc(G *gp)
 {
@@ -1907,6 +1919,7 @@ mstackalloc(G *gp)
 }
 
 // Allocate a new g, with a stack big enough for stacksize bytes.
+// 创建一个g对象, 为其分配至少 stacksize 字节的栈空间.
 G*
 runtime·malg(int32 stacksize)
 {
@@ -1917,8 +1930,10 @@ runtime·malg(int32 stacksize)
 		runtime·printf("runtime: SizeofStktop=%d, should be >=%d\n", (int32)StackTop, (int32)sizeof(Stktop));
 		runtime·throw("runtime: bad stack.h");
 	}
-
+	// 先申请空间
 	newg = runtime·malloc(sizeof(G));
+	// runtime·allocm() 中调用时, 为cgo/win分配g0时, 
+	// stacksize 会指定为-1.
 	if(stacksize >= 0) {
 		if(g == m->g0) {
 			// running on scheduler stack already.
@@ -1926,6 +1941,8 @@ runtime·malg(int32 stacksize)
 		} else {
 			// have to call stackalloc on scheduler stack.
 			g->param = (void*)(StackSystem + stacksize);
+			// 通过 runtime·mcall() 调用 mstackalloc, 
+			// 其实最终调用的还是 runtime·stackalloc()
 			runtime·mcall(mstackalloc);
 			stk = g->param;
 			g->param = nil;
