@@ -255,6 +255,7 @@ struct	G
 	// stackguard0 can be set to StackPreempt as opposed to stackguard
 	// cannot move - also known to linker, libmach, runtime/cgo
 	// stackguard0 被设置为 StackPreempt, 表示当前g对象被抢占(对比 preempt 字段)
+	// 唯一一次有效使用在 stack.c -> runtime·newstack() 函数中.
 	uintptr	stackguard0;
 	uintptr	stackbase;	// cannot move - also known to libmach, runtime/cgo
 	uint32	panicwrap;	// cannot move - also known to linker
@@ -270,7 +271,9 @@ struct	G
 	uintptr	stackguard;
 	uintptr	stack0;
 	uintptr	stacksize;
-	G*	alllink;	// on allg
+	// on allg
+	// ...这个指向 runtime·allg 变量吧
+	G*	alllink;
 	void*	param;		// passed parameter on wakeup
 	int16	status;
 	int64	goid;

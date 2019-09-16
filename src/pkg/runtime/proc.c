@@ -1920,6 +1920,7 @@ mstackalloc(G *gp)
 
 // Allocate a new g, with a stack big enough for stacksize bytes.
 // 创建一个g对象, 为其分配至少 stacksize 字节的栈空间.
+// 如果 stacksize < 0, 则只创建G对象, 不分配栈空间.
 G*
 runtime·malg(int32 stacksize)
 {
@@ -1937,6 +1938,7 @@ runtime·malg(int32 stacksize)
 	if(stacksize >= 0) {
 		if(g == m->g0) {
 			// running on scheduler stack already.
+			// stk 是分配的栈空间的起始地址
 			stk = runtime·stackalloc(StackSystem + stacksize);
 		} else {
 			// have to call stackalloc on scheduler stack.
@@ -1951,6 +1953,10 @@ runtime·malg(int32 stacksize)
 		newg->stack0 = (uintptr)stk;
 		newg->stackguard = (uintptr)stk + StackGuard;
 		newg->stackguard0 = newg->stackguard;
+		// stacksize 为当前分配的栈大小
+		// stackbase 为栈底(栈的起始点), 
+		// stackbase + Stktop 为栈顶(栈的最高点, 已经分配了空间)
+		// stackguard 应该是这些字段中最高的, 因为ta是上限值.
 		newg->stackbase = (uintptr)stk + StackSystem + stacksize - sizeof(Stktop);
 		runtime·memclr((byte*)newg->stackbase, sizeof(Stktop));
 	}

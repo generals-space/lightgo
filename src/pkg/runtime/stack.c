@@ -91,6 +91,7 @@ stackcacherelease(void)
 	runtime·unlock(&stackcachemu);
 }
 
+// 分配大小为n的栈空间, 返回这段空间的起始地址.
 // caller: stack.c -> runtime·newstack(), 
 // proc.c -> runtime·malg()
 void*
@@ -276,22 +277,26 @@ runtime·newstack(void)
 		runtime·printf("runtime: newstack framesize=%p argsize=%p sp=%p stack=[%p, %p]\n"
 			"\tmorebuf={pc:%p sp:%p lr:%p}\n"
 			"\tsched={pc:%p sp:%p lr:%p ctxt:%p}\n",
-			(uintptr)framesize, (uintptr)argsize, sp, gp->stackguard - StackGuard, gp->stackbase,
+			(uintptr)framesize, (uintptr)argsize, 
+			sp, gp->stackguard - StackGuard, gp->stackbase,
 			m->morebuf.pc, m->morebuf.sp, m->morebuf.lr,
 			gp->sched.pc, gp->sched.sp, gp->sched.lr, gp->sched.ctxt);
 	}
 	// 栈溢出检查
 	if(sp < gp->stackguard - StackGuard) {
-		runtime·printf("runtime: split stack overflow: %p < %p\n", sp, gp->stackguard - StackGuard);
+		runtime·printf("runtime: split stack overflow: %p < %p\n", 
+			sp, gp->stackguard - StackGuard);
 		runtime·throw("runtime: split stack overflow");
 	}
 
 	if(argsize % sizeof(uintptr) != 0) {
-		runtime·printf("runtime: stack split with misaligned argsize %d\n", argsize);
+		runtime·printf("runtime: stack split with misaligned argsize %d\n", 
+			argsize);
 		runtime·throw("runtime: stack split argsize");
 	}
-
+	// g->stackguard0 的唯一一次有效使用...? 其他地方都是赋值操作...
 	if(gp->stackguard0 == (uintptr)StackPreempt) {
+		// g0不可被抢占
 		if(gp == m->g0)
 			runtime·throw("runtime: preempt g0");
 		if(oldstatus == Grunning && m->p == nil && m->locks == 0)
@@ -300,7 +305,9 @@ runtime·newstack(void)
 			runtime·throw("runtime: stack split during syscall");
 		// Be conservative about where we preempt.
 		// We are interested in preempting user Go code, not runtime code.
-		if(oldstatus != Grunning || m->locks || m->mallocing || m->gcing || m->p->status != Prunning) {
+		// 抢占时谨慎一点, 最好先抢占开发者的go协程, 保留运行时的代码.
+		if(oldstatus != Grunning || m->locks || m->mallocing || 
+			m->gcing || m->p->status != Prunning) {
 			// Let the goroutine keep running for now.
 			// gp->preempt is set, so it will be preempted next time.
 			gp->stackguard0 = gp->stackguard;
@@ -362,7 +369,8 @@ runtime·newstack(void)
 	// propagate the panic flag
 	// forward so that recover will know we're in a panic.
 	oldtop = (Stktop*)top->stackbase;
-	if(oldtop != nil && oldtop->panic && top->argp == (byte*)oldtop - oldtop->argsize - gp->panicwrap)
+	if(oldtop != nil && oldtop->panic && 
+		top->argp == (byte*)oldtop - oldtop->argsize - gp->panicwrap)
 		top->panic = true;
 
 	top->panicwrap = gp->panicwrap;
