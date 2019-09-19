@@ -241,6 +241,7 @@ runtime·newstack(void)
 	uintptr *src, *dst, *dstend;
 	G *gp;
 	Gobuf label;
+	// 是否由 runtime·newstackcall() 函数调用.
 	bool newstackcall;
 	uintptr free;
 
@@ -257,6 +258,7 @@ runtime·newstack(void)
 	gp = m->curg;
 	oldstatus = gp->status;
 
+	// framesize 表示本次调用需要分配的栈大小 
 	framesize = m->moreframesize;
 	argsize = m->moreargsize;
 	gp->status = Gwaiting;
@@ -295,6 +297,7 @@ runtime·newstack(void)
 		runtime·throw("runtime: stack split argsize");
 	}
 	// g->stackguard0 的唯一一次有效使用...? 其他地方都是赋值操作...
+	// if条件成立, 表示当前g对象已被通知抢占, 但还未让出CPU.
 	if(gp->stackguard0 == (uintptr)StackPreempt) {
 		// g0不可被抢占
 		if(gp == m->g0)
@@ -305,7 +308,7 @@ runtime·newstack(void)
 			runtime·throw("runtime: stack split during syscall");
 		// Be conservative about where we preempt.
 		// We are interested in preempting user Go code, not runtime code.
-		// 抢占时谨慎一点, 最好先抢占开发者的go协程, 保留运行时的代码.
+		// 抢占时谨慎一点, 最好先抢占开发者的go协程, 保留运行时的代码...没毛病
 		if(oldstatus != Grunning || m->locks || m->mallocing || 
 			m->gcing || m->p->status != Prunning) {
 			// Let the goroutine keep running for now.
@@ -323,25 +326,31 @@ runtime·newstack(void)
 		// special case: called from runtime.newstackcall (framesize==1)
 		// to call code with an arbitrary argument size,
 		// and we have enough space on the current stack.
-		// the new Stktop* is necessary to unwind, but
-		// we don't need to create a new segment.
+		// the new Stktop* is necessary to unwind, 
+		// but we don't need to create a new segment.
+		// 特殊情况: 主调函数为 runtime·newstackcall() framesize == 1
 		top = (Stktop*)(m->morebuf.sp - sizeof(*top));
 		stk = (byte*)gp->stackguard - StackGuard;
 		free = 0;
 	} else {
 		// allocate new segment.
+		// 计算实际需要扩张的栈内存大小.
 		framesize += argsize;
 		// room for more functions, Stktop.
 		framesize += StackExtra;
 		if(framesize < StackMin) framesize = StackMin;
 		framesize += StackSystem;
 		gp->stacksize += framesize;
+		// 不可超过最大值
 		if(gp->stacksize > runtime·maxstacksize) {
-			runtime·printf("runtime: goroutine stack exceeds %D-byte limit\n", (uint64)runtime·maxstacksize);
+			runtime·printf("runtime: goroutine stack exceeds %D-byte limit\n", 
+				(uint64)runtime·maxstacksize);
 			runtime·throw("stack overflow");
 		}
+		// 新栈帧的起始地址.
 		stk = runtime·stackalloc(framesize);
 		top = (Stktop*)(stk+framesize-sizeof(*top));
+		// 此次分配的 framesize 空间目前全部是空闲的.
 		free = framesize;
 	}
 

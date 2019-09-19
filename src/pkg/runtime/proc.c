@@ -1187,6 +1187,7 @@ stoplockedm(void)
 		runtime·throw("stoplockedm: inconsistent locking");
 	if(m->p) {
 		// Schedule another M to run this p.
+		// 将当前m与其p对象解绑, 然后绑定另外一个m
 		p = releasep();
 		handoffp(p);
 	}
@@ -1581,7 +1582,8 @@ runtime·gosched0(G *gp)
 }
 
 // Finishes execution of the current goroutine.
-// Need to mark it as nosplit, because it runs with sp > stackbase (as runtime·lessstack).
+// Need to mark it as nosplit, because it runs with 
+// sp > stackbase (as runtime·lessstack).
 // Since it does not return it does not matter. 
 // But if it is preempted at the split stack check,
 // GC will complain about inconsistent sp.

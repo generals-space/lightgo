@@ -85,12 +85,17 @@ enum {
 
 	// The amount of extra stack to allocate beyond the size
 	// needed for the single frame that triggered the split.
+	// 栈空间不足, 触发栈分割时需要为新栈帧额外分配的空间大小.
+	// 创建g对象时分配初始的栈空间时并不会包含这个值.
 	StackExtra = 2048,
 
 	// The minimum stack segment size to allocate.
 	// If the amount needed for the splitting frame + StackExtra
 	// is less than this number, 
 	// the stack will have this size instead.
+	// 分配栈空间的最小值.
+	// 如果要分配的栈帧空间+StackExtra的和仍小于此值, 
+	// 分配时会直接使用这个值. 算是标准化吧.
 	StackMin = 8192,
 	FixedStack = StackMin + StackSystem,
 
@@ -120,6 +125,8 @@ enum {
 	// The assumed size of the top-of-stack data block.
 	// The actual size can be smaller than this but cannot be larger.
 	// Checked in proc.c's runtime.malg.
+	// 每个栈帧的栈顶都存在一个数据块, StackTop 为此数据块的预设大小.
+	// 实际值可能被这个值要小, 不会更大.
 	StackTop = 96,
 };
 

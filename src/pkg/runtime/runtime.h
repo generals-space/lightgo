@@ -270,6 +270,7 @@ struct	G
 	// same as stackguard0, but not set to StackPreempt
 	uintptr	stackguard;
 	uintptr	stack0;
+	// 当前g线程的栈大小, 不可超过 runtime·maxstacksize
 	uintptr	stacksize;
 	// on allg
 	// ...这个指向 runtime·allg 变量吧
