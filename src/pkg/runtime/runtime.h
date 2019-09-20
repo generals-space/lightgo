@@ -254,10 +254,13 @@ struct	G
 {
 	// stackguard0 can be set to StackPreempt as opposed to stackguard
 	// cannot move - also known to linker, libmach, runtime/cgo
-	// stackguard0 被设置为 StackPreempt, 表示当前g对象被抢占(对比 preempt 字段)
+	// stackguard0 目前发现有两个可能值: stackguard, 或 StackPreempt
+	// 被设置为 StackPreempt 时, 表示当前g对象被抢占(对比 preempt 字段)
 	// 唯一一次有效使用在 stack.c -> runtime·newstack() 函数中.
 	uintptr	stackguard0;
-	uintptr	stackbase;	// cannot move - also known to libmach, runtime/cgo
+	// cannot move - also known to libmach, runtime/cgo
+	// 当前g对象栈空间顶部top部分的起始地址.
+	uintptr	stackbase;	
 	uint32	panicwrap;	// cannot move - also known to linker
 	uint32	selgen;		// valid sudog pointer
 	Defer*	defer;
@@ -269,6 +272,7 @@ struct	G
 	uintptr	syscallguard;	// if status==Gsyscall, syscallguard = stackguard to use during gc
 	// same as stackguard0, but not set to StackPreempt
 	uintptr	stackguard;
+	// 当前g对象栈空间的起始地址
 	uintptr	stack0;
 	// 当前g线程的栈大小, 不可超过 runtime·maxstacksize
 	uintptr	stacksize;

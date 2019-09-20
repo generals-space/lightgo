@@ -1951,14 +1951,14 @@ runtime·malg(int32 stacksize)
 			stk = g->param;
 			g->param = nil;
 		}
-		newg->stacksize = StackSystem + stacksize;
-		newg->stack0 = (uintptr)stk;
-		newg->stackguard = (uintptr)stk + StackGuard;
-		newg->stackguard0 = newg->stackguard;
 		// stacksize 为当前分配的栈大小
-		// stackbase 为栈底(栈的起始点), 
-		// stackbase + Stktop 为栈顶(栈的最高点, 已经分配了空间)
-		// stackguard 应该是这些字段中最高的, 因为ta是上限值.
+		newg->stacksize = StackSystem + stacksize;
+		// stack0 是当前栈空间的起始地址
+		newg->stack0 = (uintptr)stk;
+		newg->stackguard0 = newg->stackguard;
+		// stackguard 当前栈空间的上限
+		newg->stackguard = (uintptr)stk + StackGuard;
+		// stackbase 是当前栈顶部top部分的起始地址
 		newg->stackbase = (uintptr)stk + StackSystem + stacksize - sizeof(Stktop);
 		runtime·memclr((byte*)newg->stackbase, sizeof(Stktop));
 	}
@@ -2017,6 +2017,9 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	// and make it look like goexit was on the original but
 	// the call to the actual goroutine function was split.
 	// Not worth it: this is almost always an error.
+	// 虽然可以创建一个2级栈帧, 然后让ta看起来像 goexit 在最初的栈上,
+	// 但是这样的话, 对g中函数的调用是被拆分过的.
+	// 不值得, 这种情况几乎完全是不该出现的错误
 	if(siz > StackMin - 1024)
 		runtime·throw("runtime.newproc: function arguments too large for new goroutine");
 

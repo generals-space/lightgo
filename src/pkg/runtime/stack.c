@@ -7,6 +7,16 @@
 #include "malloc.h"
 #include "stack.h"
 
+```
+栈空间布局
+
+stack0       stackguard (stackguard0)                 stackbase(sp)                 --> High Address
+  ↓               ↓                                       ↓               
+  +---------------+---------------------------------------+--------------+
+  | System        | Stack                                 | Top          |
+  +---------------+---------------------------------------+--------------+
+```
+
 enum
 {
 	StackDebug = 0,
@@ -139,6 +149,8 @@ runtime·stackalloc(uint32 n)
 	return runtime·mallocgc(n, 0, FlagNoProfiling|FlagNoGC|FlagNoZero|FlagNoInvokeGC);
 }
 
+// 调用 runtime·free 直接释放指定空间 v
+// caller: runtime·oldstack()
 void
 runtime·stackfree(void *v, uintptr n)
 {
@@ -154,12 +166,15 @@ runtime·stackfree(void *v, uintptr n)
 		m->stackinuse--;
 		return;
 	}
+	// 在 malloc.goc 中定义
 	runtime·free(v);
 }
 
 // Called from runtime·lessstack when returning from a function 
 // which allocated a new stack segment. 
 // The function's return value is in m->cret.
+// 在函数结束时被调用(函数调用时一般会分配新栈段)
+// caller: runtime·lessstack() 只有这一种调用情况
 void
 runtime·oldstack(void)
 {
@@ -184,8 +199,10 @@ runtime·oldstack(void)
 
 	// gp->status is usually Grunning, but it could be Gsyscall if a stack split
 	// happens during a function call inside entersyscall.
+	// gp->status一般是 Grunning, 但如果在 entersyscall 内部的函数调用期间
+	// 发生栈分割, 则可能是 Gsyscall
 	oldstatus = gp->status;
-	
+
 	gp->sched = top->gobuf;
 	gp->sched.ret = m->cret;
 	m->cret = 0; // drop reference
@@ -197,8 +214,7 @@ runtime·oldstack(void)
 		dst = (uintptr*)top->argp;
 		dstend = dst + argsize/sizeof(*dst);
 		src = (uintptr*)sp;
-		while(dst < dstend)
-			*dst++ = *src++;
+		while(dst < dstend) *dst++ = *src++;
 	}
 	goid = top->gobuf.g->goid;	// fault if g is bad, before gogo
 	USED(goid);
