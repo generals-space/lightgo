@@ -27,7 +27,8 @@ typedef struct Sched Sched;
 struct Sched {
 	Lock;
 
-	uint64	goidgen;
+	// 全局最新的g对象的gid, 每创建一个g, 此值加1.
+	uint64	goidgen; 
 
 	M*	midle;	 // idle m's waiting for work
 	int32	nmidle;	 // number of idle m's waiting for work
@@ -2017,12 +2018,15 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	// and make it look like goexit was on the original but
 	// the call to the actual goroutine function was split.
 	// Not worth it: this is almost always an error.
+	// 参数占用空间太大.
 	// 虽然可以创建一个2级栈帧, 然后让ta看起来像 goexit 在最初的栈上,
 	// 但是这样的话, 对g中函数的调用是被拆分过的.
 	// 不值得, 这种情况几乎完全是不该出现的错误
 	if(siz > StackMin - 1024)
 		runtime·throw("runtime.newproc: function arguments too large for new goroutine");
 
+	// 从指定p的本地队列中获取一个g任务对象
+	// ...不过, 要运行一个指定的函数fn, 不应该获取一个已经存在的g吧???
 	if((newg = gfget(m->p)) != nil) {
 		if(newg->stackguard - StackGuard != newg->stack0)
 			runtime·throw("invalid stack in newg");
@@ -2037,15 +2041,17 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 		runtime·unlock(&runtime·sched);
 	}
 
+	// sp 用于定位参数和返回值, 但是用g对象执行的函数应该是没有返回值的.
 	sp = (byte*)newg->stackbase;
 	sp -= siz;
+	// 将从 argp 处, narg 大小的空间, 复制到 sp 处.
 	runtime·memmove(sp, argp, narg);
 	if(thechar == '5') {
 		// caller's LR
 		sp -= sizeof(void*);
 		*(void**)sp = nil;
 	}
-
+	// g->sched 为 Gobuf 对象
 	runtime·memclr((byte*)&newg->sched, sizeof newg->sched);
 	newg->sched.sp = (uintptr)sp;
 	newg->sched.pc = (uintptr)runtime·goexit;
@@ -2058,7 +2064,9 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	if(raceenabled) newg->racectx = runtime·racegostart((void*)callerpc);
 	runqput(m->p, newg);
 
-	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0 && fn->fn != runtime·main)  // TODO: fast atomic
+	if(runtime·atomicload(&runtime·sched.npidle) != 0 && 
+		runtime·atomicload(&runtime·sched.nmspinning) == 0 && 
+		fn->fn != runtime·main)  // TODO: fast atomic
 		wakep();
 	m->locks--;
 	// restore the preemption request in case we've cleared it in newstack
@@ -2089,6 +2097,8 @@ gfput(P *p, G *gp)
 	}
 }
 
+// 从指定p的本地任务队列中获取一个待执行的g对象.
+// 如果队列为空, 则从全局队列中取一些任务过来.
 // Get from gfree list.
 // If local list is empty, grab a batch from global list.
 static G*

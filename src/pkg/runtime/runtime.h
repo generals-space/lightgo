@@ -210,8 +210,10 @@ struct	Slice
 struct	Gobuf
 {
 	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
+	// sp, pc和g字段的偏移量是编译器可预见的.
 	uintptr	sp;
 	uintptr	pc;
+	// g成员指向 gobuf 对象所属的g对象, 相当于反向引用.
 	G*	g;
 	uintptr	ret;
 	void*	ctxt;
@@ -260,7 +262,7 @@ struct	G
 	uintptr	stackguard0;
 	// cannot move - also known to libmach, runtime/cgo
 	// 当前g对象栈空间顶部top部分的起始地址.
-	uintptr	stackbase;	
+	uintptr	stackbase;
 	uint32	panicwrap;	// cannot move - also known to linker
 	uint32	selgen;		// valid sudog pointer
 	Defer*	defer;
@@ -307,6 +309,8 @@ struct	G
 	uintptr	sigpc;
 	// pc of go statement that created this goroutine
 	// 创建此g对象的go()语句的pc(程序计数器)
+	// 或者说是主调函数的函数地址, 
+	// 只在 proc.c -> runtime·newproc1() 函数中被赋值.
 	uintptr	gopc;
 	uintptr	racectx;
 	uintptr	end[];
@@ -316,7 +320,9 @@ struct	M
 	// goroutine with scheduling stack
 	G*	g0;
 	void*	moreargp;	// argument pointer for more stack
-	Gobuf	morebuf;	// gobuf arg to morestack
+	// gobuf arg to morestack
+	// morebuf 应该等于 curg->sched, 表示当前运行的g对象的 Gobuf
+	Gobuf	morebuf;	
 
 	// Fields not known to debuggers.
 	uint32	moreframesize;	// size arguments to morestack
@@ -455,6 +461,7 @@ enum
 struct	Stktop
 {
 	// The offsets of these fields are known to (hard-coded in) libmach.
+	// 这些成员的偏移量是编译器可预见的.
 	uintptr	stackguard;
 	uintptr	stackbase;
 	Gobuf	gobuf;
@@ -756,7 +763,8 @@ bool	runtime·topofstack(Func*);
  */
 extern	String	runtime·emptystring;
 extern	uintptr runtime·zerobase;
-extern	G*	runtime·allg; // G对象链表
+// 各p的本地队列中, 加上全局队列中所有G对象的链表
+extern	G*	runtime·allg; 
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
 // P指针链表, 在runtime·schedinit()中按(MaxGomaxprocs+1)申请的空间

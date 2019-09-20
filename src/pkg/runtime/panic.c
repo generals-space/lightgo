@@ -310,13 +310,11 @@ runtime·unwindstack(G *gp, byte *sp)
 	byte *stk;
 
 	// Must be called from a different goroutine, usually m->g0.
-	if(g == gp)
-		runtime·throw("unwindstack on self");
+	if(g == gp) runtime·throw("unwindstack on self");
 
 	while((top = (Stktop*)gp->stackbase) != 0 && top->stackbase != 0) {
 		stk = (byte*)gp->stackguard - StackGuard;
-		if(stk <= sp && sp < (byte*)gp->stackbase)
-			break;
+		if(stk <= sp && sp < (byte*)gp->stackbase) break;
 		gp->stackbase = top->stackbase;
 		gp->stackguard = top->stackguard;
 		gp->stackguard0 = gp->stackguard;
@@ -326,8 +324,10 @@ runtime·unwindstack(G *gp, byte *sp)
 		}
 	}
 
-	if(sp != nil && (sp < (byte*)gp->stackguard - StackGuard || (byte*)gp->stackbase < sp)) {
-		runtime·printf("recover: %p not in [%p, %p]\n", sp, gp->stackguard - StackGuard, gp->stackbase);
+	if(sp != nil && (sp < (byte*)gp->stackguard - StackGuard 
+		|| (byte*)gp->stackbase < sp)) {
+		runtime·printf("recover: %p not in [%p, %p]\n", 
+			sp, gp->stackguard - StackGuard, gp->stackbase);
 		runtime·throw("bad unwindstack");
 	}
 }
@@ -353,7 +353,8 @@ runtime·recover(byte *argp, Eface ret)
 	// g->panicwrap in the prologue and epilogue of functions marked as wrappers.
 	top = (Stktop*)g->stackbase;
 	p = g->panic;
-	if(p != nil && !p->recovered && top->panic && argp == (byte*)top - top->argsize - g->panicwrap) {
+	if(p != nil && !p->recovered && top->panic && 
+		argp == (byte*)top - top->argsize - g->panicwrap) {
 		p->recovered = 1;
 		ret = p->arg;
 	} else {

@@ -1450,6 +1450,7 @@ scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 }
 
 // Scan a stack frame: local variables and function arguments/results.
+// 扫描栈帧, 包括局部变量和函数参数及返回值.
 static void
 addframeroots(Stkframe *frame, void*)
 {
@@ -1462,7 +1463,7 @@ addframeroots(Stkframe *frame, void*)
 
 	// Scan local variables if stack frame has been allocated.
 	// Use pointer information if known.
-	// 扫描本地局部变量(如果此栈帧已经被分配)
+	// 扫描本地局部变量(如果此栈帧已分配空间)
 	afterprologue = (frame->varp > (byte*)frame->sp);
 	if(afterprologue) {
 		locals = runtime·funcdata(f, FUNCDATA_GCLocals);
@@ -1484,13 +1485,15 @@ addframeroots(Stkframe *frame, void*)
 	// Scan arguments.
 	// Use pointer information if known.
 	args = runtime·funcdata(f, FUNCDATA_GCArgs);
-	if(args != nil && args->n > 0) scanbitvector(frame->argp, args, false);
-	else addroot((Obj){frame->argp, frame->arglen, 0});
+	if(args != nil && args->n > 0) 
+		scanbitvector(frame->argp, args, false);
+	else 
+		addroot((Obj){frame->argp, frame->arglen, 0});
 }
 
 // addroots操作遍历栈空间时调用.
 // 由于此时已经经过了STW, 所以理论上所有的g对象都处于休眠状态.
-// 对所有处于runnable, waiting和syscall状态的g对象都调用此函数.
+// 对所有处于 runnable, waiting 和 syscall 状态的g对象都调用此函数.
 // caller: addroots()
 static void
 addstackroots(G *gp)
@@ -1505,15 +1508,19 @@ addstackroots(G *gp)
 	stk = (Stktop*)gp->stackbase;
 	guard = gp->stackguard;
 	// g是正在执行GC的线程吧, 不过在哪定义的?
-	// 不过照这样写的, g应该没有allg链表里吧.
+	// 不过照这样写的, g应该没有 allg 链表里吧.
 	if(gp == g) runtime·throw("can't scan our own stack");
 	if((mp = gp->m) != nil && mp->helpgc) runtime·throw("can't scan gchelper stack");
 	if(gp->syscallstack != (uintptr)nil) {
-		// Scanning another goroutine that is about to enter or might
-		// have just exited a system call. It may be executing code such
-		// as schedlock and may have needed to start a new stack segment.
+		// 如果gp处于系统调用过程中.
+
+		// Scanning another goroutine that is about to enter
+		// or might have just exited a system call. 
+		// It may be executing code such as schedlock 
+		// and may have needed to start a new stack segment.
 		// Use the stack segment and stack pointer at the time of
 		// the system call instead, since that won't change underfoot.
+		// 
 		sp = gp->syscallsp;
 		pc = gp->syscallpc;
 		lr = 0;
@@ -1527,7 +1534,8 @@ addstackroots(G *gp)
 		lr = gp->sched.lr;
 
 		// For function about to start, context argument is a root too.
-		if(gp->sched.ctxt != 0 && runtime·mlookup(gp->sched.ctxt, &base, &size, nil))
+		if(gp->sched.ctxt != 0 && 
+			runtime·mlookup(gp->sched.ctxt, &base, &size, nil))
 			addroot((Obj){base, size, 0});
 	}
 	if(ScanStackByFrames) {
@@ -1538,9 +1546,11 @@ addstackroots(G *gp)
 		USED(lr);
 		USED(pc);
 		n = 0;
+		// stk 是栈空间顶部 top 区的起始地址
 		while(stk) {
 			if(sp < guard-StackGuard || (uintptr)stk < sp) {
-				runtime·printf("scanstack inconsistent: g%D#%d sp=%p not in [%p,%p]\n", gp->goid, n, sp, guard-StackGuard, stk);
+				runtime·printf("scanstack inconsistent: g%D#%d sp=%p not in [%p,%p]\n", 
+					gp->goid, n, sp, guard-StackGuard, stk);
 				runtime·throw("scanstack");
 			}
 			addroot((Obj){(byte*)sp, (uintptr)stk - sp, (uintptr)defaultProg | PRECISE | LOOP});
@@ -1608,7 +1618,7 @@ addroots(void)
 			}
 		}
 	}
-	// 遍历栈空间...我擦, gc的目标原来不只是堆么?
+	// 遍历栈空间, gc的目标不只是堆. 除了堆和栈, 还有全局变量区.
 	// stacks
 	for(gp=runtime·allg; gp!=nil; gp=gp->alllink) {
 		switch(gp->status){
