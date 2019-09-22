@@ -273,9 +273,16 @@ runtime·check(void)
 	TestAtomic64();
 }
 
+// 无人调用, 应该是标准库 runtime.Caller() 直接指向这里
+// 但是其原型本来为 func Caller(skip int) (pc uintptr, file string, line int, ok bool)
+// 与这里的在参数和返回值上有出入, retXXX应该作为返回值出现, 但全出现在参数列表中.
+// 注意一下函数末尾的4处`FLUSH()`, 值得正视其作用. 
+// 不过实际上我在FLUSH()后面打印过这些返回值, 并没有得到有效输出, 所以ta的作用还是不明确的.
 void
 runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool retbool)
 {
+	// runtime·printf("skip: %d, retpc: %d, retfile: %s, retline: %d, retbool: %T \n", 
+	// 	skip, retpc, retfile, retline, retbool);
 	Func *f, *g;
 	uintptr pc;
 	uintptr rpc[2];
@@ -286,19 +293,25 @@ runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool r
 	 * "called" sigpanic.
 	 */
 	retpc = 0;
+	// runtime·callers()得到, 在当前函数调用链上, 函数的个数, 
+	// 从最底层的主调函数开始, 跳过的数量.
 	if(runtime·callers(1+skip-1, rpc, 2) < 2) {
 		retfile = runtime·emptystring;
 		retline = 0;
 		retbool = false;
+		// 在进入else if块时, 说明 runtime·callers 的返回值 >= 2
 	} else if((f = runtime·findfunc(rpc[1])) == nil) {
 		retfile = runtime·emptystring;
 		retline = 0;
-		retbool = true;  // have retpc at least
+		// have retpc at least
+		// bool 为true时至少会返回 pc
+		retbool = true; 
 	} else {
 		retpc = rpc[1];
 		pc = retpc;
 		g = runtime·findfunc(rpc[0]);
-		if(pc > f->entry && (g == nil || g->entry != (uintptr)runtime·sigpanic))
+		if(pc > f->entry && 
+			(g == nil || g->entry != (uintptr)runtime·sigpanic))
 			pc--;
 		retline = runtime·funcline(f, pc, &retfile);
 		retbool = true;
@@ -307,6 +320,8 @@ runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool r
 	FLUSH(&retfile);
 	FLUSH(&retline);
 	FLUSH(&retbool);
+	// runtime·printf("skip: %d, retpc: %d, retfile: %s, retline: %d, retbool: %T \n", 
+	// 	skip, retpc, retfile, retline, retbool);
 }
 
 void

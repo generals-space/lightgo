@@ -1128,6 +1128,9 @@ endscan:;
 // debug_scanblock is the debug copy of scanblock.
 // it is simpler, slower, single-threaded, recursive,
 // and uses bitSpecial as the mark bit.
+// debug_scanblock debug版本的 scanblock
+// 更简单, 单线程, 递归操作, 使用 bitSpecial 作为标记位.
+// 不过速度上好像更慢一点.
 static void
 debug_scanblock(byte *b, uintptr n)
 {
@@ -1203,7 +1206,8 @@ debug_scanblock(byte *b, uintptr n)
 
 // ##enqueue
 // Append obj to the work buffer.
-// _wbuf, _wp, _nobj are input/output parameters and are specifying the work buffer.
+// _wbuf, _wp, _nobj are input/output parameters 
+// and are specifying the work buffer.
 static void
 enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 {
@@ -1211,7 +1215,9 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 	Obj *wp;
 	Workbuf *wbuf;
 
-	if(Debug > 1) runtime·printf("append obj(%p %D %p)\n", obj.p, (int64)obj.n, obj.ti);
+	if(Debug > 1) 
+		runtime·printf("append obj(%p %D %p)\n", 
+			obj.p, (int64)obj.n, obj.ti);
 
 	// Align obj.b to a word boundary.
 	off = (uintptr)obj.p & (PtrSize-1);
@@ -1376,9 +1382,13 @@ addroot(Obj obj)
 	// 为root节点容量扩容
 	if(work.nroot >= work.rootcap) {
 		cap = PageSize/sizeof(Obj);
+		
 		if(cap < 2*work.rootcap) cap = 2*work.rootcap;
+		
 		new = (Obj*)runtime·SysAlloc(cap*sizeof(Obj), &mstats.gc_sys);
+		
 		if(new == nil) runtime·throw("runtime: cannot allocate memory");
+
 		if(work.roots != nil) {
 			runtime·memmove(new, work.roots, work.rootcap*sizeof(Obj));
 			runtime·SysFree(work.roots, work.rootcap*sizeof(Obj), &mstats.gc_sys);

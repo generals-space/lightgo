@@ -780,6 +780,7 @@ TEXT runtime·stackcheck(SB), NOSPLIT, $0-0
 	RET
 
 TEXT runtime·memclr(SB),NOSPLIT,$0-16
+	// 这里的SP应该是真实SP
 	MOVQ	8(SP), DI		// arg 1 addr
 	MOVQ	16(SP), CX		// arg 2 count
 	MOVQ	CX, BX
@@ -794,9 +795,25 @@ TEXT runtime·memclr(SB),NOSPLIT,$0-16
 	STOSB
 	RET
 
+/*
+    |------------------|                                                                         
+    |   callee arg0    |                                                                         
+    ----------------------------------------------+   FP(virtual register)                       
+    |   return addr    |  parent return address   |                                              
+    +------------------+---------------------------                                              
+                       |  caller BP               |                                              
+                       |  (caller frame pointer)  |                                              
+        BP(pseudo SP)  ----------------------------                                              
+*/
+// 获取主调函数的pc地址, $0没有局部变量和调用函数, $8表示有一个参数/返回值
+// caller: traceback_x86.c -> runtime·callers()
 TEXT runtime·getcallerpc(SB),NOSPLIT,$0-8
-	MOVQ	x+0(FP),AX		// addr of first arg
-	MOVQ	-8(AX),AX		// get calling pc
+	// addr of first arg
+	// 第一个参数的地址
+	MOVQ	x+0(FP),AX
+	// get calling pc
+	// 主调函数的地址, -8是向下数, 指向return address
+	MOVQ	-8(AX),AX
 	RET
 
 TEXT runtime·setcallerpc(SB),NOSPLIT,$0-16
@@ -805,7 +822,11 @@ TEXT runtime·setcallerpc(SB),NOSPLIT,$0-16
 	MOVQ	BX, -8(AX)		// set calling pc
 	RET
 
+// 获取主调函数的sp地址, $0没有局部变量和调用函数, $8表示有一个参数/返回值
+// 返回的是伪sp, 实际上的fp, 用于定位局部变量
+// caller: traceback_x86.c -> runtime·callers()
 TEXT runtime·getcallersp(SB),NOSPLIT,$0-8
+	// 真实的fp也表示当前函数的 return 地址
 	MOVQ	sp+0(FP), AX
 	RET
 

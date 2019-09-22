@@ -494,8 +494,13 @@ enum
 // and with package debug/gosym.
 struct	Func
 {
-	uintptr	entry;	// start pc
-	int32	nameoff;// function name
+	// start pc
+	// 入口地址
+	uintptr	entry;
+	// function name
+	// 函数名称, 其实是距 pclntab(在symtab.c中定义) 的偏移量
+	// ...匿名函数的话, 这个值会不会是0???
+	int32	nameoff;
 	
 	int32	args;	// in/out args size
 	int32	frame;	// legacy frame size; use pcsp if possible

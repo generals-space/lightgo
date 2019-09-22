@@ -242,24 +242,27 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 	}
 
 	s = runtime·MHeap_LookupMaybe(&runtime·mheap, v);
-	if(sp)
-		*sp = s;
+	
+	if(sp) *sp = s;
+
 	if(s == nil) {
 		runtime·checkfreed(v, 1);
-		if(base)
-			*base = nil;
-		if(size)
-			*size = 0;
+	
+		if(base) *base = nil;
+	
+		if(size) *size = 0;
+	
 		return 0;
 	}
 
 	p = (byte*)((uintptr)s->start<<PageShift);
 	if(s->sizeclass == 0) {
 		// Large object.
-		if(base)
-			*base = p;
-		if(size)
-			*size = s->npages<<PageShift;
+
+		if(base) *base = p;
+
+		if(size) *size = s->npages<<PageShift;
+		
 		return 1;
 	}
 
@@ -268,8 +271,8 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 		i = ((byte*)v - p)/n;
 		*base = p + i*n;
 	}
-	if(size)
-		*size = n;
+	
+	if(size) *size = n;
 
 	return 1;
 }

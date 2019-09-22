@@ -3364,6 +3364,8 @@ runtime·testSchedLocalQueueSteal(void)
 extern void runtime·morestack(void);
 
 // Does f mark the top of a goroutine stack?
+// f是否已经是处于栈顶的函数(再没有更上层的主调函数了)
+// 比如 runtime·goexit()
 bool
 runtime·topofstack(Func *f)
 {

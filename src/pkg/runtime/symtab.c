@@ -15,10 +15,15 @@
 typedef struct Ftab Ftab;
 struct Ftab
 {
-	uintptr	entry;
-	uintptr	funcoff;
+	// 这是函数对象 Func 的入口地址???
+	uintptr	entry; 
+	// 距 pclntab 的偏移量
+	// 可通过 pclntab + ftab[n].funcoff 得到 Func 对象的起始地址.
+	uintptr	funcoff; 
 };
 
+// pclntab 有8个成员, 占用 8 bytes
+// 见 runtime·symtabinit() 函数.
 extern byte pclntab[];
 
 static Ftab *ftab;
@@ -26,36 +31,65 @@ static uintptr nftab;
 static uint32 *filetab;
 static uint32 nfiletab;
 
+// 注意这里创建字符串对象的式, String 是一个结构体.
 static String end = { (uint8*)"end", 3 };
 
+/* 符号表
+                                            ftab[nftab] = "end"
+                                                     |    
+        pclntab            nftab           ftab      |       
+   |<---- x8 ---->|          ↓              ↓        ↓    |<- filetab ->|
+   +----+----+----+----+-----------+-----------------+----+----+--------+
+   | x1 | ...| x1 | x1 |     x8    |       ...       | x3 | x4 |        |
+   +----+----+----+----+-----------+-----------------+----+----+--------+
+      |         |                                            ↑
+      |         |                                         nfiletab
+      ↓         ↓    
+    header  sizeof(void*)
+ */
+
+// 初始化函数符号表
+// ...但好像只是一个检测的过程, 符号表在这之前应该就已经填好了.
+// caller: runtime·schedinit() 只有这一处调用
 void
 runtime·symtabinit(void)
 {
 	int32 i, j;
 	Func *f1, *f2;
-	
+
 	// See golang.org/s/go12symtab for header: 0xfffffffb,
 	// two zero bytes, a byte giving the PC quantum,
 	// and a byte giving the pointer width in bytes.
-	if(*(uint32*)pclntab != 0xfffffffb || pclntab[4] != 0 || pclntab[5] != 0 || pclntab[6] != PCQuantum || pclntab[7] != sizeof(void*)) {
-		runtime·printf("runtime: function symbol table header: 0x%x 0x%x\n", *(uint32*)pclntab, *(uint32*)(pclntab+4));
+	if(*(uint32*)pclntab != 0xfffffffb || 
+		pclntab[4] != 0 || 
+		pclntab[5] != 0 || 
+		pclntab[6] != PCQuantum || 
+		pclntab[7] != sizeof(void*)) {
+		runtime·printf("runtime: function symbol table header: 0x%x 0x%x\n", 
+			*(uint32*)pclntab, *(uint32*)(pclntab+4));
 		runtime·throw("invalid function symbol table\n");
 	}
 
 	nftab = *(uintptr*)(pclntab+8);
 	ftab = (Ftab*)(pclntab+8+sizeof(void*));
 	for(i=0; i<nftab; i++) {
-		// NOTE: ftab[nftab].entry is legal; it is the address beyond the final function.
+		// NOTE: ftab[nftab].entry is legal; 
+		// it is the address beyond the final function.
+		// ftab[nftab]是一个有效地址, 指向ftab中最后一个函数
 		if(ftab[i].entry > ftab[i+1].entry) {
+			// 函数符号表中的成员未按照地址排序, 是不应该出现的.
 			f1 = (Func*)(pclntab + ftab[i].funcoff);
 			f2 = (Func*)(pclntab + ftab[i+1].funcoff);
-			runtime·printf("function symbol table not sorted by program counter: %p %s > %p %s", ftab[i].entry, runtime·funcname(f1), ftab[i+1].entry, i+1 == nftab ? "end" : runtime·funcname(f2));
+			runtime·printf("function symbol table not sorted by program counter: %p %s > %p %s", 
+				ftab[i].entry, runtime·funcname(f1), ftab[i+1].entry, 
+				i+1 == nftab ? "end" : runtime·funcname(f2));
 			for(j=0; j<=i; j++)
-				runtime·printf("\t%p %s\n", ftab[j].entry, runtime·funcname((Func*)(pclntab + ftab[j].funcoff)));
+				runtime·printf("\t%p %s\n", 
+					ftab[j].entry, runtime·funcname((Func*)(pclntab + ftab[j].funcoff)));
 			runtime·throw("invalid runtime symbol table");
 		}
 	}
-	
+
 	filetab = (uint32*)(pclntab + *(uint32*)&ftab[nftab].funcoff);
 	nfiletab = filetab[0];
 }
@@ -71,8 +105,7 @@ readvarint(byte **pp)
 	p = *pp;
 	for(shift = 0;; shift += 7) {
 		v |= (*p & 0x7F) << shift;
-		if(!(*p++ & 0x80))
-			break;
+		if(!(*p++ & 0x80)) break;
 	}
 	*pp = p;
 	return v;
@@ -83,11 +116,12 @@ runtime·funcdata(Func *f, int32 i)
 {
 	byte *p;
 
-	if(i < 0 || i >= f->nfuncdata)
-		return nil;
+	if(i < 0 || i >= f->nfuncdata) return nil;
+
 	p = (byte*)&f->nfuncdata + 4 + f->npcdata*4;
-	if(sizeof(void*) == 8 && ((uintptr)p & 4))
-		p += 4;
+
+	if(sizeof(void*) == 8 && ((uintptr)p & 4)) p += 4;
+
 	return ((void**)p)[i];
 }
 
@@ -113,6 +147,7 @@ step(byte **pp, uintptr *pc, int32 *value, bool first)
 
 // Return associated data value for targetpc in func f.
 // (Source file is f->src.)
+// 获取函数f中指定指令 targetpc 相关的数据.
 static int32
 pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 {
@@ -130,8 +165,8 @@ pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 	// The pc deltas are unsigned.
 	// The starting value is -1, the starting pc is the function entry.
 	// The table ends at a value delta of 0 except in the first pair.
-	if(off == 0)
-		return -1;
+	if(off == 0) return -1;
+
 	p = pclntab + off;
 	pc = f->entry;
 	value = -1;
@@ -141,16 +176,15 @@ pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 			runtime·funcname(f), f, pc, targetpc, value, p);
 	
 	while(step(&p, &pc, &value, pc == f->entry)) {
-		if(debug)
-			runtime·printf("\tvalue=%d until pc=%p\n", value, pc);
-		if(targetpc < pc)
-			return value;
+		if(debug) runtime·printf("\tvalue=%d until pc=%p\n", value, pc);
+		
+		if(targetpc < pc) return value;
 	}
 	
 	// If there was a table, it should have covered all program counters.
 	// If not, something is wrong.
-	if(runtime·panicking || !strict)
-		return -1;
+	if(runtime·panicking || !strict) return -1;
+
 	runtime·printf("runtime: invalid pc-encoded table f=%s pc=%p targetpc=%p tab=%p\n",
 		runtime·funcname(f), pc, targetpc, p);
 	p = (byte*)f + off;
@@ -166,14 +200,16 @@ pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 
 static String unknown = { (uint8*)"?", 1 };
 
+// 获取指定函数对象 f 的名称
+// 其实返回的是指向函数名的地址.
 int8*
 runtime·funcname(Func *f)
 {
-	if(f == nil || f->nameoff == 0)
-		return nil;
+	if(f == nil || f->nameoff == 0) return nil;
 	return (int8*)(pclntab + f->nameoff);
 }
 
+// caller: runtime·funcline(), runtime·funcline_go()
 static int32
 funcline(Func *f, uintptr targetpc, String *file, bool strict)
 {
@@ -184,7 +220,8 @@ funcline(Func *f, uintptr targetpc, String *file, bool strict)
 	fileno = pcvalue(f, f->pcfile, targetpc, strict);
 	line = pcvalue(f, f->pcln, targetpc, strict);
 	if(fileno == -1 || line == -1 || fileno >= nfiletab) {
-		// runtime·printf("looking for %p in %S got file=%d line=%d\n", targetpc, *f->name, fileno, line);
+		// runtime·printf("looking for %p in %S got file=%d line=%d\n", 
+		//	targetpc, *f->name, fileno, line);
 		return 0;
 	}
 	*file = runtime·gostringnocopy(pclntab + filetab[fileno]);
@@ -211,16 +248,14 @@ runtime·funcspdelta(Func *f, uintptr targetpc)
 int32
 runtime·pcdatavalue(Func *f, int32 table, uintptr targetpc)
 {
-	if(table < 0 || table >= f->npcdata)
-		return -1;
+	if(table < 0 || table >= f->npcdata) return -1;
 	return pcvalue(f, (&f->nfuncdata)[1+table], targetpc, true);
 }
 
 int32
 runtime·funcarglen(Func *f, uintptr targetpc)
 {
-	if(targetpc == f->entry)
-		return 0;
+	if(targetpc == f->entry) return 0;
 	return runtime·pcdatavalue(f, PCDATA_ArgSize, targetpc-PCQuantum);
 }
 
@@ -247,18 +282,20 @@ runtime·funcentry_go(Func *f, uintptr ret)
 	FLUSH(&ret);
 }
 
+// 参数 addr 一般为 pc 计数器 
 Func*
 runtime·findfunc(uintptr addr)
 {
 	Ftab *f;
 	int32 nf, n;
 
-	if(nftab == 0)
-		return nil;
+	if(nftab == 0) return nil;
+
 	if(addr < ftab[0].entry || addr >= ftab[nftab].entry)
 		return nil;
 
 	// binary search to find func with entry <= addr.
+	// 二分搜索 查找 ftab 链表中 entry 成员地址 <= addr 的 func 对象.
 	f = ftab;
 	nf = nftab;
 	while(nf > 0) {
@@ -277,6 +314,8 @@ runtime·findfunc(uintptr addr)
 	// that the address was in the table bounds.
 	// this can only happen if the table isn't sorted
 	// by address or if the binary search above is buggy.
+	// 运行到这里, 说明没找到.
+	// 这种情况下只会发生在符号表没有按地址排序, 或是上面的二分搜索有bug的时候
 	runtime·prints("findfunc unreachable\n");
 	return nil;
 }
