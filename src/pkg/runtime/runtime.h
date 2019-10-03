@@ -309,7 +309,7 @@ struct	G
 	uintptr	sigpc;
 	// pc of go statement that created this goroutine
 	// 创建此g对象的go()语句的pc(程序计数器)
-	// 或者说是主调函数的函数地址, 
+	// 或者说是主调函数的函数地址(不是调用处的地址), 
 	// 只在 proc.c -> runtime·newproc1() 函数中被赋值.
 	uintptr	gopc;
 	uintptr	racectx;
@@ -495,7 +495,7 @@ enum
 struct	Func
 {
 	// start pc
-	// 入口地址
+	// 入口地址, 一般与 pc 变量进行运算.
 	uintptr	entry;
 	// function name
 	// 函数名称, 其实是距 pclntab(在symtab.c中定义) 的偏移量

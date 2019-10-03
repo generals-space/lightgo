@@ -38,7 +38,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	Stkframe frame;
 	Stktop *stk;
 	String file;
-
+	// 参数 lr0 几乎没什么作用啊...
 	USED(lr0);
 
 	nprint = 0;
@@ -57,7 +57,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 		frame.pc = *(uintptr*)frame.sp;
 		frame.sp += sizeof(uintptr);
 	}
-	
+
 	f = runtime·findfunc(frame.pc);
 	if(f == nil) {
 		if(callback != nil) {
@@ -72,6 +72,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	n = 0;
 	// gp是当前协程对象, stackbase 指向栈空间顶部top部分的起始地址
 	stk = (Stktop*)gp->stackbase;
+	// 从当前 frame 向上追溯, max 为最大层数.
 	while(n < max) {
 		// Typically:
 		//	pc is the PC of the running function.
@@ -159,9 +160,11 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 			skip--;
 			goto skipped;
 		}
-
+		// 用于栈信息追溯而打印时, skip一般为0, 
+		// 否则直接在上面就 goto 到 skipped 处了.
 		if(pcbuf != nil) pcbuf[n] = frame.pc;
 
+		// callback 在gc时会用到
 		if(callback != nil) callback(&frame, v);
 
 		if(printing) {
@@ -209,12 +212,14 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 		frame.sp = frame.fp;
 		frame.fp = 0;
 	}
-
+	// ...这不就是 printing 么? 为什么还要重新写一遍表达式?
 	if(pcbuf == nil && callback == nil) n = nprint;
 
 	return n;
 }
 
+// 打印指定协程对象gp的父级函数的调用栈信息???
+// 包括函数名称, 所在文件及行号, 还有函数地址.
 void
 runtime·printcreatedby(G *gp)
 {
@@ -224,16 +229,23 @@ runtime·printcreatedby(G *gp)
 	String file;
 
 	// Show what created goroutine, except main goroutine (goid 1).
+	// gp->gopc 为当前协程对象gp的主调函数的地址
+	// 注意如下的if语句中其实也是一个执行流程, pc-> f -> gp -> goid 原本都是未知的.
 	if((pc = gp->gopc) != 0 && (f = runtime·findfunc(pc)) != nil &&
 		runtime·showframe(f, gp) && gp->goid != 1) {
+
 		runtime·printf("created by %s\n", runtime·funcname(f));
-		tracepc = pc;	// back up to CALL instruction for funcline.
-		if(pc > f->entry)
-			tracepc -= PCQuantum;
+		// back up to CALL instruction for funcline.
+		tracepc = pc;
+		// 86/64 平台上, PCQuantum 值为1
+		// 函数对象的 entry 成员本来就是 pc 值, 什么时候会出现这种情况???
+		if(pc > f->entry) tracepc -= PCQuantum;
+
 		line = runtime·funcline(f, tracepc, &file);
 		runtime·printf("\t%S:%d", file, line);
-		if(pc > f->entry)
-			runtime·printf(" +%p", (uintptr)(pc - f->entry));
+
+		if(pc > f->entry) runtime·printf(" +%p", (uintptr)(pc - f->entry));
+		
 		runtime·printf("\n");
 	}
 }
@@ -253,8 +265,12 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 	// If that means we print nothing at all, 
 	// repeat forcing all frames printed.
 	// 打印栈调用信息, 默认不打印runtime的函数帧
+	// 如果打印的数量(即返回值为0), 那么把最后一个参数改成true再来一遍.
+	// skip 在参数 gp 之后, 这里值为0.
+	// 最后一个参数为 printall.
 	if(runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, false) == 0)
 		runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, true);
+	// 打印gp协程当前正在运行的g的主调函数的栈信息, 包括函数名称, 声明时所在的文件, 行号和pc地址等.
 	runtime·printcreatedby(gp);
 }
 

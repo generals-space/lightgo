@@ -283,6 +283,7 @@ runtime·funcentry_go(Func *f, uintptr ret)
 }
 
 // 参数 addr 一般为 pc 计数器 
+// 注意: 最终函数的 entry 不一定等于 addr, 这里只做一个大小的比较
 Func*
 runtime·findfunc(uintptr addr)
 {
@@ -350,6 +351,11 @@ contains(String s, int8 *p)
 	return 0;
 }
 
+// 是否打印栈帧信息. 注意该函数本身不打印, 而是返回布尔值.
+// 如果当前协程对象gp发生异常(设置了异常标识位), 
+// 或是gp正在执行的函数为 runtime·panic ,
+// 或是通过 GOTRACEBACK 环境变量设置显示追踪信息, 则返回 true
+// 默认不打印 runtime· 开头的函数(除了 panic).
 bool
 runtime·showframe(Func *f, G *gp)
 {
@@ -358,13 +364,17 @@ runtime·showframe(Func *f, G *gp)
 
 	if(m->throwing > 0 && gp != nil && (gp == m->curg || gp == m->caughtsig))
 		return 1;
-	if(traceback < 0)
-		traceback = runtime·gotraceback(nil);
+
+	if(traceback < 0) traceback = runtime·gotraceback(nil);
+
+	// name 为函数名称, 这里不是单纯的c语言字符串, 而是 golang 中的 String 对象
+	// 因此下面可以使用其专有的属性与方法.
 	name = runtime·gostringnocopy((uint8*)runtime·funcname(f));
 
 	// Special case: always show runtime.panic frame, so that we can
 	// see where a panic started in the middle of a stack trace.
 	// See golang.org/issue/5832.
+	// 7+1+5 正好是 runtime.panic 的字符串长度
 	if(name.len == 7+1+5 && hasprefix(name, "runtime.panic"))
 		return 1;
 
