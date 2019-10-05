@@ -327,10 +327,9 @@ hasprefix(String s, int8 *p)
 	int32 i;
 
 	for(i=0; i<s.len; i++) {
-		if(p[i] == 0)
-			return 1;
-		if(p[i] != s.str[i])
-			return 0;
+		if(p[i] == 0) return 1;
+
+		if(p[i] != s.str[i]) return 0;
 	}
 	return p[i] == 0;
 }
@@ -340,11 +339,11 @@ contains(String s, int8 *p)
 {
 	int32 i;
 
-	if(p[0] == 0)
-		return 1;
+	if(p[0] == 0) return 1;
+
 	for(i=0; i<s.len; i++) {
-		if(s.str[i] != p[0])
-			continue;
+		if(s.str[i] != p[0]) continue;
+
 		if(hasprefix((String){s.str + i, s.len - i}, p))
 			return 1;
 	}
@@ -362,7 +361,8 @@ runtime·showframe(Func *f, G *gp)
 	static int32 traceback = -1;
 	String name;
 
-	if(m->throwing > 0 && gp != nil && (gp == m->curg || gp == m->caughtsig))
+	if(m->throwing > 0 && gp != nil && 
+		(gp == m->curg || gp == m->caughtsig))
 		return 1;
 
 	if(traceback < 0) traceback = runtime·gotraceback(nil);

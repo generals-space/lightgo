@@ -398,7 +398,8 @@ runtime·ready(G *gp)
 	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 }
 
-// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, cpus, 8)
+// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, ncpu, MaxGcproc)
+// caller: mgc0.c -> gc() 只有这一处
 int32
 runtime·gcprocs(void)
 {
@@ -408,27 +409,41 @@ runtime·gcprocs(void)
 	// Limited by gomaxprocs, number of actual CPUs, and MaxGcproc.
 	// 确定可用于GC操作的CPU数量, 三者中取最小值.
 	runtime·lock(&runtime·sched);
+
 	n = runtime·gomaxprocs;
 	if(n > runtime·ncpu) n = runtime·ncpu;
 	if(n > MaxGcproc) n = MaxGcproc;
+
 	// one M is currently running
+	// 在被调用时, 只有1个m处于运行状态, 其他都是 midle
+	// 如果 n > nmidle+1, 其实是超出了当前创建了的m的总量.
+	// 最多是让所有m都去执行gc嘛.
 	if(n > runtime·sched.nmidle+1) n = runtime·sched.nmidle+1;
 	runtime·unlock(&runtime·sched);
 	return n;
 }
 
+// 是否需要增加新的 proc 以执行gc
+// 标准就是判断当前处于 midle 的m是否大于0
+// 因为只要大于0
+// 由于只有一处调用, 可以认为被调用时只有一个m在运行,
+// 其他都在休眠.
+// caller: runtime·starttheworld() 只有这一处
 static bool
 needaddgcproc(void)
 {
 	int32 n;
 
 	runtime·lock(&runtime·sched);
+	
 	n = runtime·gomaxprocs;
-	if(n > runtime·ncpu)
-		n = runtime·ncpu;
-	if(n > MaxGcproc)
-		n = MaxGcproc;
-	n -= runtime·sched.nmidle+1; // one M is currently running
+	if(n > runtime·ncpu) n = runtime·ncpu;
+	if(n > MaxGcproc) n = MaxGcproc;
+	
+	// one M is currently running
+	// 在被调用时, 只有1个m处于运行状态, 其他都是 midle
+	// 将这个 m 移除再比较
+	n -= runtime·sched.nmidle+1; 
 	runtime·unlock(&runtime·sched);
 	return n > 0;
 }
@@ -555,6 +570,7 @@ runtime·stoptheworld(void)
 	}
 }
 
+// caller: runtime·starttheworld() 只有这一处调用.
 static void
 mhelpgc(void)
 {
@@ -570,9 +586,12 @@ runtime·starttheworld(void)
 	G *gp;
 	bool add;
 
-	m->locks++;  // disable preemption because it can be holding p in a local var
+	// disable preemption because it can be holding p in a local var
+	m->locks++; 
 
-	gp = runtime·netpoll(false);  // non-blocking
+	// non-blocking
+	gp = runtime·netpoll(false); 
+	// 将gp放到全局任务队列
 	injectglist(gp);
 	add = needaddgcproc();
 	runtime·lock(&runtime·sched);
@@ -584,18 +603,29 @@ runtime·starttheworld(void)
 	runtime·sched.gcwaiting = 0;
 
 	p1 = nil;
+	// 遍历全局任务队列, 将拥有本地任务的p队列取出组成链表并分别绑定空闲的m.
+	// 注意排列的顺序, while循环中先取出的p对象将会放在这个链表的尾部, 
+	// 最后一个拥有本地任务队列的P对象(由p1指向)将作为该链表头, 
+	// 而最终p变量将表示第一个没有本地任务的对象, 没有在此链表中.
 	while(p = pidleget()) {
 		// procresize() puts p's with work at the beginning of the list.
 		// Once we reach a p without a run queue, 
 		// the rest don't have one either.
+		// procresize() 把本地队列有任务的 p 都放在了链表的前面, 没任务的都在后面.
+		// 当我们遍历到一个没有本地任务的 p 时, 说明剩下的 p 也都是没有的.
 		if(p->runqhead == p->runqtail) {
 			pidleput(p);
 			break;
 		}
+		// 如果p对象本地任务队列不为空, 
+		// 那么从全局调度器的 midle 链表中取一个m, 并与该p绑定.
+		// 注意: mget()有可能返回nil.
 		p->m = mget();
 		p->link = p1;
 		p1 = p;
 	}
+	// 经过上面的while循环, p1对象表示链表的头, 由link指向下一个p对象, 最后一个为nil.
+
 	if(runtime·sched.sysmonwait) {
 		// runtime.h 中有声明, 将true和false定义为1和0
 		runtime·sched.sysmonwait = false;
@@ -603,17 +633,33 @@ runtime·starttheworld(void)
 	}
 	runtime·unlock(&runtime·sched);
 
+	// 遍历上面的while循环构建的链表, 其中的每个p成员都拥有本地任务队列.
 	while(p1) {
 		p = p1;
 		p1 = p1->link;
 		if(p->m) {
+			// 虽然该p绑定了某个m, 但好像还不如绑定一个nil呢.
+			// 因为绑定的目标m->nextp指向的p可能并不是当前的p对象,
+			// 这样就可能造成一种 m <-> p 相互指向不一致的问题, 
+			// 此时需要抛出异常.
 			mp = p->m;
+			// 这里不是解绑了吗? 而且后面好像也没有用到,
+			// 所以我觉得上面绑定p和m的目的只是通过 mget() 获取m对象而已,
+			// 实际的目的是设置 mp->nextp, 即在该m在完成当前p任务后, 
+			// 下一个执行的才是我们现在指定的p.
 			p->m = nil;
 			if(mp->nextp) runtime·throw("starttheworld: inconsistent mp->nextp");
 			mp->nextp = p;
+			// 在 stoplockedm(), stopm() 两处被调用 notesleep().
+			// 在这里唤醒这个 m.
+			// 需要知道的是, 在两处 sleep() 的地方, 被唤醒后都立刻
+			// 绑定了 nextp 成员, 放弃了原来的p.
 			runtime·notewakeup(&mp->park);
 		} else {
-			// Start M to run P.  Do not start another M below.
+			// Start M to run P. Do not start another M below.
+			// p对象没有可用的m, 就启动新的m.
+			// 注意这个地方可能会执行不只一次...吧???
+			// 一旦这里启动了新的m, 就设置add为false, 不再执行下面的if块.
 			newm(nil, p);
 			add = false;
 		}
@@ -622,12 +668,16 @@ runtime·starttheworld(void)
 	if(add) {
 		// If GC could have used another helper proc, start one now,
 		// in the hope that it will be available next time.
+		// 希望能在下一轮gc期间可用.
 		// It would have been even better to start it before the collection,
 		// but doing so requires allocating memory, 
 		// so it's tricky to coordinate. 
+		// 可能在开始gc前就启动会好一点, 但这需要事先分配内存, 很难协调.
 		// This lazy approach works out in practice:
 		// we don't mind if the first couple gc rounds don't have quite
 		// the maximum number of procs.
+		// 这种惰性的方法在实践中是有用的, 因为我们不在乎前两轮gc执行的procs数量
+		// 没有达到最大值.
 		newm(mhelpgc, nil);
 	}
 	m->locks--;
@@ -1012,6 +1062,7 @@ newm(void(*fn)(void), P *p)
 // Stops execution of the current m until new work is available.
 // Returns with acquired P.
 // 结束当前m, 直到有新任务需要执行.
+// ...没有返回值, 不过会将当前
 static void
 stopm(void)
 {
@@ -1029,7 +1080,7 @@ retry:
 	// 将m放到全局调度器的空闲队列 runtime·sched.midle 中
 	mput(m); 
 	runtime·unlock(&runtime·sched);
-
+	// 开始休眠, 待唤醒.
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
 	if(m->helpgc) {
@@ -1038,6 +1089,8 @@ retry:
 		m->mcache = nil;
 		goto retry;
 	}
+	// 为当前m绑定下一个p(只是修改了一下m->p的值)...但是就没有下下一个p了.
+	// 注意能运行到这里, 说明 m->p 已经是 nil 了
 	acquirep(m->nextp);
 	m->nextp = nil;
 }
@@ -1179,6 +1232,7 @@ wakep(void)
 // Stops execution of the current m that is locked to a g 
 // until the g is runnable again.
 // Returns with acquired P.
+// 
 static void
 stoplockedm(void)
 {
@@ -1198,7 +1252,8 @@ stoplockedm(void)
 	runtime·noteclear(&m->park);
 	if(m->lockedg->status != Grunnable)
 		runtime·throw("stoplockedm: not runnable");
-	// 将m绑定下一个p
+	// 为当前m绑定下一个p(只是修改了一下m->p的值)...但是就没有下下一个p了.
+	// 注意能运行到这里, 说明 m->p 已经是 nil 了
 	acquirep(m->nextp);
 	m->nextp = nil;
 }
@@ -2594,7 +2649,7 @@ procresize(int32 new)
 }
 
 // Associate p and the current m.
-// 将目标p对象与当前m关联, p的状态需要是 idle
+// 将目标p对象与当前m关联(只是修改了一下m->的值), p的状态需要是 idle
 static void
 acquirep(P *p)
 {
@@ -3051,7 +3106,8 @@ mput(M *mp)
 
 // Try to get an m from midle list.
 // Sched must be locked.
-// 从全局调度器的 midle 链表中取得一个m
+// 从全局调度器的 midle 链表中取得一个m.
+// 注意: 有可能返回nil
 static M*
 mget(void)
 {
@@ -3125,6 +3181,7 @@ pidleput(P *p)
 
 // Try get a p from pidle list.
 // Sched must be locked.
+// 从全局任务队列中获取并返回一个p对象
 static P*
 pidleget(void)
 {

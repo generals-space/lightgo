@@ -119,12 +119,13 @@ void
 runtime·notewakeup(Note *n)
 {
 	uint32 old;
-
+	// 将 n->key 赋值为1, old为true/false
 	old = runtime·xchg((uint32*)&n->key, 1);
 	if(old != 0) {
 		runtime·printf("notewakeup - double wakeup (%d)\n", old);
 		runtime·throw("notewakeup - double wakeup");
 	}
+	// 唤醒1个在 n->key 处休眠的进程
 	runtime·futexwakeup((uint32*)&n->key, 1);
 }
 

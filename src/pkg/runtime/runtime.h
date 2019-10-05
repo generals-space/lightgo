@@ -339,6 +339,7 @@ struct	M
 	// attached P for executing Go code (nil if not executing Go code)
 	// 这里应该是单个p对象, 一个m只绑定一个p
 	P*	p;
+	// 这是下一个要切换的p? 
 	P*	nextp;
 	int32	id;
 	// 话说 G和P都有各自的枚举状态, M就没有.
@@ -364,6 +365,8 @@ struct	M
 	uint64	ncgocall;	// number of cgo calls in total
 	int32	ncgo;		// number of cgo calls currently in progress
 	CgoMal*	cgomal;
+	// m 休眠|等待的地址.
+	// 在 stoplockedm(), stopm() 两处被调用 notesleep().
 	Note	park;
 	M*	alllink;	// on allm
 	M*	schedlink;

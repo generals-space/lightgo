@@ -65,8 +65,8 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 }
 
 // If any procs are sleeping on addr, wake up at most cnt.
-// wakeup可以唤醒在addr处休眠的进程, 可能不只一个,
-// cnt可以指定此次操作能够唤醒多少个休眠中的进程.
+// wakeup可以唤醒在 addr 处休眠的进程, 可能不只一个,
+// cnt 可以指定此次操作能够唤醒多少个休眠中的进程.
 void
 runtime·futexwakeup(uint32 *addr, uint32 cnt)
 {
