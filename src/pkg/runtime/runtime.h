@@ -359,6 +359,10 @@ struct	M
 	int32	locks;
 	int32	dying;
 	int32	profilehz;
+	// helpgc 是一个作用类似于序号或是递增id一样的数值. 
+	// 新m初始启动时, 由 runtime·mstart 设置值为0.
+	// 范围在 [1-nproc], 0会留给STW后启动gc的那个m.
+	// 在 starttheworld()->mhelpgc() 时会将其设置为 -1.
 	int32	helpgc;
 	bool	spinning;
 	uint32	fastrand;

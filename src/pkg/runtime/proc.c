@@ -448,6 +448,8 @@ needaddgcproc(void)
 	return n > 0;
 }
 
+// 当确定执行gc操作的协程数量大于1时调用此函数.
+// caller: mgc0.c -> gc()
 void
 runtime·helpgc(int32 nproc)
 {
@@ -458,12 +460,20 @@ runtime·helpgc(int32 nproc)
 	pos = 0;
 	// one M is currently running
 	for(n = 1; n < nproc; n++) { 
+		// m中的mcache用的其实是ta绑定的p的mcache
+		// 如果这个if条件为true, 说明遍历到了当前m的p对象, 需要跳过.
 		if(runtime·allp[pos]->mcache == m->mcache) pos++;
 
-		// 从sched获取一个空闲的m对象
+		// 从sched获取一个空闲的m对象, 设置其helpgc序号,
+		// 并且与 allp[pos] 绑定.
 		mp = mget();
+		// 这里报的错是什么意思?
+		// 由于 nproc = min(GOMAXPROCS, ncpu, MaxGcproc), 
+		// 而m的数量一定是比p多的, 所以???
 		if(mp == nil) runtime·throw("runtime·gcprocs inconsistency");
+		// 这是设置序号吧?
 		mp->helpgc = n;
+		// 为什么只绑定 mcache? 不使用 acquirep() 完成?
 		mp->mcache = runtime·allp[pos]->mcache;
 		pos++;
 		runtime·notewakeup(&mp->park);
@@ -1063,6 +1073,7 @@ newm(void(*fn)(void), P *p)
 // Returns with acquired P.
 // 结束当前m, 直到有新任务需要执行.
 // ...没有返回值, 不过会将当前
+// caller: runtime·mstart(), startlockedm(), gcstopm(), findrunnable(), exitsyscall0()
 static void
 stopm(void)
 {
@@ -1083,8 +1094,12 @@ retry:
 	// 开始休眠, 待唤醒.
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
+	// 被唤醒的地方有4处, 可能性还是有很多种的.
+	// 如果被唤醒后发现 m->helpgc > 0, 
+	// 说明此m被选为参与执行gc了.
 	if(m->helpgc) {
 		runtime·gchelper();
+		// 辅助执行完毕, 立刻回归原来的角色.
 		m->helpgc = 0;
 		m->mcache = nil;
 		goto retry;

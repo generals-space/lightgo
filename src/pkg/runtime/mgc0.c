@@ -203,12 +203,24 @@ static void	gchelperstart(void);
 static struct {
 	uint64	full;  // lock-free list of full blocks
 	uint64	empty; // lock-free list of empty blocks
-	byte	pad0[CacheLineSize]; // prevents false-sharing between full/empty and nproc/nwait
+	// prevents false-sharing between full/empty and nproc/nwait
+	byte	pad0[CacheLineSize]; 
+	// 参与执行gc的协程数量, 其值由 runtime·gcprocs() 设置.
+	// 取值为 min(GOMAXPROCS, ncpu, MaxGcproc)
+	// 参与执行gc的协程要运行的是 runtime·gchelper() 函数.
 	uint32	nproc;
 	volatile uint32	nwait;
+	// 参考 alldone 成员的解释, 每个参与gc的协程在完成自己部分的标记清理工作后,
+	// 都会对 ndone 进行加1的原子操作, 然后与 nproc-1 比较(减去的1是gc主协程),
+	// 如果相等, 那么表示所以gc协程都已完成, 就唤醒在 alldone 处等待的主协程.
 	volatile uint32	ndone;
 	volatile uint32 debugmarkdone;
-	Note	alldone; // Note与Lock一样(...完全一样), 是分别基于futex/sema实现的锁吧
+	// Note与Lock一样(...完全一样), 是分别基于futex/sema实现的锁吧
+	// 在STW后, 实际执行gc操作的协程可能不只一个,
+	// 数量大致在 [1-nproc) 之间, ta们并行执行gc操作.
+	// gc主线程将在这个地址休眠, 直到所有gc协程全部完成标记清理工作后,
+	// 再继续执行.
+	Note	alldone; 
 	ParFor	*markfor;
 	ParFor	*sweepfor;
 
@@ -381,6 +393,10 @@ struct BufferList
 	byte 		pad[CacheLineSize];
 };
 #pragma dataflag NOPTR
+
+// 为执行gc操作的协程提供各自的缓存数组.
+// 由于执行gc操作的协程不只一个, gc()->runtime·gcprocs() 可以得到执行gc的协程数量.
+// 这里 bufferList 数组的容量 MaxGcproc 是绝对够用的.
 static BufferList bufferList[MaxGcproc];
 
 static Type *itabtype;
@@ -719,6 +735,7 @@ checkptr(void *obj, uintptr objti)
 // wbuf: current work buffer
 // wp:   storage for next queued pointer (write pointer)
 // nobj: number of queued objects
+// caller: markroot(), runtime·gchelper(), gc().
 static void
 scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 {
@@ -1517,10 +1534,12 @@ addstackroots(G *gp)
 
 	stk = (Stktop*)gp->stackbase;
 	guard = gp->stackguard;
-	// g是正在执行GC的线程吧, 不过在哪定义的?
-	// 不过照这样写的, g应该没有 allg 链表里吧.
+	// ~~g是正在执行GC的线程吧, 不过在哪定义的?~~
+	// ~~不过照这样写的, g应该没有 allg 链表里吧.~~
 	if(gp == g) runtime·throw("can't scan our own stack");
+	// 如果执行当前g的m对象是 helpgc 线程, 那么不要执行gc, 是友军.
 	if((mp = gp->m) != nil && mp->helpgc) runtime·throw("can't scan gchelper stack");
+	
 	if(gp->syscallstack != (uintptr)nil) {
 		// 如果gp处于系统调用过程中.
 
@@ -1894,9 +1913,14 @@ runtime·memorydump(void)
 	}
 }
 
+// 执行这个函数的都是参与gc的几个协程, 数量在 [1-nproc] 之间.
+// caller: proc.c -> stopm(), 只有这一处.
+// stopm() 这个函数有一个休眠等待的过程, 被唤醒时, 如果 m->helpgc > 0,
+// 就会调用这个函数, 来辅助执行gc.
 void
 runtime·gchelper(void)
 {
+	// 调用这个做一些准备工作, 比如验证 m->helpgc 的合法性, 判断当前g是否为g0
 	gchelperstart();
 
 	// parallel mark for over gc roots
@@ -1912,7 +1936,10 @@ runtime·gchelper(void)
 	}
 
 	runtime·parfordo(work.sweepfor);
+
 	bufferList[m->helpgc].busy = 0;
+	// ndone+1 后如果等于 nproc-1, 则说明这是最后一个完成gc的线程, 
+	// 可以唤醒 alldone 处等待的协程了.
 	if(runtime·xadd(&work.ndone, +1) == work.nproc-1)
 		runtime·notewakeup(&work.alldone);
 }
@@ -2226,12 +2253,14 @@ gc(struct gc_args *args)
 	work.nwait = 0;
 	work.ndone = 0;
 	work.debugmarkdone = 0;
-	// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, cpus, 8).
+	// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, ncpu, MaxGcproc).
 	work.nproc = runtime·gcprocs();
 	addroots();
 	// 设置markfor, sweepfor并⾏mark、sweep 属性, markroot与sweepspan都是函数
 	runtime·parforsetup(work.markfor, work.nproc, work.nroot, nil, false, markroot);
 	runtime·parforsetup(work.sweepfor, work.nproc, runtime·mheap.nspan, nil, true, sweepspan);
+	// 如果执行gc操作的协程数量大于1, 那么在进行之后的操作之前, 需要保证这些协程全部完成才行.
+	// 所以下面有 notesleep(alldone) 的语句, 而在 sleep 之前, 则需要使用 claer 对目标锁对象清零.
 	if(work.nproc > 1) {
 		runtime·noteclear(&work.alldone);
 		runtime·helpgc(work.nproc);
@@ -2262,6 +2291,7 @@ gc(struct gc_args *args)
 	t3 = runtime·nanotime();
 	
 	// 如果执行GC的协程数量多于1个, 那就等待直到ta们全部完成.
+	// wakeup 的操作在 runtime·gchelper() 函数中.
 	// ...如果只有1个就不用了? 只有一个协程时运行到这里说明sweepfor已经完成了是吗???
 	if(work.nproc > 1) runtime·notesleep(&work.alldone);
 	
@@ -2389,6 +2419,7 @@ runtime∕debug·setGCPercent(intgo in, intgo out)
 	FLUSH(&out);
 }
 
+// caller: runtime·gchelper(), gc()
 static void
 gchelperstart(void)
 {
