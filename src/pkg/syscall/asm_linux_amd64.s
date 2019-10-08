@@ -12,19 +12,28 @@
 // Trap # in AX, args in DI SI DX R10 R8 R9, return in AX DX
 // Note that this differs from "standard" ABI convention, which
 // would pass 4th arg in CX, not R10.
-
+// 系统调用号由 AX 寄存器传递, 参数列表分别放在 DI SI DX R10 R8 R9 寄存器中,
+// 返回值则放在 AX DX 中.
+// 注意: 这里与标准API调用约定不太一样, 第4个参数是放在R10而不是CX寄存器中的.
+// 
+// 参数SB寄存器(Static Base)只是表示当前语句是用来声明函数(或全局变量的)
+// 不过这个函数貌似没有被其他地方显式调用, 应该是由编译器来定位的.
 TEXT	·Syscall(SB),NOSPLIT,$0-64
 	CALL	runtime·entersyscall(SB)
+	// 下面的 MOVQ 指令是为参数列表赋值, 从第3个指针地址开始.
 	MOVQ	16(SP), DI
 	MOVQ	24(SP), SI
 	MOVQ	32(SP), DX
 	MOVQ	$0, R10
 	MOVQ	$0, R8
 	MOVQ	$0, R9
-	MOVQ	8(SP), AX	// syscall entry
+	// syscall entry
+	// AX 系统调用入口
+	MOVQ	8(SP), AX
 	SYSCALL
 	CMPQ	AX, $0xfffffffffffff001
 	JLS	ok
+	// 下面的 MOVQ 指令是为返回值赋值
 	MOVQ	$-1, 40(SP)	// r1
 	MOVQ	$0, 48(SP)	// r2
 	NEGQ	AX

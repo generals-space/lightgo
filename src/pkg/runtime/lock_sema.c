@@ -227,7 +227,7 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 }
 
 // ns 纳秒时间长度
-// caller: runtime·stoptheworld()
+// caller: runtime·stoptheworld() 只有这一处.
 // 只有g0对象可调用.
 bool
 runtime·notetsleep(Note *n, int64 ns)
@@ -249,11 +249,9 @@ runtime·notetsleepg(Note *n, int64 ns)
 {
 	bool res;
 
-	if(g == m->g0)
-		runtime·throw("notetsleepg on g0");
+	if(g == m->g0) runtime·throw("notetsleepg on g0");
 
-	if(m->waitsema == 0)
-		m->waitsema = runtime·semacreate();
+	if(m->waitsema == 0) m->waitsema = runtime·semacreate();
 
 	runtime·entersyscallblock();
 	res = notetsleep(n, ns, 0, nil);

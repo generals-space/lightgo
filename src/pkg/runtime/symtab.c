@@ -111,6 +111,11 @@ readvarint(byte **pp)
 	return v;
 }
 
+// caller: mgc0.c -> addframeroots() (在这个函数中有两处调用)
+// 获取目标函数 f 的参数列表或局部变量的地址信息.
+// 参数 i 的取值可以为 FUNCDATA_GCArgs(值为0)/FUNCDATA_GCLocals(值为1),
+// 在 funcdata.h 中定义.
+// 表示获取指定函数对象 f 的传入参数/局部变量的地址信息.
 void*
 runtime·funcdata(Func *f, int32 i)
 {
@@ -121,7 +126,7 @@ runtime·funcdata(Func *f, int32 i)
 	p = (byte*)&f->nfuncdata + 4 + f->npcdata*4;
 
 	if(sizeof(void*) == 8 && ((uintptr)p & 4)) p += 4;
-
+	// 此处p数组的成员(参数列表/局部变量)都可以被转换成 BitVector 类型
 	return ((void**)p)[i];
 }
 

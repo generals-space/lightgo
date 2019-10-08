@@ -64,7 +64,17 @@ struct Sched {
     // 一般在 stoptheworld/freezetheworld 时会将其设置为1,
     // starttheworld 则会设置为0.
 	uint32	gcwaiting;
+	// 关于 stopwait 的解释见下面的 stopnote.
 	int32	stopwait;
+	// 只在 runtime·stoptheworld() 函数中有过 sleep 休眠的操作,
+	// 依次停止处于 stop/syscall..等状态的p对象,
+	// 但仍然有可能存在占用CPU的p, stoptheworld 在发出抢占请求后,
+	// 并不能立刻停止这些p, 只能等到下一次调度再停止.
+	// 
+	// 在 stoptheworld 中, 将 stopwait 赋值为 runtime·gomaxprocs
+	// 表示进程中p对象的数量, 大概在[1-GOMAXPROCS]吧,
+	// 每将一个p对象设置为 gcstop, 就将 stopwait 减1, 
+	// 会有一个for无限循环, 判断 stopwait 是否等于0
 	Note	stopnote;
 	uint32	sysmonwait;
 	Note	sysmonnote;
@@ -252,7 +262,10 @@ runtime·main(void)
 	g->defer = &d;
 
 	if(m != &runtime·m0) runtime·throw("runtime·main not on m0");
+	// 通过 scavenger 变量启动独立的协程运行 runtime·MHeap_Scavenger(),
+	// 完成定期释放未使用的内存给操作系统, 无限循环.
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
+
 	// main·init 为汇编代码
 	main·init();
 
@@ -1165,6 +1178,7 @@ startm(P *p, bool spinning)
 // Hands off P from syscall or locked M.
 // 将处于 syscall 或是 locked 状态的m对象绑定的p移交给新的m对象.
 // 如果处于gc过程中, 就不再做这些移交的操作, 置p为 Pcstop, 然后尝试唤醒STW.
+// caller: stoplockedm(), ·entersyscallblock(), retake()
 static void
 handoffp(P *p)
 {
@@ -1690,12 +1704,19 @@ goexit0(G *gp)
 	schedule();
 }
 
+// 设置当前g对象的 g->sched 信息,
+// 即当前正在执行的函数的主调函数 pc和sp等信息
+// caller: ·entersyscall(), ·entersyscallblock()
+// 主要还是用于从系统调用返回时重新唤醒主调函数的吧.
+// sp用于定位局部变量
+// 注意: 这里的sched存放的主调函数信息其实是进行syscall的函数, 
+// 用于返回的.
 #pragma textflag NOSPLIT
 static void
 save(void *pc, uintptr sp)
 {
 	g->sched.pc = (uintptr)pc;
-	g->sched.sp = sp;
+	g->sched.sp = sp; 
 	g->sched.lr = 0;
 	g->sched.ret = 0;
 	g->sched.ctxt = 0;
@@ -1706,31 +1727,45 @@ save(void *pc, uintptr sp)
 // Record that it's not using the cpu anymore.
 // This is called only from the go syscall library and cgocall,
 // not from the low-level system calls used by the runtime.
-// 协程g将要陷入系统调用, 这里记录ta将不再占用cpu.
-// 此函数只在golang的syscall库和cgocall函数时调用.
+// 协程对象 g 将要陷入系统调用, 这里记录ta将不再占用cpu.
+// 此函数只由golang的 syscall 库和 cgocall 函数调用.
 // 
 // Entersyscall cannot split the stack: the runtime·gosave must
 // make g->sched refer to the caller's stack segment, 
 // because entersyscall is going to return immediately after.
-// entersyscall 不能被分割栈, runtime·gosave() 必定将
-// g->sched 赋值为调用方的栈, 因为 entersyscall 将会马上返回.
+// entersyscall 不能被分割栈, runtime·gosave() 必定会将
+// g->sched 赋值为调用方的栈段, 因为 entersyscall 将会马上返回.
+//
 // caller: runtime·cgocall(), runtime·cgocallbackg()
-// 还有其他的一些调用方, 大都是汇编的调用.
+// 还有其他的一些调用方, 大都是汇编的调用, 主要是各平台的 Syscall(SB) 函数.
+// 参数 dummy 应该是主调函数的函数名称所在地址, 这是一个不确定的值.
+// 主要就设置了一个p的状态为 Psyscall, 解绑m与p,
+// 然后标记为当前g对象被抢占, 好像就没了?
 #pragma textflag NOSPLIT
 void
 ·entersyscall(int32 dummy)
 {
-	// Disable preemption because during this function g is in Gsyscall status,
-	// but can have inconsistent g->sched, do not let GC observe it.
+	// Disable preemption because during this function 
+	// g is in Gsyscall status,
+	// but can have inconsistent g->sched, 
+	// do not let GC observe it.
+	// 禁止抢占. 因为在此函数中 g 将处于(或者说被修改为) Gsyscall 状态,
+	// 但可能会出现 g->sched 不一致的情况, 别让gc线程发现这里.
 	m->locks++;
 
 	// Leave SP around for GC and traceback.
+	// 保留SP用于GC和回溯
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
+
 	g->syscallsp = g->sched.sp;
 	g->syscallpc = g->sched.pc;
 	g->syscallstack = g->stackbase;
 	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
+
+	// 这里if语句的第一个条件是判断栈溢出的, 可参考 stack.c -> runtime·newstack() 
+	// 中的 overflow 检查.
+	// 至于第二个条件, 由于 g->stackbase 本来就表示
 	if(g->syscallsp < g->syscallguard-StackGuard || 
 		g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
@@ -1739,6 +1774,10 @@ void
 	}
 
 	// TODO: fast atomic
+	// 只有 sysmon() 这一个地方将 sysmonwait 设置为1, 
+	// 然后在 sysmonnote 陷入休眠(当没有任务需要监控的时候)
+	// 现在任务来了, 唤醒ta吧.
+	// ...sysmon 还能监控 syscall 的??? 没注意
 	if(runtime·atomicload(&runtime·sched.sysmonwait)) { 
 		runtime·lock(&runtime·sched);
 		if(runtime·atomicload(&runtime·sched.sysmonwait)) {
@@ -1746,12 +1785,22 @@ void
 			runtime·notewakeup(&runtime·sched.sysmonnote);
 		}
 		runtime·unlock(&runtime·sched);
+		// 这里又来一句这个是啥意思???
 		save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 	}
 
+	// 这里的目的是? 
+	// 进入 syscall 应该是解绑m与g的关系吧, 
+	// 解绑这俩做什么? 也没解绑 m->p 为 nil啊...
+	// 另外, 此时m的状态是?
 	m->mcache = nil;
 	m->p->m = nil;
 	runtime·atomicstore(&m->p->status, Psyscall);
+	// 一般在gc操作前的 runtime·stoptheworld() 会将 gcwaiting 设置为1.
+	// if条件为true, 那么应该是处于gc前的STW过程中, 
+	// 而且很大可能 stopwait 不为0, 正在 stopnote 处休眠.
+	// 那此时就不应该进入 syscall 了, 先执行gc流程吧.
+	// 看样子经过下面这句就只能等下一次调度了.
 	if(runtime·sched.gcwaiting) {
 		runtime·lock(&runtime·sched);
 		if (runtime·sched.stopwait > 0 && 
@@ -1760,47 +1809,73 @@ void
 				runtime·notewakeup(&runtime·sched.stopnote);
 		}
 		runtime·unlock(&runtime·sched);
+		// ...这又是啥意思???
 		save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 	}
 
-	// Goroutines must not split stacks in Gsyscall status (it would corrupt g->sched).
-	// We set stackguard to StackPreempt so that first split stack check calls morestack.
+	// Goroutines must not split stacks in Gsyscall status 
+	// (it would corrupt g->sched).
+	// We set stackguard to StackPreempt 
+	// so that first split stack check calls morestack.
 	// Morestack detects this case and throws.
+	// 处于 syscall 状态的g不可分割栈(会导致 g->sched 混乱).
+	// 这里我们设置 stackguard0 为 StackPreempt, 
+	// 以便第一次栈分隔检查可以调用 morestack(),
+	// 而 morestack() 将检查分割栈的情况并抛出异常.
+	// 
+	// 其他地方在设置 stackguard0 为 StackPreempt 时, 通常都会判断 g->preempt 是否为1.
+	// 而且通常是在 locks--后,
+	// 而这里没有判断, 还在 locks-- 之前, 说明此次操作不需要的前提, 
+	// 设置 stackguard0 是直接目的.
 	g->stackguard0 = StackPreempt;
 	m->locks--;
 }
 
-// The same as runtime·entersyscall(), but with a hint that the syscall is blocking.
+// The same as runtime·entersyscall(), 
+// but with a hint that the syscall is blocking.
+// 与 runtime·entersyscall() 相同, 但这里的系统调用是阻塞的.
+// 没懂什么意思...??? handoff()这一行是阻塞的吗? 直到 syscall 完成?
+// caller: lock_sema.c/lock_futex.c -> runtime·notetsleepg() 只有这一处.
 #pragma textflag NOSPLIT
 void
 ·entersyscallblock(int32 dummy)
 {
 	P *p;
 
-	m->locks++;  // see comment in entersyscall
+	// see comment in entersyscall
+	m->locks++; 
 
 	// Leave SP around for GC and traceback.
+	// 保留SP用于GC和回溯
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
+
 	g->syscallsp = g->sched.sp;
 	g->syscallpc = g->sched.pc;
 	g->syscallstack = g->stackbase;
 	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
-	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
+
+	if(g->syscallsp < g->syscallguard-StackGuard || 
+		g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
 		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscallblock");
 	}
+	// 直到这里, 仍与 ·entersyscall 保持一致, 区别在后半部分.
 
+	// 将当前m与其p成员解绑, 然后将此p绑定到其他m上.
+	// 话说, 此时g对象应该还在p的本地任务队列里的吧?
 	p = releasep();
+	// 把p移交到新的m
 	handoffp(p);
-	if(g->isbackground)  // do not consider blocked scavenger for deadlock detection
-		incidlelocked(1);
+	// do not consider blocked scavenger for deadlock detection
+	if(g->isbackground) incidlelocked(1);
 
 	// Resave for traceback during blocked call.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 
-	g->stackguard0 = StackPreempt;  // see comment in entersyscall
+	// see comment in entersyscall
+	g->stackguard0 = StackPreempt; 
 	m->locks--;
 }
 
@@ -1900,7 +1975,7 @@ exitsyscallfast(void)
 	if(runtime·sched.pidle) {
 		runtime·lock(&runtime·sched);
 		p = pidleget();
-		// sysmonwait 只有一个地方被设置为1, 然后陷入休眠: sysmon()
+		// sysmonwait 只有sysmon()这一个地方被设置为1, 然后陷入休眠.
 		// 既然p有任务来了, sysmon 也没必要再休眠了.
 		if(p && runtime·atomicload(&runtime·sched.sysmonwait)) {
 			runtime·atomicstore(&runtime·sched.sysmonwait, 0);

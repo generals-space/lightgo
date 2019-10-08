@@ -8,8 +8,9 @@
 #include "stack.h"
 
 /* 栈空间布局
+这应该是针对单个函数的, g对象中相关成员只是对当前正在运行的函数来说.
 
-stack0       [stackguard0]        stackbase(sp)           stackguard0           --> High Address
+stack0       [stackguard0]        stackbase(sp)         stackguard0(上限)      --> High Address
   ↓               ↓                    ↓                       ↓
   +---------------+--------------------+--------------+·········
   | System        | Stack              | Top          |        |
@@ -189,6 +190,7 @@ runtime·oldstack(void)
 	gp = m->curg;
 	top = (Stktop*)gp->stackbase;
 	old = (byte*)gp->stackguard - StackGuard;
+	// sp用于定位局部变量
 	sp = (byte*)top;
 	argsize = top->argsize;
 
@@ -322,6 +324,7 @@ runtime·newstack(void)
 			runtime·throw("runtime: g is running but p is not");
 		if(oldstatus == Gsyscall && m->locks == 0)
 			runtime·throw("runtime: stack split during syscall");
+
 		// Be conservative about where we preempt.
 		// We are interested in preempting user Go code, not runtime code.
 		// 抢占时谨慎一点, 最好先抢占开发者的go协程, 保留运行时的代码...没毛病
@@ -329,6 +332,8 @@ runtime·newstack(void)
 			m->gcing || m->p->status != Prunning) {
 			// Let the goroutine keep running for now.
 			// gp->preempt is set, so it will be preempted next time.
+			// 这一轮协程还可以运行, 但是由于 preempt 已经设置,
+			// 下一轮调度就会被抢占了.
 			gp->stackguard0 = gp->stackguard;
 			gp->status = oldstatus;
 			runtime·gogo(&gp->sched);	// never return
@@ -338,7 +343,8 @@ runtime·newstack(void)
 		runtime·gosched0(gp);	// never return
 	}
 
-	if(newstackcall && m->morebuf.sp - sizeof(Stktop) - argsize - 32 > gp->stackguard) {
+	if(newstackcall && 
+		m->morebuf.sp - sizeof(Stktop) - argsize - 32 > gp->stackguard) {
 		// special case: called from runtime.newstackcall (framesize==1)
 		// to call code with an arbitrary argument size,
 		// and we have enough space on the current stack.

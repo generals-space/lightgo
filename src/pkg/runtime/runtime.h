@@ -211,6 +211,7 @@ struct	Gobuf
 {
 	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
 	// sp, pc和g字段的偏移量是编译器可预见的.
+	// sp用于定位局部变量(父函数)
 	uintptr	sp;
 	uintptr	pc;
 	// g成员指向 gobuf 对象所属的g对象, 相当于反向引用.
@@ -267,14 +268,22 @@ struct	G
 	uint32	selgen;		// valid sudog pointer
 	Defer*	defer;
 	Panic*	panic;
+	// 用于存在当前g所执行的函数的父级函数的信息,
+	// 包括父级函数的pc(函数地址), sp(用于定位局部变量)
 	Gobuf	sched;
-	uintptr	syscallstack;	// if status==Gsyscall, syscallstack = stackbase to use during gc
-	uintptr	syscallsp;	// if status==Gsyscall, syscallsp = sched.sp to use during gc
-	uintptr	syscallpc;	// if status==Gsyscall, syscallpc = sched.pc to use during gc
-	uintptr	syscallguard;	// if status==Gsyscall, syscallguard = stackguard to use during gc
+	// 以下 syscallXXX 都只在 status == Gsyscall 状态下有效
+	// syscallstack = stackbase to use during gc
+	uintptr	syscallstack;	
+	// syscallsp = sched.sp to use during gc
+	uintptr	syscallsp;	
+	// syscallpc = sched.pc to use during gc
+	uintptr	syscallpc;	
+	// syscallguard = stackguard to use during gc
+	uintptr	syscallguard;
+
 	// same as stackguard0, but not set to StackPreempt
 	uintptr	stackguard;
-	// 当前g对象栈空间的起始地址
+	// 当前g对象正在执行的函数的栈空间的起始地址
 	uintptr	stack0;
 	// 当前g线程的栈大小, 不可超过 runtime·maxstacksize
 	uintptr	stacksize;
@@ -284,7 +293,12 @@ struct	G
 	void*	param;		// passed parameter on wakeup
 	int16	status;
 	int64	goid;
-	int8*	waitreason;	// if status==Gwaiting
+	// if status==Gwaiting
+	// Gwaiting 状态下被设置, 目前看到的可能值有
+	// 1. garbage collection
+	// 2. stack unsplit
+	// 3. stack split
+	int8*	waitreason;
 	// 貌似这个链表指针指向下一个待调度执行的g对象.
 	G*	schedlink; 
 	bool	ispanic;
@@ -750,18 +764,29 @@ struct Panic
 
 /*
  * stack traces
+ * 栈帧空间对象
  */
 typedef struct Stkframe Stkframe;
 struct Stkframe
 {
-	Func*	fn;	// function being run
-	uintptr	pc;	// program counter within fn
-	uintptr	lr;	// program counter at caller aka link register
+	// function being run
+	// fn 表示当前空间是由函数 fn 在运行时所拥有的.
+	Func*	fn;	
+	// program counter within fn
+	uintptr	pc;	
+	// program counter at caller aka link register
+	// lr 表示是主调函数在调用当前 fn 时的 pc 的地址
+	// 应该对于函数结束, 栈弹出并返回父函数时有用.
+	uintptr	lr;	
 	uintptr	sp;	// stack pointer at pc
 	uintptr	fp;	// stack pointer at caller aka frame pointer
-	byte*	varp;	// top of local variables
-	byte*	argp;	// pointer to function arguments
-	uintptr	arglen;	// number of bytes at argp
+	// top of local variables
+	byte*	varp;
+	// pointer to function arguments
+	byte*	argp;
+	// number of bytes at argp
+	// argp 处的字节数, 可以表示参数的总大小.
+	uintptr	arglen;
 };
 
 int32	runtime·gentraceback(uintptr, uintptr, uintptr, G*, int32, uintptr*, int32, void(*)(Stkframe*, void*), void*, bool);

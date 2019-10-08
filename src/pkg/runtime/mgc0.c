@@ -40,10 +40,14 @@ enum {
 
 	// Pointer map
 	BitsPerPointer = 2,
-	BitsNoPointer = 0,
-	BitsPointer = 1,
-	BitsIface = 2,
-	BitsEface = 3,
+	// 每个指针的信息用 BitsPerPointer 个 bit 即可表示,
+	// 可有如下4种情况.
+	// 在 scanbitvector() 函数中有对相关变量与 3(0000 0000 0000 0011)做与操作,
+	// 得到结果后与如下4种情况做比较的操作. 
+	BitsNoPointer = 0, 	// 非指针对象
+	BitsPointer = 1,	// 指针对象
+	BitsIface = 2,		// 接口类型对象
+	BitsEface = 3,		// 接口数据对象
 };
 
 // Bits in per-word bitmap.
@@ -448,8 +452,8 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 
 	// If buffer is nearly full, get a new one.
 	if(wbuf == nil || nobj+n >= nelem(wbuf->obj)) {
-		if(wbuf != nil)
-			wbuf->nobj = nobj;
+		if(wbuf != nil) wbuf->nobj = nobj;
+
 		wbuf = getempty(wbuf);
 		wp = wbuf->obj;
 		nobj = 0;
@@ -1300,8 +1304,8 @@ markroot(ParFor *desc, uint32 i)
 static Workbuf*
 getempty(Workbuf *b)
 {
-	if(b != nil)
-		runtime·lfstackpush(&work.full, &b->node);
+	if(b != nil) runtime·lfstackpush(&work.full, &b->node);
+
 	b = (Workbuf*)runtime·lfstackpop(&work.empty);
 	if(b == nil) {
 		// Need to allocate.
@@ -1324,8 +1328,7 @@ getempty(Workbuf *b)
 static void
 putempty(Workbuf *b)
 {
-	if(CollectStats)
-		runtime·xadd64(&gcstats.putempty, 1);
+	if(CollectStats) runtime·xadd64(&gcstats.putempty, 1);
 
 	runtime·lfstackpush(&work.empty, &b->node);
 }
@@ -1336,26 +1339,27 @@ getfull(Workbuf *b)
 {
 	int32 i;
 
-	if(CollectStats)
-		runtime·xadd64(&gcstats.getfull, 1);
+	if(CollectStats) runtime·xadd64(&gcstats.getfull, 1);
 
-	if(b != nil)
-		runtime·lfstackpush(&work.empty, &b->node);
+	if(b != nil) runtime·lfstackpush(&work.empty, &b->node);
+
 	b = (Workbuf*)runtime·lfstackpop(&work.full);
-	if(b != nil || work.nproc == 1)
-		return b;
+
+	if(b != nil || work.nproc == 1) return b;
 
 	runtime·xadd(&work.nwait, +1);
 	for(i=0;; i++) {
 		if(work.full != 0) {
 			runtime·xadd(&work.nwait, -1);
 			b = (Workbuf*)runtime·lfstackpop(&work.full);
-			if(b != nil)
-				return b;
+			
+			if(b != nil) return b;
+			
 			runtime·xadd(&work.nwait, +1);
 		}
-		if(work.nwait == work.nproc)
-			return nil;
+		
+		if(work.nwait == work.nproc) return nil;
+
 		if(i < 10) {
 			m->gcstats.nprocyield++;
 			runtime·procyield(20);
@@ -1427,6 +1431,7 @@ struct BitVector
 };
 
 // Scans an interface data value when the interface type indicates that it is a pointer.
+// caller: scanbitvector() 只有这一处
 static void
 scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 {
@@ -1436,11 +1441,16 @@ scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 	if(runtime·precisestack && afterprologue) {
 		if(bits == BitsIface) {
 			tab = *(Itab**)scanp;
-			if(tab->type->size <= sizeof(void*) && (tab->type->kind & KindNoPointers))
+
+			if(tab->type->size <= sizeof(void*) && 
+				(tab->type->kind & KindNoPointers))
 				return;
-		} else { // bits == BitsEface
+		} else { 
+			// 此时 bits == BitsEface
 			type = *(Type**)scanp;
-			if(type->size <= sizeof(void*) && (type->kind & KindNoPointers))
+
+			if(type->size <= sizeof(void*) && 
+				(type->kind & KindNoPointers))
 				return;
 		}
 	}
@@ -1448,6 +1458,14 @@ scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 }
 
 // Starting from scanp, scans words corresponding to set bits.
+// caller: addframeroots() 只有这一处
+// 这个函数是用来扫描栈空间的, 包括参数列表及本地的局部变量数据.
+// 如果参数/局部变量包含指针, 则可能分配在堆区, 否则会分配在栈区本身.
+// 所以这里就需要判断参数/局部变量中的数据是否包含指针.
+// 而这些变量的元信息都存放在 bitmap 区域, 
+// 这里扫描的应该是 bitmap 区域, scanp 表示目标地址.
+// 每 BitsPerPointer 个 bits 就可以表示一个该地址是否为一个指针, 
+// 这决定了是否继续扫描其指向的地址.
 static void
 scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 {
@@ -1456,21 +1474,30 @@ scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 	int32 i, remptrs;
 
 	wordp = bv->data;
+	// remptrs(bv->n) 是 wordp(bv->data) 中包含数据的 size 大小,
+	// 可以说是 bv->data 尾部地址减去首部地址的差
 	for(remptrs = bv->n; remptrs > 0; remptrs -= 32) {
+		// word 是数据区域的地址指针
+		// uintptr 类型, 这里应该是4字节吧...???
+		// 所以 wordp++ 会让其值增加 8 * 4 = 32
+		// 应该也正是for循环条件中的, remptrs -= 32 步进长度的原因.
 		word = *wordp++;
 		if(remptrs < 32)
 			i = remptrs;
 		else
 			i = 32;
-		i /= BitsPerPointer;
+		i /= BitsPerPointer; // BitsPerPointer 声明为2
+
 		for(; i > 0; i--) {
-			bits = word & 3;
+			bits = word & 3; // 3 -> 0000 0000 0000 0011
 			if(bits != BitsNoPointer && *(void**)scanp != nil)
 				if(bits == BitsPointer)
 					addroot((Obj){scanp, PtrSize, 0});
 				else
 					scaninterfacedata(bits, scanp, afterprologue);
+			// word 右移, 继续以后两位与 3 做与操作.
 			word >>= BitsPerPointer;
+			// scanp 增加一个指针的大小
 			scanp += PtrSize;
 		}
 	}
@@ -1478,6 +1505,7 @@ scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 
 // Scan a stack frame: local variables and function arguments/results.
 // 扫描栈帧, 包括局部变量和函数参数及返回值.
+// caller: addstackroots() 只有这一处
 static void
 addframeroots(Stkframe *frame, void*)
 {
@@ -1490,7 +1518,7 @@ addframeroots(Stkframe *frame, void*)
 
 	// Scan local variables if stack frame has been allocated.
 	// Use pointer information if known.
-	// 扫描本地局部变量(如果此栈帧已分配空间)
+	// 这部分是扫描本地局部变量(如果此栈帧已分配空间)
 	afterprologue = (frame->varp > (byte*)frame->sp);
 	if(afterprologue) {
 		locals = runtime·funcdata(f, FUNCDATA_GCLocals);
@@ -1511,10 +1539,13 @@ addframeroots(Stkframe *frame, void*)
 
 	// Scan arguments.
 	// Use pointer information if known.
+	// 这里是扫描传入参数.
 	args = runtime·funcdata(f, FUNCDATA_GCArgs);
 	if(args != nil && args->n > 0) 
+		// 如果参数列表不为空
 		scanbitvector(frame->argp, args, false);
 	else 
+		// 如果参数列表为空
 		addroot((Obj){frame->argp, frame->arglen, 0});
 }
 
@@ -1920,7 +1951,7 @@ runtime·memorydump(void)
 void
 runtime·gchelper(void)
 {
-	// 调用这个做一些准备工作, 比如验证 m->helpgc 的合法性, 判断当前g是否为g0
+	// 调用这个做一些准备工作, 比如验证 m->helpgc 的合法性, 判断当前g是否为g0等
 	gchelperstart();
 
 	// parallel mark for over gc roots
@@ -1946,7 +1977,7 @@ runtime·gchelper(void)
 
 #define GcpercentUnknown (-2)
 
-// Initialized from $GOGC.  GOGC=off means no gc.
+// Initialized from $GOGC. GOGC=off means no gc.
 // 从环境变量GOGC进行初始化. GOGC=off表示不进行gc
 // Next gc is after we've allocated an extra amount of
 // memory proportional to the amount already in use.

@@ -482,6 +482,9 @@ static FuncVal forcegchelperv = {(void(*)(void))forcegchelper};
 // Release (part of) unused memory to OS.
 // Goroutine created at startup.
 // Loop forever.
+// 定期释放未使用的内存给操作系统, 无限循环.
+// caller: runtime·main() 
+// 在进程启动初期就创建一个线程独立完成这项工作.
 void
 runtime·MHeap_Scavenger(void)
 {
@@ -595,7 +598,8 @@ void
 runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 {
 	if(span->next != nil || span->prev != nil) {
-		runtime·printf("failed MSpanList_Insert %p %p %p\n", span, span->next, span->prev);
+		runtime·printf("failed MSpanList_Insert %p %p %p\n", 
+			span, span->next, span->prev);
 		runtime·throw("MSpanList_Insert");
 	}
 	span->next = list->next;
