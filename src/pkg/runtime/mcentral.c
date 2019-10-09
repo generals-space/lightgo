@@ -199,6 +199,7 @@ runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *sizep, int32 *npagesp, int3
 
 // Fetch a new span from the heap and
 // carve into objects for the free list.
+// 从 heap 处取一个 span 块, 并切分成对象块, 并组成空闲链表备用.
 static bool
 MCentral_Grow(MCentral *c)
 {

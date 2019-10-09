@@ -23,8 +23,10 @@ enum {
 	IgnorePreciseGC = 0,
 
 	// Four bits per word (see #defines below).
-	// 这里的word指一个指针的大小, 8 bytes, 也即64 bits.
-	// bitmap:heap == 1:16
+	// word 是一种逻辑单位, 与 pointer 同级, 占用空间 4 bits.
+	// 那我觉得这里其实是把每 4 bits 叫作一个 word.
+	// bitmap 中只要一个word(4 bits)就可以描述一个 arena 中的pointer(8 bits * 8).
+	// bitmap:arena == 1:16
 	// wordsPerBitmapWord = 16
 	wordsPerBitmapWord = sizeof(void*)*8/4,
 	// bitShift = 16
@@ -54,11 +56,12 @@ enum {
 // #defines because enum might not be able to hold the values.
 //
 // Each word in the bitmap describes wordsPerBitmapWord words of heap memory. 
-// bitmap中的每个字(word)都描述了堆内存中wordsPerBitmapWord(即16)个字.
+// bitmap中的每个字(word)都描述了arena中wordsPerBitmapWord(即16)个字.
+// (我觉得这里word只是一个大小的单位, 并没有具体意义)
 // There are 4 bitmap bits dedicated to each heap word,
 // so on a 64-bit system there is one bitmap word per 16 heap words.
-// 堆中的每个字, 都可以用bitmap区域中4 bit唯一指定, 
-// 所以在64位系统中, bitmap区域中一个字可以指定16个堆中的字.
+// arena区域中的每个指针, 都可以用bitmap区域中4 bit来描述, 
+// 所以在64位系统中, bitmap区域中一个字可以指定16个堆中的字(大小4 bits).
 // The bits in the word are packed together by type first, then by heap location, 
 // so each 64-bit bitmap word consists of, from top to bottom,
 // the 16 bitSpecial bits for the corresponding heap words, then the 16 bitMarked bits,
@@ -75,11 +78,12 @@ enum {
 // (On a 32-bit system, the only difference is that the divisor is 8.)
 // bitmap区域从mheap.arena_start开始, 并且向后扩展.
 // 在64位系统中, arena区域的第off个字, 可以通过mheap.arena_start前
-// (就是bitmap区域了)的第(off/16+1)个字查询到.
+// (就是bitmap区域了)的第(off/16+1)个字查询到(没毛病).
 // To pull out the bits corresponding to a given pointer p, we use:
-//
-// p为某个对象在arena区域所占空间的起始地址, off的单位应该是指针数量.
-// b则表示bitmap中相应字的位置(应该是以字为单位, 毕竟其实也是指针大小)
+// 为了找到 bitmap 中描述指定指针 p 的相关 bit 位, 通常进行如下计算:
+// 
+// p为某个对象在arena区域所占空间的起始地址, off是偏移量(两个地址间的差, 并不是字节, 而是精确到bit了).
+// b则表示bitmap中相应字的位置...??? 好像不管怎么算, 单位都不太对啊
 //	off = p - (uintptr*)mheap.arena_start;  // word offset
 //	b = (uintptr*)mheap.arena_start - off/wordsPerBitmapWord - 1;
 //	shift = off % wordsPerBitmapWord
@@ -1979,12 +1983,20 @@ runtime·gchelper(void)
 
 // Initialized from $GOGC. GOGC=off means no gc.
 // 从环境变量GOGC进行初始化. GOGC=off表示不进行gc
+// 
 // Next gc is after we've allocated an extra amount of
 // memory proportional to the amount already in use.
 // If gcpercent=100 and we're using 4M, we'll gc again when we get to 8M. 
 // This keeps the gc cost in linear proportion to the allocation cost. 
 // Adjusting gcpercent just changes the linear constant 
 // (and also the amount of extra memory used).
+// 
+// gcpercent表示, 下一次gc时, 需要等到额外分配的内存大小, 占当前已分配空间的比例.
+// 比如, 如果 gcpercent == 100, 此次gc时内存已经分配了 4M, 
+// 那么下次gc触发条件是内存分配达到 8M, 即额外增长 100% 的时候, 再触发.
+// 这样可以保证gc的开销与内存分配开销成线性比例.
+// 调整此参数只会影响线性常数(当然也包括新增内存的空间大小)
+// 
 static int32 gcpercent = GcpercentUnknown;
 
 // caller: updatememstats(), gc()
@@ -2103,6 +2115,9 @@ struct gc_args
 static void gc(struct gc_args *args);
 static void mgc(G *gp);
 
+
+// caller: runtime·gc(), runtime∕debug·setGCPercent()
+// 获取 GOGC 环境变量, 用于主调函数设置 gcpercent 全局变量.
 static int32
 readgogc(void)
 {
@@ -2152,7 +2167,7 @@ runtime·gc(int32 force)
 	// 首次调用(gcpercent初始值就是GcpercentUnknown)
 	if(gcpercent == GcpercentUnknown) {
 		runtime·lock(&runtime·mheap);
-		// 第一次执行, 调用readgogc从环境变量中取GOGC设置. 
+		// 第一次执行, 调用 readgogc() 从环境变量中取GOGC设置. 
 		// GOGC为off时得到-1, 其他的默认情况下返回100
 		if(gcpercent == GcpercentUnknown) gcpercent = readgogc();
 
@@ -2440,11 +2455,13 @@ void
 runtime∕debug·setGCPercent(intgo in, intgo out)
 {
 	runtime·lock(&runtime·mheap);
-	if(gcpercent == GcpercentUnknown)
-		gcpercent = readgogc();
+
+	if(gcpercent == GcpercentUnknown) gcpercent = readgogc();
+	
 	out = gcpercent;
-	if(in < 0)
-		in = -1;
+
+	if(in < 0) in = -1;
+	
 	gcpercent = in;
 	runtime·unlock(&runtime·mheap);
 	FLUSH(&out);
@@ -2537,7 +2554,8 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 
 	if(0) runtime·printf("markallocated %p+%p\n", v, n);
 	// 如果v+n的区域超出了arena部分, 则抛出异常.
-	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
+	if((byte*)v+n > (byte*)runtime·mheap.arena_used || 
+		(byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markallocated: bad pointer");
 	
 	// 起始地址距arena开始处的偏移量, 单位是字(即指针大小)
@@ -2577,7 +2595,8 @@ runtime·markfreed(void *v, uintptr n)
 
 	if(0) runtime·printf("markfreed %p+%p\n", v, n);
 
-	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
+	if((byte*)v+n > (byte*)runtime·mheap.arena_used || 
+		(byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markfreed: bad pointer");
 
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;  // word offset
@@ -2624,24 +2643,26 @@ runtime·checkfreed(void *v, uintptr n)
 
 // mark the span of memory at v as having n blocks of the given size.
 // if leftover is true, there is left over space at the end of the span.
-// 标记在内存span的地址v处, 分配了n个大小为size的块
+// 标记在内存span的地址v处, 分配了n个大小为size的块.
+// caller: malloc.goc -> runtime·mallocgc(), mcentral.c -> MCentral_Grow()
 void
 runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 {
 	uintptr *b, off, shift;
 	byte *p;
 
-	if((byte*)v+size*n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
+	if((byte*)v+size*n > (byte*)runtime·mheap.arena_used || 
+		(byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markspan: bad pointer");
 
 	p = v;
-	if(leftover)	// mark a boundary just past end of last block too
-		n++;
+	// mark a boundary just past end of last block too
+	if(leftover) n++;
+
 	for(; n-- > 0; p += size) {
-		// Okay to use non-atomic ops here, because we control
-		// the entire span, and each bitmap word has bits for only
-		// one span, so no other goroutines are changing these
-		// bitmap words.
+		// Okay to use non-atomic ops here, because we control the entire span, 
+		// and each bitmap word has bits for only one span, 
+		// so no other goroutines are changing these bitmap words.
 		off = (uintptr*)p - (uintptr*)runtime·mheap.arena_start;  // word offset
 		b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
 		shift = off % wordsPerBitmapWord;
@@ -2657,7 +2678,8 @@ runtime·unmarkspan(void *v, uintptr n)
 {
 	uintptr *p, *b, off;
 
-	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
+	if((byte*)v+n > (byte*)runtime·mheap.arena_used || 
+		(byte*)v < runtime·mheap.arena_start)
 		runtime·throw("markspan: bad pointer");
 
 	p = v;

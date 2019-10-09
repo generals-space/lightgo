@@ -34,6 +34,9 @@ extern volatile intgo runtime·MemProfileRate;
 // 大对象(大于32k)直接从堆中分配.
 // 如果分配的块之后需要调用runtime·free()手动释放(即不由GC操作来回收空间), 
 // 则typ参数必须指定为0, 而此时flag一般为FlagNoInvokeGC.
+// 
+// 此函数的调用者很多, 创建P, G对象, chan, string对象, 还有栈帧对象等, 
+// 都可以调用此函数创建.
 void*
 runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 {
@@ -105,8 +108,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		v = (void*)(s->start << PageShift);
 
 		// setup for mark sweep
-		// 准备好之后的标记清除(应该是记录下分配空间的位置, 方便GC时的索引)
-		// 在mgc0.c文件中定义
+		// 为之后的标记清除做准备(应该是记录下分配空间的位置, 方便GC时的索引)
 		runtime·markspan(v, 0, 0, true);
 	}
 	// 如果flag不包括FlagNoGC标识位, 说明该空间需要被GC, 所以将其标记.
