@@ -411,6 +411,8 @@ struct	M
 	uint32	waitsemacount;
 	uint32	waitsemalock;
 	GCStats	gcstats;
+	// racecall 总是成对出现(就是先赋值为true, 执行一些代码后, 再改回false)
+	// 都在 race.c 文件中赋值.
 	bool	racecall;
 	bool	needextram;
 	void	(*waitunlockf)(Lock*);

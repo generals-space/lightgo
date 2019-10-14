@@ -279,17 +279,18 @@ runtime·racereadrangepc(void *addr, uintptr sz, void *callpc, void *pc)
 	rangeaccess(addr, sz, (uintptr)callpc, (uintptr)pc, false);
 }
 
+// caller: race.c->runtime·RaceAcquire()
 void
 runtime·raceacquire(void *addr)
 {
 	runtime·raceacquireg(g, addr);
 }
 
+// caller: race.c->runtime·raceacquire(), chan.c->racesync()
 void
 runtime·raceacquireg(G *gp, void *addr)
 {
-	if(g->raceignore)
-		return;
+	if(g->raceignore) return;
 	m->racecall = true;
 	m->locks++;
 	runtime∕race·Acquire(gp->racectx, addr);
@@ -306,8 +307,7 @@ runtime·racerelease(void *addr)
 void
 runtime·racereleaseg(G *gp, void *addr)
 {
-	if(g->raceignore)
-		return;
+	if(g->raceignore) return;
 	m->racecall = true;
 	m->locks++;
 	runtime∕race·Release(gp->racectx, addr);
