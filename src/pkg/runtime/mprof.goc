@@ -296,6 +296,7 @@ runtime·SetBlockProfileRate(intgo rate)
 	runtime·atomicstore64((uint64*)&runtime·blockprofilerate, r);
 }
 
+// caller: sema.goc -> runtime·semacquire()和runtime_Syncsemacquire()
 void
 runtime·blockevent(int64 cycles, int32 skip)
 {
@@ -304,10 +305,10 @@ runtime·blockevent(int64 cycles, int32 skip)
 	uintptr stk[32];
 	Bucket *b;
 
-	if(cycles <= 0)
-		return;
+	if(cycles <= 0) return;
 	rate = runtime·atomicload64((uint64*)&runtime·blockprofilerate);
-	if(rate <= 0 || (rate > cycles && runtime·fastrand1()%rate > cycles))
+	if(rate <= 0 || (rate > cycles && 
+		runtime·fastrand1() % rate > cycles))
 		return;
 
 	nstk = runtime·callers(skip, stk, 32);

@@ -63,9 +63,9 @@ unlocked:
 				return;
 			i = 0;
 		}
-		if(i<spin)
+		if(i < spin)
 			runtime·procyield(ACTIVE_SPIN_CNT);
-		else if(i<spin+PASSIVE_SPIN)
+		else if(i < spin + PASSIVE_SPIN)
 			runtime·osyield();
 		else {
 			// Someone else has it.
@@ -112,10 +112,9 @@ runtime·unlock(Lock *l)
 		}
 	}
 
-	if(--m->locks < 0)
-		runtime·throw("runtime·unlock: lock count");
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
+	if(--m->locks < 0) runtime·throw("runtime·unlock: lock count");
+	// restore the preemption request in case we've cleared it in newstack
+	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 }
 
 // One-time notifications.

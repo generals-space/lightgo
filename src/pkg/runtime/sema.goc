@@ -6,14 +6,21 @@
 // Intended use is provide a sleep and wakeup
 // primitive that can be used in the contended case
 // of other synchronization primitives.
+// 信号量在golang中的实现.
+// (其实是根据不同平台, 兼容了futex/semaphore两种底层机制, 实现的PV操作.)
+// 目的是提供休眠和唤醒原语, 可以在其他同步原语争用的情况下使用(其他同步原语是啥意思???).
+// 
 // Thus it targets the same goal as Linux's futex,
 // but it has much simpler semantics.
-//
 // That is, don't think of these as semaphores.
 // Think of them as a way to implement sleep and wakeup
 // such that every sleep is paired with a single wakeup,
 // even if, due to races, the wakeup happens before the sleep.
-//
+// 所以ta的目标与linux下的 futex 基本一致, 不过语义更简单.
+// 那就是, 别把这些当作信号量, 什么P啊V啊都不重要,
+// 只把ta们当成一种休眠和唤醒的方式就好了.
+// 每个休眠都对应一个简单的唤醒, 
+// 即使由于 race 竞态的原因, 唤醒操作可能发生在休眠之前.
 // See Mullender and Cox, ``Semaphores in Plan 9,''
 // http://swtch.com/semaphore.pdf
 
@@ -21,6 +28,14 @@ package sync
 #include "runtime.h"
 #include "arch_GOARCH.h"
 #include "../../cmd/ld/textflag.h"
+
+/*
+写在前面
+
+SemaRoot 结构是一个双向链表, 本文件中将其用作双向链表.
+进程启动时会自动创建 semtable 数组, 大小为 SEMTABLESZ(251),
+
+ */
 
 typedef struct SemaWaiter SemaWaiter;
 struct SemaWaiter
@@ -44,72 +59,90 @@ struct SemaRoot
 };
 
 // Prime to not correlate with any user patterns.
+// 确保与任何用户模式都不相关.
 #define SEMTABLESZ 251
 
 struct semtable
 {
 	SemaRoot;
+	// 这是用于字节对齐吧?
 	uint8 pad[CacheLineSize-sizeof(SemaRoot)];
 };
 #pragma dataflag NOPTR /* mark semtable as 'no pointers', hiding from garbage collector */
 static struct semtable semtable[SEMTABLESZ];
 
+// 从 semtable 映射表中获取 addr 对应的 semroot 队列.
+// ...???这个addr到数组索引的映射算法很奇怪啊
 static SemaRoot*
 semroot(uint32 *addr)
 {
 	return &semtable[((uintptr)addr >> 3) % SEMTABLESZ];
 }
 
+// 将目标 SemaWaiter 对象s放到 SemaRoot 对象root所指队列的队列尾.
 static void
 semqueue(SemaRoot *root, uint32 volatile *addr, SemaWaiter *s)
 {
 	s->g = g;
 	s->addr = addr;
-	s->next = nil;
+	s->next = nil; // 作为队列尾, 后面没有元素.
 	s->prev = root->tail;
+
 	if(root->tail)
 		root->tail->next = s;
 	else
+		// root->tail 为空, 说明队列为空, 直接把队列头指向s
 		root->head = s;
 	root->tail = s;
 }
 
+// 将 s 对象从 root 所指队列中移出.
 static void
 semdequeue(SemaRoot *root, SemaWaiter *s)
 {
 	if(s->next)
 		s->next->prev = s->prev;
 	else
+		// 说明s对象是队列尾
 		root->tail = s->prev;
+
 	if(s->prev)
 		s->prev->next = s->next;
 	else
+		// 说明s对象是队列头
 		root->head = s->next;
+
 	s->prev = nil;
 	s->next = nil;
 }
 
+// 判断目标地址 addr 是否可以...???
 static int32
 cansemacquire(uint32 *addr)
 {
 	uint32 v;
-
+	// runtime·atomicload() 在 runtime/atomic_amd64.c 中定义
 	while((v = runtime·atomicload(addr)) > 0)
-		if(runtime·cas(addr, v, v-1))
-			return 1;
+		// cas 函数在 runtime/asm_amd64.s
+		if(runtime·cas(addr, v, v-1)) return 1;
 	return 0;
 }
 
+// caller: mutex.go->Lock() 中 runtime_Semacquire(), 
+// 实际调用当前源文件的 runtime_Semacquire() 函数, 
+// 最终调用的还是这里.
 void
 runtime·semacquire(uint32 volatile *addr, bool profile)
 {
-	SemaWaiter s;	// Needs to be allocated on stack, otherwise garbage collector could deallocate it
+	// Needs to be allocated on stack, otherwise 
+	// garbage collector could deallocate it
+	// sema waiter 需要在栈上定义, 否则可能被gc回收.
+	SemaWaiter s;
 	SemaRoot *root;
 	int64 t0;
-	
+
 	// Easy case.
-	if(cansemacquire(addr))
-		return;
+	if(cansemacquire(addr)) return;
 
 	// Harder case:
 	//	increment waiter count
@@ -117,18 +150,29 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 	//	enqueue itself as a waiter
 	//	sleep
 	//	(waiter descriptor is dequeued by signaler)
+	// 获取 addr 对应的 SemRoot 成员.
 	root = semroot(addr);
 	t0 = 0;
 	s.releasetime = 0;
+	// 这是开启profile记录的开关吧
 	if(profile && runtime·blockprofilerate > 0) {
 		t0 = runtime·cputicks();
 		s.releasetime = -1;
 	}
+	// 
 	for(;;) {
+		// 对 root 的修改需要加锁, 作为 mutex 的底层实现, 
+		// 实际借助了OS层面的 semaphore/futex 机制.
+		// runtime·lock() 在 lock_futex.c/lock_sema.c 文件中定义...
+		// 不过 lock() 方法接受的应该是 *Lock 类型啊.
 		runtime·lock(root);
 		// Add ourselves to nwait to disable "easy case" in semrelease.
+		// 将 root->nwait 加1, 这会导致在 semrelease() 无法满足 easy case.
 		runtime·xadd(&root->nwait, 1);
 		// Check cansemacquire to avoid missed wakeup.
+		// 再一次调用 cansemacquire(), 防止在上一次 cansemacquire() 后可能
+		// 有其他协程已经调用 semaelease() 执行了释放操作, 那么作为第一个无竞争
+		// 加锁的协程, 之后的操作其实是没有必要的.
 		if(cansemacquire(addr)) {
 			runtime·xadd(&root->nwait, -1);
 			runtime·unlock(root);
@@ -136,11 +180,16 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 		}
 		// Any semrelease after the cansemacquire knows we're waiting
 		// (we set nwait above), so go to sleep.
+		// 将s对象添加到 root 队列中.
 		semqueue(root, addr, &s);
+		// park() 操作会休眠当前尝试获取 sema 的协程(就是主调者所在的g对象),
+		// 休眠后会调用 runtime·unlock(root), 
+		// 看了 park() 的源码后我觉得, 执行完下一句后, 当前协程就会开始休眠,
+		// 直到被唤醒, 才能继续执行, 这也是 mutex 实际阻塞的地方吧...???
 		runtime·park(runtime·unlock, root, "semacquire");
 		if(cansemacquire(addr)) {
-			if(t0)
-				runtime·blockevent(s.releasetime - t0, 3);
+			// 当被唤醒后, 记录阻塞的时间, 用于prof
+			if(t0) runtime·blockevent(s.releasetime - t0, 3);
 			return;
 		}
 	}
@@ -158,17 +207,25 @@ runtime·semrelease(uint32 volatile *addr)
 	// Easy case: no waiters?
 	// This check must happen after the xadd, to avoid a missed wakeup
 	// (see loop in semacquire).
-	if(runtime·atomicload(&root->nwait) == 0)
-		return;
+	// 简单情况: 没有休眠等待的协程.
+	// 为什么要在 xadd 后再检查???
+	if(runtime·atomicload(&root->nwait) == 0) return;
 
 	// Harder case: search for a waiter and wake it.
+	// 复杂情况: 先再次检查 nwait 的值, 如果仍不为0,
+	// 就按顺序唤醒一个休眠的 goroutine.
 	runtime·lock(root);
 	if(runtime·atomicload(&root->nwait) == 0) {
 		// The count is already consumed by another goroutine,
 		// so no need to wake up another goroutine.
+		// 刚才 load 时 nwait 还不是 0呢, 现在又突然变成了0, 
+		// 说明有另一个线程被唤醒了, 把 nwait 值减了1.
+		// 我call, 这啥意思? 随便一个协程都能release吗? 还有这种操作?
+		// 这一段代码是不是用于其他场景的? rwmutex啥的?
 		runtime·unlock(root);
 		return;
 	}
+	// 从双向队列头部取出一个 waiter, 后面会唤醒其对应的 goroutine
 	for(s = root->head; s; s = s->next) {
 		if(s->addr == addr) {
 			runtime·xadd(&root->nwait, -1);
@@ -178,8 +235,11 @@ runtime·semrelease(uint32 volatile *addr)
 	}
 	runtime·unlock(root);
 	if(s) {
-		if(s->releasetime)
-			s->releasetime = runtime·cputicks();
+		// releasetime 在 runtime·semacquire()函数中, 
+		// 在开启 profile 记录时会被赋值为 -1
+		if(s->releasetime) s->releasetime = runtime·cputicks();
+		// 唤醒s所表示的 sema 所属的 goroutine 协程对象
+		// 其实只是把其状态修改为 grunable, 重新参与调度.
 		runtime·ready(s->g);
 	}
 }

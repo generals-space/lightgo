@@ -1613,6 +1613,12 @@ top:
 // and unlocks the lock.
 // The goroutine can be made runnable again 
 // by calling runtime·ready(gp).
+// 将当前g对象状态修改为 waiting, 并解绑m和g, 让该g开始休眠.
+// 第一个参数 unlockf 是一个函数, 用于解锁,
+// 第二个参数 lock 则是 unlockf 的参数, 表示当前协程是在哪个锁对象上休眠的,
+// 以便之后再在 lock 对象上将其唤醒.
+// 比如在 sema.goc -> runtime·semacquire()
+// 中是 runtime·unlock, lock 为 root, reason 为
 void
 runtime·park(void(*unlockf)(Lock*), Lock *lock, int8 *reason)
 {
@@ -1623,20 +1629,23 @@ runtime·park(void(*unlockf)(Lock*), Lock *lock, int8 *reason)
 }
 
 // runtime·park continuation on g0.
+// 在g0上继续执行 park 操作, gp 是上面提到的当前g对象.
 static void
 park0(G *gp)
 {
 	gp->status = Gwaiting;
 	gp->m = nil;
 	m->curg = nil;
+	// 这是让该m仍然能正常工作吧, 不受g对象的影响.
 	if(m->waitunlockf) {
 		m->waitunlockf(m->waitlock);
 		m->waitunlockf = nil;
 		m->waitlock = nil;
 	}
+	// 休眠了gp对象, 但m不能闲着, 重新开始调度.
 	if(m->lockedg) {
 		stoplockedm();
-		execute(gp);  // Never returns.
+		execute(gp); // Never returns.
 	}
 	schedule();
 }

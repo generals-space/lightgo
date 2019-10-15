@@ -5,6 +5,7 @@
 enum {
 	thechar = '6',
 	BigEndian = 0,
+	// CPU 高速缓存线路
 	CacheLineSize = 64,
 	RuntimeGogoBytes = 64,
 	// PCQuantum 应该是每个 pc 变量占用空间的大小吧
