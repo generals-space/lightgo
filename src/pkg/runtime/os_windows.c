@@ -189,12 +189,19 @@ int32
 runtime·semasleep(int64 ns)
 {
 	// store ms in ns to save stack space
-	if(ns < 0) ns = INFINITE;
+	if(ns < 0) 
+		ns = INFINITE;
 	else {
 		ns = runtime·timediv(ns, 1000000, nil);
 		if(ns == 0) ns = 1;
 	}
+	// WaitForSingleObject 就是win平台下的 semaphore acquire 操作.
+	// stdcall 的第2个参数貌似有特殊含义, WaitForXXX 本身只接受两个参数,
+	// waitsema 表示目标~~信号量~~对象, ns表示等待的时间, 用于实现超时机制.
+	// 注意: waitsema 是 event 对象, 对应的唤醒操作也是 SetEvent().
+	// 见下面的 runtime·semacreate()
 	if(runtime·stdcall(runtime·WaitForSingleObject, 2, m->waitsema, (uintptr)ns) != 0)
+		// stdcall 结果不为0则表示超时.
 		return -1;  // timeout
 	return 0;
 }
@@ -202,12 +209,15 @@ runtime·semasleep(int64 ns)
 void
 runtime·semawakeup(M *mp)
 {
+	// 注意!!! 唤醒操作用的是 SetEvent, 是因为 waitsema 本身是 Event 对象.
+	// 见下面的 runtime·semacreate().
 	runtime·stdcall(runtime·SetEvent, 1, mp->waitsema);
 }
 
 uintptr
 runtime·semacreate(void)
 {
+	// 注意!!! 这里创建的其实是 event 对象, 而不是 semaphore 对象
 	return (uintptr)runtime·stdcall(runtime·CreateEvent, 4, (uintptr)0, (uintptr)0, (uintptr)0, (uintptr)0);
 }
 

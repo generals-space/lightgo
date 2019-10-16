@@ -34,7 +34,12 @@ package sync
 
 SemaRoot 结构是一个双向链表, 本文件中将其用作双向链表.
 进程启动时会自动创建 semtable 数组, 大小为 SEMTABLESZ(251),
+SemaRoot 的成员是 SemaWaiter, 存储相关的g对象及队列中的前后成员信息.
 
+semtable 是一个数组, 成员也是 semtable 结构体, 
+其实可以看作 semtable 的成员为 SemaRoot,
+在使用时会按照 semroot() 函数中的方式对 addr 和 semtable 数组索引做一个映射,
+类似于map的功能.
  */
 
 typedef struct SemaWaiter SemaWaiter;
@@ -159,7 +164,6 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 		t0 = runtime·cputicks();
 		s.releasetime = -1;
 	}
-	// 
 	for(;;) {
 		// 对 root 的修改需要加锁, 作为 mutex 的底层实现, 
 		// 实际借助了OS层面的 semaphore/futex 机制.

@@ -9,7 +9,7 @@
 #include "../../cmd/ld/textflag.h"
 
 // This implementation depends on OS-specific implementations of
-//
+// 本文件中的函数实现依赖于特定平台的 semaphore 休眠与唤醒的机制, mac/windows实现了这种机制.
 //	uintptr runtime·semacreate(void)
 //		Create a semaphore, which will be assigned to m->waitsema.
 //		The zero value is treated as absence of any semaphore,
@@ -39,50 +39,77 @@ runtime·lock(Lock *l)
 	uintptr v;
 	uint32 i, spin;
 
-	if(m->locks++ < 0)
-		runtime·throw("runtime·lock: lock count");
+	if(m->locks++ < 0) runtime·throw("runtime·lock: lock count");
 
 	// Speculative grab for lock.
-	if(runtime·casp((void**)&l->key, nil, (void*)LOCKED))
-		return;
+	// 尝试争用锁, 看这情况像是为第一个调用 Lock() 的协程准备的,
+	// 此时没有任何人和ta争抢.
+	if(runtime·casp((void**)&l->key, nil, (void*)LOCKED)) return;
 
-	if(m->waitsema == 0)
-		m->waitsema = runtime·semacreate();
+	// lock_sema.c 中的 lock/unlock 机制基于 semaphore, 所以判断并执行初始化.
+	if(m->waitsema == 0) m->waitsema = runtime·semacreate();
 
 	// On uniprocessor's, no point spinning.
 	// On multiprocessors, spin for ACTIVE_SPIN attempts.
 	spin = 0;
-	if(runtime·ncpu > 1)
-		spin = ACTIVE_SPIN;
+	if(runtime·ncpu > 1) spin = ACTIVE_SPIN;
 
+	// 这里的循环和 lock_futex.c 中的不太一样, 可以对比分析.
 	for(i=0;; i++) {
 		v = (uintptr)runtime·atomicloadp((void**)&l->key);
-		if((v&LOCKED) == 0) {
+		// 如果 l->key 没有设置 locked 标识位, 则进入此if.
+		// 由于关于 spin 条件的前两个if除了 procyield/osyield 没有其他任何操作,
+		// 只有第3个else块可能会修改 l->key 的值, 
+		// 由于一旦进入此if块, 就会重置变量i
+		if((v & LOCKED) == 0) {
 unlocked:
-			if(runtime·casp((void**)&l->key, (void*)v, (void*)(v|LOCKED)))
+			// 加锁成功并返回, 有两种情况能够正常 return.
+			// 1. 第一个调用 Lock() 并顺利获得 mutex, 不需要运行到下面的 semasleep();
+			// 2. 运行到 semasleep() 休眠后被唤醒, 重置i=0重新开始for循环, 
+			// 		由于被唤醒时 lock 标识位一定为0, 所以也有可能进入到这里, 然后从
+			//      Lock() 调用中返回.
+			if(runtime·casp((void**)&l->key, (void*)v, (void*)(v | LOCKED)))
 				return;
 			i = 0;
 		}
+		// 运行到这里, 说明v已经被加上了 locked 标记, l对象已经被其他线程占用.
+		// 没办法, 当前协程必须等待, 等待的过程分为以下几个阶段.
+		// 在这个大循环里, 可以认为, 
+		// 第[0, ACTIVE_SPIN)次区间内进行 procyield() 操作, cpu空转;
+		// 第[ACTIVE_SPIN, ACTIVE_SPIN + PASSIVE_SPIN)次区间内进行 osyield() 操作, 
+		// 		在os层的让出cpu使用权;
+		// 第[ACTIVE_SPIN + PASSIVE_SPIN, )次区间内
 		if(i < spin)
 			runtime·procyield(ACTIVE_SPIN_CNT);
 		else if(i < spin + PASSIVE_SPIN)
 			runtime·osyield();
 		else {
 			// Someone else has it.
-			// l->waitm points to a linked list of M's waiting
-			// for this lock, chained through m->nextwaitm.
+			// l->waitm points to a linked list of M's waiting for this lock, 
+			// chained through m->nextwaitm.
 			// Queue this M.
+			// 当前锁对象l已经被其他协程占用, 自旋了这么多次, 仍然没等到释放.
+			// 那么将当前m添加到
+			// l->key 可以被解释为 waitm, 指向一个 M* 类型的链表, 表示在当前锁对象l上等待的队列, 
+			// 各个等待着的 M* 成员间, 通过 nextwaitm 进行连接.
 			for(;;) {
-				m->nextwaitm = (void*)(v&~LOCKED);
-				if(runtime·casp((void**)&l->key, (void*)v, (void*)((uintptr)m|LOCKED)))
+				m->nextwaitm = (void*)(v &~ LOCKED); // 移除v的 locked 标识位.
+				// 注意这里对目标 l->key 的取值, 把m本身的地址也算上了.
+				if(runtime·casp((void**)&l->key, (void*)v, (void*)((uintptr)m | LOCKED)))
 					break;
 				v = (uintptr)runtime·atomicloadp((void**)&l->key);
-				if((v&LOCKED) == 0)
-					goto unlocked;
+				// 运行到这里, 说明抢占失败.
+				// 看看这里的判断条件与 unlocked 标签前的 if 条件相同.
+				// 注意, 这样跳回去, 会将变量i重置为0.
+				if((v & LOCKED) == 0) goto unlocked;
 			}
-			if(v&LOCKED) {
-				// Queued.  Wait.
+			// 经过上面的for循环, 这里的if条件几乎一定会成立.
+			if(v & LOCKED) {
+				// Queued. Wait.
+				// 休眠, 被唤醒后继续执行. 依赖win平台的信号量实现.
 				runtime·semasleep(-1);
+				// i被重置后进入下一次循环, 被唤醒时 l->key 应该是没有锁的,
+				// 那么在新的循环中就有可能 return.
 				i = 0;
 			}
 		}
@@ -95,23 +122,44 @@ runtime·unlock(Lock *l)
 	uintptr v;
 	M *mp;
 
+	// 这个无限循环, 不成功就不停的做法, 感觉比 lock_futex.c 中的实现要靠谱很多啊
 	for(;;) {
 		v = (uintptr)runtime·atomicloadp((void**)&l->key);
+		// ~~这个事先判断原来的值是否为 locked 状态, 避免在一个 unlocked 的锁上~~
+		// ~~再执行 unlock() 操作发生的异常, 这个也比 lock_futex.c 的实现靠谱.~~
+		//
+		// 好吧我错了, 下面的 if..else.. 目的根本不是这个.
+		// 等待一个锁的m不只一个, 所以ta们会以链表的形式存储, 通过 m->nextwaitm 属性指向下一个成员.
+		// 该链表的头就是 l->key, 当然需要去除最后一位 locked 的影响, 就可以得到一个m对象的地址.
+		//
+		// ok, 有了上面的铺垫, 我们可以知道 v 的值其实是 m | LOCKED, 
+		// 常规情况下不可能 == LOCKED, 除非这是等待队列中最后一个m.
 		if(v == LOCKED) {
+			// 如果当前没有其他协程在争用此 mutex, 可以把 l->key 设置为 nil
 			if(runtime·casp((void**)&l->key, (void*)LOCKED, nil))
 				break;
 		} else {
 			// Other M's are waiting for the lock.
 			// Dequeue an M.
-			mp = (void*)(v&~LOCKED);
+			// 如果还有其他的协程在争用此 mutex (这些协程此时应该在休眠).
+			// 话说, 为什么是m??? 不应该是g吗?
+			mp = (void*)(v &~ LOCKED); // 移除v的 locked 标识位.
+			// 唤醒 mp, 然后把 mp->nextwaitm 这下一个正在等待的m的地址赋值给 l->key, 
+			// 相当于从队列头取出一个元素.
+			// ~~这个链表就像是栈结构一样, 后进先出...感觉这样很不公平啊~~
+			// 错了, 虽然这些m按照后入先出的顺序调用唤醒函数, 但是在 semawakeup() 函数内部,
+			// 比如win平台的 WaitForXXX/SetEvent 的PV操作, 目标其实是 mp->waitsema,
+			// 而在这个等待队列中, mp->waitsema 的值是同一个.
+			// 且在系统层面, waitsema 的唤醒顺序仍然是先进先出.
 			if(runtime·casp((void**)&l->key, (void*)v, mp->nextwaitm)) {
-				// Dequeued an M.  Wake it.
+				// Dequeued an M. Wake it.
 				runtime·semawakeup(mp);
 				break;
 			}
 		}
 	}
 
+	// 不管是 futex 还是 sema 实现, 下面的操作都是不可省略的.
 	if(--m->locks < 0) runtime·throw("runtime·unlock: lock count");
 	// restore the preemption request in case we've cleared it in newstack
 	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;

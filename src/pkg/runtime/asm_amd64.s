@@ -534,9 +534,17 @@ TEXT runtime·xadd64(SB), NOSPLIT, $0-16
 	ADDQ	CX, AX
 	RET
 
+// 交换两个参数间4 bytes的数据...返回第一个参数的值.
+// 接受两个参数(*uint32, int)
+// 返回值为 true/false(XCHGL 指令的返回值)
+// 
+// 不过按照$0-12, 两个参数就已经占用了12 bytes,
+// 返回值怎么来的???
 TEXT runtime·xchg(SB), NOSPLIT, $0-12
-	MOVQ	8(SP), BX
-	MOVL	16(SP), AX
+	MOVQ	8(SP), BX // 第2个参数, 8 bytes
+	MOVL	16(SP), AX // MOVL 操作数为 4 bytes, 所以这是第一个参数
+	// xxxL 操作数为 4 bytes, 把(AX, offset=0)
+	// 与(BX, offset=0)交换 4 bytes 数据.
 	XCHGL	AX, 0(BX)
 	RET
 
@@ -546,12 +554,22 @@ TEXT runtime·xchg64(SB), NOSPLIT, $0-16
 	XCHGQ	AX, 0(BX)
 	RET
 
+// 让CPU循环 n 次, 什么也不做.
+// 但ta应该接受一个参数 n , 但是$0-0 完全看不出来啊...???
+// caller: 
+// - lock_futex.c/lock_sema.c -> runtime·lock()
+// - mgc0.c -> getfull()
+// - parfor.c -> runtime·parfordo()
 TEXT runtime·procyield(SB),NOSPLIT,$0-0
-	MOVL	8(SP), AX
+	// 将参数1存放到AX寄存器
+	MOVL	8(SP), AX 
+	// 这是一个for循环, 
 again:
 	PAUSE
+	// 每次将AX中的数值减1($1就是常数1)
 	SUBL	$1, AX
-	JNZ	again
+	// jump if not zero 如果AX中的数值不为0, 则继续 again 循环.
+	JNZ	again 
 	RET
 
 TEXT runtime·atomicstorep(SB), NOSPLIT, $0-16

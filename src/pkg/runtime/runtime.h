@@ -370,6 +370,14 @@ struct	M
 	// 所以与0值的比较一般会伴随着对g的 preempt 字段的判断.
 	// 也就是说, 在处于对 locks 加锁的这些操作中时, g是不可以被抢占的.
 	// locks 貌似就是用来检测是否可以设置 preempt 的.
+	//
+	// 上面说的成对是在同一个函数内成对, 还有另一种情况, 
+	// 比如在 runtime·lock()与runtime·unlock()间
+	// (在lock_futex.c/lock_sema.c中都有实现),
+	// lock()操作会将 locks 加1, unlock()会将 locks 减1.
+	// 但与上面相同的是, unlock()中减1后也会判断是否等于0,
+	// 如果是, 则设置 preempt.
+	// 注意: 不可小于0, 会抛出异常.
 	int32	locks;
 	int32	dying;
 	int32	profilehz;
@@ -406,8 +414,14 @@ struct	M
 	uint32	freghi[16];	// D[i] msb and F[i+16]
 	uint32	fflag;		// floating point compare flags
 	uint32	locked;		// tracking for LockOSThread
-	M*	nextwaitm;	// next M waiting for lock
-	uintptr	waitsema;	// semaphore for parking on locks
+	// next M waiting for lock
+	// 下一个正在等待某个锁的m对象.
+	// nextwaitm 只在 lock_sema.c 中有使用.
+	M*	nextwaitm;
+	// semaphore for parking on locks
+	// 用于 mutex 互斥锁的底层实现.
+	// waitsemaXXX 相关的成员只在 mac/win平台下有效, linux下是 futex 机制
+	uintptr	waitsema;
 	uint32	waitsemacount;
 	uint32	waitsemalock;
 	GCStats	gcstats;

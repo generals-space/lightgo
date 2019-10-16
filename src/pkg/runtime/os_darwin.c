@@ -407,13 +407,14 @@ runtime·semasleep(int64 ns)
 		r = runtime·mach_semaphore_timedwait(m->waitsema, secs, nsecs);
 		if(r == KERN_ABORTED || r == KERN_OPERATION_TIMED_OUT)
 			return -1;
-		if(r != 0)
-			macherror(r, "semaphore_wait");
+		
+		if(r != 0) macherror(r, "semaphore_wait");
+		
 		return 0;
 	}
 	while((r = runtime·mach_semaphore_wait(m->waitsema)) != 0) {
-		if(r == KERN_ABORTED)	// interrupted
-			continue;
+		// interrupted
+		if(r == KERN_ABORTED) continue;
 		macherror(r, "semaphore_wait");
 	}
 	return 0;

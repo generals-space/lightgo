@@ -337,7 +337,11 @@ TEXT runtime·settls(SB),NOSPLIT,$32
 	MOVL	$0xf1, 0xf1  // crash
 	RET
 
+// 无参数
 TEXT runtime·osyield(SB),NOSPLIT,$0
+	// 发起 sched_yield() 系统调用(其系统调用号为24)
+	// 作用类似于 sleep(), 但是在休眠期间会让出CPU
+	// 和 python3 的 asyncio.sleep() 很像
 	MOVL	$24, AX
 	SYSCALL
 	RET
