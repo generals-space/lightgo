@@ -341,7 +341,11 @@ TEXT runtime·settls(SB),NOSPLIT,$32
 TEXT runtime·osyield(SB),NOSPLIT,$0
 	// 发起 sched_yield() 系统调用(其系统调用号为24)
 	// 作用类似于 sleep(), 但是在休眠期间会让出CPU
-	// 和 python3 的 asyncio.sleep() 很像
+	// 和 python3 的 asyncio.sleep() 很像.
+	// 但其实也不那么像, 因为ta并不休眠, 调用ta之后, 
+	// 如果其他线程没有需要的, 那ta就立刻返回, 
+	// 继续往下执行自己的代码, 不阻塞.
+	// 可以说是在自己空闲的时候, 给了其他线程运行的机会.
 	MOVL	$24, AX
 	SYSCALL
 	RET
