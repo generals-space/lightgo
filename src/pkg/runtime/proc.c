@@ -524,6 +524,9 @@ runtime·freezetheworld(void)
 	runtime·usleep(1000);
 }
 
+// caller: proc.c -> runtime·gomaxprocsfunc(), 
+//			mgc0.c -> runtime·gc(), 
+//			mgc0.c -> runtime·ReadMemStats()
 void
 runtime·stoptheworld(void)
 {
@@ -2316,6 +2319,7 @@ runtime·Gosched(void)
 
 // Implementation of runtime.GOMAXPROCS.
 // delete when scheduler is even stronger
+// 调整的过程中用到了 STW 操作.
 int32
 runtime·gomaxprocsfunc(int32 n)
 {
@@ -2325,14 +2329,18 @@ runtime·gomaxprocsfunc(int32 n)
 	runtime·lock(&runtime·sched);
 	ret = runtime·gomaxprocs;
 	if(n <= 0 || n == ret) {
+		// 不合法的 proc 值或是和原有值相同时直接返回.
 		runtime·unlock(&runtime·sched);
 		return ret;
 	}
 	runtime·unlock(&runtime·sched);
-
+	// 运行到这里, 准备调整进程中 proc 的数量, 需要执行STW操作.
 	runtime·semacquire(&runtime·worldsema, false);
+	// ...STW就STW吧, 还把 gcing 标记设置为1.
+	// 应该是某些对象需要在 gc 状态进行一些调整吧.
 	m->gcing = 1;
 	runtime·stoptheworld();
+	// newprocs 是 runtime 空间中的全局变量.
 	newprocs = n;
 	m->gcing = 0;
 	runtime·semrelease(&runtime·worldsema);
