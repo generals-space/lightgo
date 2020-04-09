@@ -95,7 +95,11 @@ struct Hmap
 {
 	// Note: the format of the Hmap is encoded in ../../cmd/gc/reflect.c and
 	// ../reflect/type.go.  Don't change this structure without also changing that code!
-	uintgo  count;        // # live cells == size of map.  Must be first (used by len() builtin)
+	
+	// # live cells == size of map.  Must be first (used by len() builtin)
+	// 元素数量
+	uintgo  count;
+	// 状态标识
 	uint32  flags;
 	uint32  hash0;        // hash seed
 	uint8   B;            // log_2 of # of buckets (can hold up to LOAD * 2^B items)
@@ -146,24 +150,21 @@ check(MapType *t, Hmap *h)
 		if(h->oldbuckets != nil) {
 			oldbucket = bucket & (((uintptr)1 << (h->B - 1)) - 1);
 			b = (Bucket*)(h->oldbuckets + oldbucket * h->bucketsize);
-			if(!evacuated(b))
-				continue; // b is still uninitialized
+			// b is still uninitialized
+			if(!evacuated(b)) continue; 
 		}
 		for(b = (Bucket*)(h->buckets + bucket * h->bucketsize); b != nil; b = b->overflow) {
 			for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
-				if(b->tophash[i] == 0)
-					continue;
+				if(b->tophash[i] == 0) continue;
 				cnt++;
 				t->key->alg->equal(&eq, t->key->size, IK(h, k), IK(h, k));
-				if(!eq)
-					continue; // NaN!
+				// NaN!
+				if(!eq) continue; 
 				hash = h->hash0;
 				t->key->alg->hash(&hash, t->key->size, IK(h, k));
 				top = hash >> (8*sizeof(uintptr) - 8);
-				if(top == 0)
-					top = 1;
-				if(top != b->tophash[i])
-					runtime·throw("bad hash");
+				if(top == 0) top = 1;
+				if(top != b->tophash[i]) runtime·throw("bad hash");
 			}
 		}
 	}
@@ -172,25 +173,19 @@ check(MapType *t, Hmap *h)
 	if(h->oldbuckets != nil) {
 		for(oldbucket = 0; oldbucket < (uintptr)1 << (h->B - 1); oldbucket++) {
 			b = (Bucket*)(h->oldbuckets + oldbucket * h->bucketsize);
-			if(evacuated(b))
-				continue;
-			if(oldbucket < h->nevacuate)
-				runtime·throw("bucket became unevacuated");
+			if(evacuated(b)) continue;
+			if(oldbucket < h->nevacuate) runtime·throw("bucket became unevacuated");
 			for(; b != nil; b = overflowptr(b)) {
 				for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
-					if(b->tophash[i] == 0)
-						continue;
+					if(b->tophash[i] == 0) continue;
 					cnt++;
 					t->key->alg->equal(&eq, t->key->size, IK(h, k), IK(h, k));
-					if(!eq)
-						continue; // NaN!
+					if(!eq) continue; // NaN!
 					hash = h->hash0;
 					t->key->alg->hash(&hash, t->key->size, IK(h, k));
 					top = hash >> (8*sizeof(uintptr) - 8);
-					if(top == 0)
-						top = 1;
-					if(top != b->tophash[i])
-						runtime·throw("bad hash (old)");
+					if(top == 0) top = 1;
+					if(top != b->tophash[i]) runtime·throw("bad hash (old)");
 				}
 			}
 		}

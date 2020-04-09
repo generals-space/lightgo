@@ -3,7 +3,13 @@
 // license that can be found in the LICENSE file.
 
 /*
-	Package unsafe contains operations that step around the type safety of Go programs.
+	Package unsafe contains operations that 
+	step around the type safety of Go programs.
+	unsafe包包含了绕过go程序类型安全机制的操作.
+	step around: 绕过
+
+	但是这个文件好像什么也没定义啊...
+	另外, 调用unsafe包的, 没有.c文件, 所有的调用者都是.go文件.
 */
 package unsafe
 

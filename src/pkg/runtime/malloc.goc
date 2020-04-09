@@ -32,8 +32,8 @@ extern volatile intgo runtime·MemProfileRate;
 // If the block will be freed with runtime·free(), typ must be 0.
 // 小对象由每个线程(m对象)的cache中的空闲列表(mcache)中分配.
 // 大对象(大于32k)直接从堆中分配.
-// 如果分配的块之后需要调用runtime·free()手动释放(即不由GC操作来回收空间), 
-// 则typ参数必须指定为0, 而此时flag一般为FlagNoInvokeGC.
+// 如果分配的块之后需要调用 runtime·free() 手动释放(即不由GC操作来回收空间), 
+// 则typ参数必须指定为0, 而此时 flag 一般为 FlagNoInvokeGC.
 // 
 // 此函数的调用者很多, 创建P, G对象, chan, string对象, 还有栈帧对象等, 
 // 都可以调用此函数创建.

@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package reflect implements run-time reflection, allowing a program to
-// manipulate objects with arbitrary types.  The typical use is to take a value
-// with static type interface{} and extract its dynamic type information by
-// calling TypeOf, which returns a Type.
+// Package reflect implements run-time reflection, 
+// allowing a program to manipulate objects with arbitrary types. 
+// The typical use is to take a value with static type interface{} 
+// and extract its dynamic type information by calling TypeOf, 
+// which returns a Type.
 //
 // A call to ValueOf returns a Value representing the run-time data.
 // Zero takes a Type and returns a Value representing a zero value
@@ -23,7 +24,7 @@ import (
 
 // Type is the representation of a Go type.
 //
-// Not all methods apply to all kinds of types.  Restrictions,
+// Not all methods apply to all kinds of types. Restrictions,
 // if any, are noted in the documentation for each method.
 // Use the Kind method to find out the kind of type before
 // calling kind-specific methods.  Calling a method
