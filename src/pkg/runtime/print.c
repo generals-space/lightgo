@@ -348,6 +348,7 @@ runtime·printpointer(void *p)
 	runtime·printhex((uint64)p);
 }
 
+// golang原生: println() 函数
 void
 runtime·printstring(String v)
 {

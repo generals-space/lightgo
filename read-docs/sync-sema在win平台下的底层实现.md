@@ -7,7 +7,7 @@
 2. [Windows线程同步（下）](https://www.cnblogs.com/predator-wang/p/5132401.html)
     - event
 3. [Windows核心编程读书笔记4（第7、8、9章）](http://www.youngroe.com/2015/10/23/Read-Notes/Read-Notes-Windows-Via-C-C-4/)
-
+    - 内核对象触发后，Wait在上面的线程被唤醒，决定哪一个线程首先被唤醒的规则基本上就是等待顺序的先入先出，和线程的优先级等无关。
 
 ```c++
 //创建信号量, 返回值即为信号量对象

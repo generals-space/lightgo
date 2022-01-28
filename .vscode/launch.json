@@ -1,0 +1,21 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "001main",
+            "type": "go", // 需要在 vscode 中安装 go 扩展
+            "request": "launch",
+            "mode": "auto",
+            "env": {
+                "PATH": "$PATH:${workspaceFolder}/bin",
+                "GOROOT": "${workspaceFolder}",
+                "GOPATH": "${workspaceFolder}/example",
+            },
+            "program": "${workspaceFolder}/example/src/001main",
+            "args": []
+        },
+    ]
+}

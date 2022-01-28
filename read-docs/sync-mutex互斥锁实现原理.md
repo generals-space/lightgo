@@ -3,11 +3,11 @@
 1. [Golang 1.3 sync.Mutex 源码解析](https://studygolang.com/articles/1472)
     - 代码分析的很详细, 透彻.
 2. [Windows线程同步（上）](https://www.cnblogs.com/predator-wang/p/5125590.html)
+    - 旋转计数可以在多处理器计算机上提供更佳性能，其原因在于在一个循环中旋转通常要快于进入内核模式等待状态。
 
 golang 1.2 的时候还没自旋锁的概念.
 
 `mutex.go`中调用的`runtime_Semacquire()`, 实际需要追踪到`sema.goc`文件中的`runtime·semacquire()`.
-
 
 ## 自旋锁为什么性能更好?
 

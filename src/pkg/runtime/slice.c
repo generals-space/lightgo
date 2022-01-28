@@ -19,6 +19,7 @@ static	void	makeslice1(SliceType*, intgo, intgo, Slice*);
 static	void	growslice1(SliceType*, Slice, intgo, Slice *);
 	void	runtime·copy(Slice to, Slice fm, uintptr width, intgo ret);
 
+// golang原生: make([]string) 函数
 // see also unsafe·NewArray
 // makeslice(typ *Type, len, cap int64) (ary []any);
 void
@@ -38,8 +39,7 @@ runtime·makeslice(SliceType *t, int64 len, int64 cap, Slice ret)
 	makeslice1(t, len, cap, &ret);
 
 	if(debug) {
-		runtime·printf("makeslice(%S, %D, %D); ret=",
-			*t->string, len, cap);
+		runtime·printf("makeslice(%S, %D, %D); ret=", *t->string, len, cap);
 		runtime·printslice(ret);
 	}
 }
