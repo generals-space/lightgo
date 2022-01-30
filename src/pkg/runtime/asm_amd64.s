@@ -6,6 +6,7 @@
 #include "funcdata.h"
 #include "../../cmd/ld/textflag.h"
 
+// caller: src/pkg/runtime/rt0_linux_amd64.s -> main() 入口
 TEXT _rt0_go(SB),NOSPLIT,$0
 	// copy arguments forward on an even stack
 	MOVQ	DI, AX		// argc
@@ -82,11 +83,13 @@ ok:
 	MOVL	AX, 0(SP)
 	MOVQ	24(SP), AX		// copy argv
 	MOVQ	AX, 8(SP)
+	// 调用初始化函数
 	CALL	runtime·args(SB)
 	CALL	runtime·osinit(SB)
 	CALL	runtime·hashinit(SB)
 	CALL	runtime·schedinit(SB)
 
+	// 创建 main goroutine 用于执行开发者编写的 main() 函数的函数体语句.
 	// create a new goroutine to start program
 	PUSHQ	$runtime·main·f(SB)		// entry
 	PUSHQ	$0			// arg size
@@ -95,7 +98,8 @@ ok:
 	ARGSIZE(-1)
 	POPQ	AX
 	POPQ	AX
-
+	
+	// 让当前线程开始执行 main goroutine
 	// start this M
 	CALL	runtime·mstart(SB)
 
