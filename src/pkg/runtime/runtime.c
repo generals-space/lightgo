@@ -64,15 +64,22 @@ runtime·mchr(byte *p, byte c, byte *ep)
 		if(*p == c) return p;
 	return nil;
 }
+
 // 如果用ida pro对go程序进行反编译, 可以发现在入口处会对argc和argv进行赋值.
-static int32	argc; // argument count, 表示传入参数的个数
-static uint8**	argv; // argument vector, 函数的参数序列或指针(第一个参数argv[0]是程序的名称, 包含程序所在的完整路径)
+// argument count, 表示传入参数的个数
+static int32	argc; 
+// argument vector, 函数的参数序列或指针
+// (第一个参数argv[0]是程序的名称, 包含程序所在的完整路径)
+static uint8**	argv; 
 
 Slice os·Args; // 命令行执行时的参数列表
 Slice syscall·envs;
 
 void (*runtime·sysargs)(int32, uint8**);
 
+// caller: 
+// 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() (main()函数)
+//
 void
 runtime·args(int32 c, uint8 **v)
 {

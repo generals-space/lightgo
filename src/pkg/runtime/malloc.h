@@ -5,7 +5,7 @@
 // Memory allocator, based on tcmalloc.
 // http://goog-perftools.sourceforge.net/doc/tcmalloc.html
 
-// The main allocator works in runs of pages.
+// The main allocator works in runs of(一连串的) pages.
 // Small allocation sizes (up to and including 32 kB) are
 // rounded to one of about 100 size classes, each of which
 // has its own free list of objects of exactly that size.
@@ -106,23 +106,26 @@ enum
 	// when msize runs its size choosing algorithm it double-checks that NumSizeClasses agrees.
 	NumSizeClasses = 61,
 
-	// Tunable constants.
 	// 小对象大小上限, 32k, 超过这个值就不会在span链表中分配而是直接到heap分配
 	// 1 << 10 = 1024, 32 << 10 = 32k
+	//
+	// Tunable constants.
 	MaxSmallSize = 32<<10,
 
-	// Chunk size for FixAlloc
 	// FixAlloc对象chunk成员的固定大小, 16k.
+	//
+	// Chunk size for FixAlloc
 	FixAllocChunk = 16<<10,
-	// Maximum page length for fixed-size list in MHeap.
-	// MHeap中定长列表的最大页长度, 
-	// 用于修饰MHeap中的free字段 MSpan列表(即MaxMHeapList为MSpan数组的长度值)
-	// 我想应该是这样的, MHeap中有free成员, 类型为MSpan数组, 用于为固定大小的小对象分配空间.
+	// MHeap 中定长列表的最大页长度, 
+	// 用于修饰 MHeap 中的free字段 MSpan 列表(即MaxMHeapList为MSpan数组的长度值)
+	// 我想应该是这样的, MHeap中有free成员, 类型为 MSpan 数组, 用于为固定大小的小对象分配空间.
 	// 
+	// Maximum page length for fixed-size list in MHeap.
 	MaxMHeapList = 1<<(20 - PageShift),
-	// Chunk size for heap growth
 	// 堆增长的块大小, 1 << 20 = 1M
 	// ...难道说堆空间不足时向OS申请内存的单位为1M? 会不会有点小?
+	//
+	// Chunk size for heap growth
 	HeapAllocChunk = 1<<20,
 
 	// Number of bits in page to span calculations (4k pages).
@@ -381,16 +384,21 @@ enum
 	MSpanListHead,
 	MSpanDead,
 };
+
 struct MSpan
 {
+	// 双向链表
 	MSpan	*next;		// in a span linked list
 	MSpan	*prev;		// in a span linked list
-	// starting page number
+
 	// 起始页的页号...是可以推算出来的. 
 	// start << PageShift可以用来表示真正的内存地址.
+	//
+	// starting page number
 	PageID	start;
-	// number of pages in span
 	// 该span中页的数量, 同一sizeclass的MSpan对象中npages的值相同.
+	//
+	// number of pages in span
 	uintptr	npages;
 	// list of free objects
 	// 该span中空闲的对象链表

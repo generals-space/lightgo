@@ -150,6 +150,11 @@ static bool preemptone(P*);
 static bool exitsyscallfast(void);
 static bool haveexperiment(int8*);
 
+// 看样子是先创建任务对象g, 再启动m去执行ta.
+//
+// caller:
+// 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 程序启动时的初始化汇总函数
+//
 // The bootstrap sequence is:
 //
 //	call osinit
@@ -158,8 +163,6 @@ static bool haveexperiment(int8*);
 //	call runtime·mstart
 //
 // The new G calls runtime·main.
-// 看样子是先创建任务对象g, 再启动m去执行ta.
-// 可以见 asm_amd64.s中定义的第一个函数 _rt0_go()
 void
 runtime·schedinit(void)
 {
@@ -167,12 +170,13 @@ runtime·schedinit(void)
 	byte *p;
 	Eface i;
 
+	// 最大系统线程数量限制, 参考标准库 runtime/debug.SetMaxThreads
 	runtime·sched.maxmcount = 10000;
 	runtime·precisestack = haveexperiment("precisestack");
 
 	runtime·mprofinit();
-	runtime·mallocinit();
-	mcommoninit(m);
+	runtime·mallocinit(); 	// 初始化内存分配器
+	mcommoninit(m); 		// 初始化调度器
 	
 	// Initialize the itable value for newErrorCString,
 	// so that the next time it gets called, 
@@ -180,9 +184,9 @@ runtime·schedinit(void)
 	// it will not need to allocated memory.
 	runtime·newErrorCString(0, &i);
 
-	runtime·goargs();
-	runtime·goenvs();
-	runtime·parsedebugvars();
+	runtime·goargs(); // 处理命令行参数
+	runtime·goenvs(); // 处理环境变量
+	runtime·parsedebugvars(); // 处理 GODEBUG, GOTRACEBACK 调试相关的环境变量设置
 
 	// Allocate internal symbol table representation now, 
 	// we need it for GC anyway.
@@ -199,6 +203,7 @@ runtime·schedinit(void)
 	// 然后调用 procresize() 创建指定数量的 p 
 	// 并为各p对象的本地任务队列申请空间.
 	runtime·allp = runtime·malloc((MaxGomaxprocs+1)*sizeof(runtime·allp[0]));
+	// 调整 P 数量
 	procresize(procs);
 
 	// 正式开启GC. 这里表示runtime启动完成.
@@ -216,10 +221,14 @@ static FuncVal scavenger = {runtime·MHeap_Scavenger};
 // 设置initDone为runtime·unlockOSThread()
 static FuncVal initDone = { runtime·unlockOSThread };
 
-// The main goroutine.
 // 主协程
 // 在 runtime·schedinit() 后进入此流程
 // 从这里开始进入开发者声明的 func main()
+//
+// caller:
+//	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 程序启动时的初始化汇总函数
+//
+// The main goroutine.
 void
 runtime·main(void)
 {
@@ -228,6 +237,7 @@ runtime·main(void)
 	// Max stack size is 1 GB on 64-bit, 250 MB on 32-bit.
 	// Using decimal instead of binary GB and MB 
 	// because they look nicer in the stack overflow failure message.
+	//
 	// 64位系统上栈空间最大为1G, 32位上则是250M.
 	// 这里用了10进制而不是2进制(1000而不是1024), 
 	// 这样在出现栈溢出时, 错误消息比较好看.
@@ -235,24 +245,23 @@ runtime·main(void)
 		runtime·maxstacksize = 1000000000;
 	else
 		runtime·maxstacksize = 250000000;
-	// 创建监控线程
+	// 创建监控线程(定期垃圾回收, 以及并发任务调试相关)
 	newm(sysmon, nil);
 
-	// Lock the main goroutine onto this, 
-	// the main OS thread, during initialization. 
-	// Most programs won't care, but a few
-	// do require certain calls to be made by the main thread.
+	// Lock the main goroutine onto this, the main OS thread, during initialization. 
+	// Most programs won't care, 
+	// but a few do require certain calls to be made by the main thread.
 	// Those can arrange for main.main to run in the main thread
-	// by calling runtime.LockOSThread during initialization
-	// to preserve the lock.
-	// 调用 runtime·lockOSThread(), 
-	// 在初始化阶段将主协程绑定在当前m对象上.
+	// by calling runtime.LockOSThread during initialization to preserve the lock.
+	//
+	// 调用 runtime·lockOSThread(), 在初始化阶段将主协程绑定在当前m对象上.
 	// 大部分操作可能并无所谓, 但有一些事情必须要主线程来做.
 	// 初始化期间持有线程锁, 然后将 main·main 放在主线程中运行...
 	runtime·lockOSThread();
 
 	// Defer unlock so that runtime.Goexit during init does the unlock too.
-	// initDone就在上面定义, 值为 runtime·unlockOSThread() 函数
+	//
+	// initDone 就在上面定义, 值为 runtime·unlockOSThread() 函数
 	d.fn = &initDone;
 	d.siz = 0;
 	d.link = g->defer;
@@ -266,7 +275,7 @@ runtime·main(void)
 	// 完成定期释放未使用的内存给操作系统, 无限循环.
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
 
-	// main·init 为汇编代码
+	// 这里应该是用户编写的代码中, 出现包引用以及 init() 函数的地方, 由编译器指向.
 	main·init();
 
 	if(g->defer != &d || d.fn != &initDone)
@@ -285,6 +294,7 @@ runtime·main(void)
 
 	// runtime·exit()为汇编代码, 针对不同系统平台各自编写.
 	runtime·exit(0);
+
 	// ...这里是清理runtime·main吧? 可是都exit了, 这里为什么还能运行???
 	for(;;) *(int32*)runtime·main = 0;
 }
@@ -711,6 +721,9 @@ runtime·starttheworld(void)
 	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
 }
 
+// caller:
+// 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 程序启动入口, 开始运行主协程.
+//
 // Called to start an M.
 void
 runtime·mstart(void)
@@ -730,8 +743,10 @@ runtime·mstart(void)
 	// Once we call schedule we're never coming back,
 	// so other calls can reuse this stack space.
 	runtime·gosave(&m->g0->sched);
-	m->g0->sched.pc = (uintptr)-1;  // make sure it is never used
-	m->g0->stackguard = m->g0->stackguard0;  // cgo sets only stackguard0, copy it to stackguard
+	// make sure it is never used
+	m->g0->sched.pc = (uintptr)-1; 
+	// cgo sets only stackguard0, copy it to stackguard
+	m->g0->stackguard = m->g0->stackguard0; 
 
 #ifdef GOOS_windows
 #ifdef GOARCH_386
@@ -764,9 +779,8 @@ runtime·mstart(void)
 	// But once this path is enabled, we must remove our seh here.
 }
 
-// When running with cgo, we call _cgo_thread_start
-// to start threads for us so that we can play nicely with
-// foreign code.
+// When running with cgo, we call _cgo_thread_start to start threads for us
+// so that we can play nicely with foreign code.
 void (*_cgo_thread_start)(void*);
 
 typedef struct CgoThreadStart CgoThreadStart;
@@ -777,15 +791,20 @@ struct CgoThreadStart
 	void (*fn)(void);
 };
 
+// 创建一个全新的m对象, 且暂不与任何线程绑定.
+//
+// caller: 
+// 	1. newm()
+// 	2. runtime·newextram()
+//
 // Allocate a new m unassociated with any thread.
 // Can use p for allocation context if needed.
-// 创建一个全新的m对象, 不与任何线程绑定.
-// caller: newm(), runtime·newextram()
 M*
 runtime·allocm(P *p)
 {
 	M *mp;
-	static Type *mtype;  // The Go type M
+	// The Go type M
+	static Type *mtype; 
 
 	// disable GC because it can be called from sysmon
 	m->locks++; 

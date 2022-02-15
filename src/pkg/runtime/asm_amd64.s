@@ -6,7 +6,7 @@
 #include "funcdata.h"
 #include "../../cmd/ld/textflag.h"
 
-// caller: src/pkg/runtime/rt0_linux_amd64.s -> main() 入口
+// caller: src/pkg/runtime/rt0_linux_amd64.s -> main() (程序启动的入口函数)
 TEXT _rt0_go(SB),NOSPLIT,$0
 	// copy arguments forward on an even stack
 	MOVQ	DI, AX		// argc
