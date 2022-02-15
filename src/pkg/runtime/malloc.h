@@ -441,18 +441,20 @@ int32	runtime·MCentral_AllocList(MCentral *c, MLink **first);
 void	runtime·MCentral_FreeList(MCentral *c, MLink *first);
 void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
 
-// Main malloc heap. 堆
-// The heap itself is the "free[]" and "large" arrays,
-// but all the other global data is here too.
 // heap本身只存储free[]数组和large, 应该就是arena区域.
 // 但是其他全局数据也存储在这里, 应该是挂的指针, 比如spans, bitmap
+//
+// Main malloc heap.
+// The heap itself is the "free[]" and "large" arrays,
+// but all the other global data is here too.
 struct MHeap
 {
 	Lock;
-	// free lists of given length
 	// h->free数组的每个成员都是span链表
 	// 各成员中, h->free[n]中拥有n个页, 
 	// 最后一个成员成员可容纳的页数即是MaxMHeapList
+	//
+	// free lists of given length
 	MSpan free[MaxMHeapList];
 	MSpan large;			// free lists length >= MaxMHeapList
 	MSpan **allspans;		// MSpan指针类型, 存储所有span对象指针
