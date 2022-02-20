@@ -21,10 +21,16 @@
 static bool MCentral_Grow(MCentral *c);
 static void MCentral_Free(MCentral *c, void *v);
 
+// 初始化 mcentral 对象.
+//
+// 为其中的 empty, nonempty 成员构造两个空的双向循环链表.
+//
+// 只被调用这一次, 不过是一个for循环, 用来初始化堆中各 size 等级的 mcentral.
+//
+// caller: 
+// 	1. runtime·MHeap_Init() 
+//
 // Initialize a single central free list.
-// 初始化mcentral的两个空的链表
-// 只被调用这一次, 不过是一个for循环, 用来初始化堆中各size等级的mcentral.
-// caller: runtime·MHeap_Init() 
 void
 runtime·MCentral_Init(MCentral *c, int32 sizeclass)
 {
@@ -33,25 +39,27 @@ runtime·MCentral_Init(MCentral *c, int32 sizeclass)
 	runtime·MSpanList_Init(&c->empty);
 }
 
+// 从 mcentral 的空闲列表中分配一批对象, 返回对象的个数.
+// 这些对象组成一个链表, 返回时 pfirst 指向第一个对象的地址.
+// 是在线程的 mcache 没有多余的空间来分配对象时, 尝试从 mcentral 获取一批空闲空间.
+// ...从传入参数来看, 好像没说要获取多少? 看心情吗?
+// ...继续分析得出, 此函数直接从 mcentral 的 noempty 链表中拿出一个 span,
+// 并将pfirst指向这个span的freelist, 
+// 再把这个span放到empty链表中(freelist都分配出去了, 相当于没有剩余空间了), 就完事了.
+//
+// caller: 
+// 	1. src/pkg/runtime/mcache.c -> runtime·MCache_Refill() 只有这一处
+//
 // Allocate a list of objects from the central free list.
 // Return the number of objects allocated.
 // The objects are linked together by their first words.
 // On return, *pfirst points at the first object.
-// 从mcentral的空闲列表中分配一批对象, 返回对象的个数.
-// 这些对象组成一个链表, 返回时pfirst指向第一个对象的地址.
-// 这个函数只被runtime·MCache_Refill()调用, 
-// 是在线程的mcache没有多余的空间来分配对象时, 尝试从mcentral获取一批空闲空间.
-// ...从传入参数来看, 好像没说要获取多少? 看心情吗?
-// ...继续分析得出, 此函数直接从mcentral的noempty链表中拿出一个span,
-// 并将pfirst指向这个span的freelist, 
-// 再把这个span放到empty链表中(freelist都分配出去了, 相当于没有剩余空间了), 就完事了.
-// caller: runtime·MCache_Refill()
 int32
 runtime·MCentral_AllocList(MCentral *c, MLink **pfirst)
 {
 	MSpan *s;
 	int32 cap, n;
-	// mcentral被多线程共享, 所以从mcentral获取内存时需要加锁
+	// mcentral 被多线程共享, 所以从 mcentral 获取内存时需要加锁
 	runtime·lock(c);
 	// Replenish central list if empty.
 	// 如果mcentral中也没有空闲空间时, 就从堆中获取, 补充自身.
@@ -197,9 +205,10 @@ runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *sizep, int32 *npagesp, int3
 	*nobj = (npages << PageShift) / size;
 }
 
+// 从 heap 处取一个 span 块, 并切分成对象块, 并组成空闲链表备用.
+//
 // Fetch a new span from the heap and
 // carve into objects for the free list.
-// 从 heap 处取一个 span 块, 并切分成对象块, 并组成空闲链表备用.
 static bool
 MCentral_Grow(MCentral *c)
 {

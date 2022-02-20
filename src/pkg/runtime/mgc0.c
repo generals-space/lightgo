@@ -226,8 +226,7 @@ static struct {
 	// Note与Lock一样(...完全一样), 是分别基于futex/sema实现的锁吧
 	// 在STW后, 实际执行gc操作的协程可能不只一个,
 	// 数量大致在 [1-nproc) 之间, ta们并行执行gc操作.
-	// gc主线程将在这个地址休眠, 直到所有gc协程全部完成标记清理工作后,
-	// 再继续执行.
+	// gc主线程将在这个地址休眠, 直到所有gc协程全部完成标记清理工作后, 再继续执行.
 	Note	alldone; 
 	ParFor	*markfor;
 	ParFor	*sweepfor;

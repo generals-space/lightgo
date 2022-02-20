@@ -10,10 +10,16 @@
 #include "arch_GOARCH.h"
 #include "malloc.h"
 
-// 当线程中mcache对象没有多余的内存时, 会调用此函数向mcentral获取一批内存块
-// 此函数只是runtime·MCentral_AllocList()的包装函数, 
-// 实际的获取操作在runtime·MCentral_AllocList()中.
-// caller: runtime·mallocgc()
+// 当线程中 mcache 对象没有多余的内存时, 会调用此函数向 mcentral 获取一批内存块.
+// 此函数只是 runtime·MCentral_AllocList() 的包装函数, 
+// 实际的获取操作在 runtime·MCentral_AllocList() 中.
+//
+// param c: 当前线程中的 m->mcache 对象
+// param sizeclass: span size等级
+//
+// caller: 
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() 在 mcache 的某个 sizeclass
+//     的列表都被申请完了的时候, 调用此函数为其重新申请空间.
 void
 runtime·MCache_Refill(MCache *c, int32 sizeclass)
 {
@@ -21,11 +27,9 @@ runtime·MCache_Refill(MCache *c, int32 sizeclass)
 
 	// Replenish using central lists.
 	l = &c->list[sizeclass];
-
 	if(l->list) runtime·throw("MCache_Refill: the list is not empty");
 
 	l->nlist = runtime·MCentral_AllocList(&runtime·mheap.central[sizeclass], &l->list);
-
 	if(l->list == nil) runtime·throw("out of memory");
 }
 

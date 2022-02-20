@@ -112,10 +112,11 @@ enum
 	// Tunable constants.
 	MaxSmallSize = 32<<10,
 
-	// FixAlloc对象chunk成员的固定大小, 16k.
+	// FixAlloc 对象 chunk 成员的固定大小, 16k.
 	//
 	// Chunk size for FixAlloc
 	FixAllocChunk = 16<<10,
+
 	// MHeap 中定长列表的最大页长度, 
 	// 用于修饰 MHeap 中的free字段 MSpan 列表(即MaxMHeapList为MSpan数组的长度值)
 	// 我想应该是这样的, MHeap中有free成员, 类型为 MSpan 数组, 用于为固定大小的小对象分配空间.
@@ -162,9 +163,13 @@ enum
 #define	MaxMem	((uintptr)-1)
 #endif
 
-// A generic linked list of blocks.  (Typically the block is bigger than sizeof(MLink).)
+// 这是一个普通单向链表
+//
+// A generic linked list of blocks. 
+// (Typically the block is bigger than sizeof(MLink).)
 struct MLink
 {
+	// 这是一个普通单向链表
 	MLink *next;
 };
 
@@ -198,23 +203,29 @@ void*	runtime·SysReserve(void *v, uintptr nbytes);
 
 // FixAlloc is a simple free-list allocator for fixed size objects.
 // Malloc uses a FixAlloc wrapped around SysAlloc to manages its MCache and MSpan objects.
-// FixAlloc是一个简单的空闲列表分配器, 用于为固定大小的对象分配空间.
-// 其中的list成员为链表类型, 就是用来分配空间的.
-// Malloc引入FixAlloc对象封装SysAlloc, 只用来管理ta的MCache和MSpan对象.
-// ...实际上也只有heap的spanalloc和cachealloc两个成员是FixAlloc对象.
+// FixAlloc 是一个简单的空闲列表分配器, 用于为固定大小的对象分配空间.
+// 其中的 list 成员为链表类型, 就是用来分配空间的.
+// Malloc 引入 FixAlloc 对象封装 SysAlloc, 只用来管理ta的 MCache 和 MSpan 对象.
+// ...实际上也只有 heap 的 spanalloc 和 cachealloc 两个成员是 FixAlloc 对象.
 // 
 // Memory returned by FixAlloc_Alloc is not zeroed.
 // The caller is responsible for locking around FixAlloc calls.
 // Callers can keep state in the object but the first word is
 // smashed by freeing and reallocating.
 // FixAlloc_Alloc()返回的内存空间并未清零.
-// 调用者需要在调用FixAlloc_XXX相关函数时加锁.
+// 调用者需要在调用 FixAlloc_XXX 相关函数时加锁.
 // 
 struct FixAlloc
 {
+	// 分别为 sizeof(MSpan), sizeof(MCache) 的大小
 	uintptr	size;
-	void	(*first)(void *arg, byte *p);	// called first time p is returned
+	// 在初始化 MHeap->spanalloc 时, 被赋值为 src/pkg/runtime/mheap.c -> RecordSpan()
+	// 在初始化 MHeap->cachealloc 时, 此值为 nil
+	//
+	// called first time p is returned
+	void	(*first)(void *arg, byte *p);
 	void*	arg;
+	// 这个链表里可能为 MSpan, 也可能为 MCache
 	MLink*	list;
 	byte*	chunk;
 	uint32	nchunk;
@@ -232,13 +243,24 @@ void	runtime·FixAlloc_Free(FixAlloc *f, void *p);
 struct MStats
 {
 	// General statistics.
-	uint64	alloc;		// bytes allocated and still in use // 已分配且正在使用的字节数
-	uint64	total_alloc;	// bytes allocated (even if freed) // 所有已分配的字节数, 包括已释放, 处于空闲状态的空间.
-	// sys 从系统获取的字节数, 其值近似等于下面的xxx_sys对象的总和
-	uint64	sys;		// bytes obtained from system (should be sum of xxx_sys below, no locking, approximate)
+	
+	// 已分配且正在使用的字节数
+	//
+	// bytes allocated and still in use 
+	uint64	alloc;
+	// 所有已分配的字节数, 包括已释放, 处于空闲状态的空间.
+	//
+	// bytes allocated (even if freed) 
+	uint64	total_alloc;
+
+	// sys 从系统获取的字节数, 其值近似等于下面的 xxx_sys 对象的总和
+	//
+	// bytes obtained from system 
+	// (should be sum of xxx_sys below, no locking, approximate)
+	uint64	sys;
 	uint64	nlookup;	// number of pointer lookups
 	uint64	nmalloc;	// number of mallocs
-	uint64	nfree;  // number of frees
+	uint64	nfree;		// number of frees
 
 	// Statistics about malloc heap.
 	// protected by mheap.Lock
@@ -313,6 +335,9 @@ extern	void	runtime·InitSizes(void);
 typedef struct MCacheList MCacheList;
 struct MCacheList
 {
+	// 当前 sizeclass 级别的小块空间链表的链表头
+	//
+	// 还有一个同级成员, 表示该链表的长度
 	MLink *list;
 	uint32 nlist;
 };
@@ -323,9 +348,12 @@ struct MCache
 	// so they are grouped here for better caching.
 	// trigger heap sample after allocating this many bytes
 	int32 next_sample;
+	// 标记此 cache 对象已经分配出去(不管是正在使用或是已经空闲...???)的大小
+	//
 	// bytes allocated (or freed) from cache since last lock of heap
-	// 标记此cache对象已经分配出去(不管是正在使用或是已经空闲...???)的大小
 	intptr local_cachealloc;
+	// 不同级别的 MCache 数组, 每个成员表示一个级别的链表头
+	//
 	// The rest is not accessed on every malloc.
 	MCacheList list[NumSizeClasses];
 	// Local allocator stats, flushed during GC.
@@ -441,8 +469,15 @@ int32	runtime·MCentral_AllocList(MCentral *c, MLink **first);
 void	runtime·MCentral_FreeList(MCentral *c, MLink *first);
 void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
 
-// heap本身只存储free[]数组和large, 应该就是arena区域.
+// heap 本身只存储 free[] 数组和 large, 应该就是arena区域.
 // 但是其他全局数据也存储在这里, 应该是挂的指针, 比如spans, bitmap
+//
+//                        arena_used(初始arena的使用为0, 所以其地址与 arena_start 在同一位置)
+// span     bitmap        arena_start                 arena_end
+//   ↓        ↓                ↓                          ↓
+//   +--------|----------------+--------------------------+
+//   |  span  |     bitmap     |           arena          |
+//   +--------|----------------+--------------------------+
 //
 // Main malloc heap.
 // The heap itself is the "free[]" and "large" arrays,
@@ -450,23 +485,31 @@ void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, ML
 struct MHeap
 {
 	Lock;
-	// h->free数组的每个成员都是span链表
-	// 各成员中, h->free[n]中拥有n个页, 
-	// 最后一个成员成员可容纳的页数即是MaxMHeapList
+
+	// free数组的每个成员都是 span 链表.
+	// 各成员中, h->free[n]中拥有n个页, 最后一个成员成员可容纳的页数即是MaxMHeapList.
 	//
 	// free lists of given length
 	MSpan free[MaxMHeapList];
 	MSpan large;			// free lists length >= MaxMHeapList
 	MSpan **allspans;		// MSpan指针类型, 存储所有span对象指针
 	uint32	nspan;			// 这是用来表示堆中span中的总个数?
-	// allspans成员列表能存储的MSpan的指针的个数, 可以说是其容量
-	// 在为allspans分配空间时会同时为此成员赋值.
+	// allspans 成员列表能存储的 MSpan 的指针的个数, 可以说是其容量.
+	// 在为 allspans 分配空间时会同时为此成员赋值.
 	uint32	nspancap;
 
+	// 该值为内存分布图中的 span 区域的起始(虚拟)地址.
+	//
+	// 在 src/pkg/runtime/malloc.goc -> runtime·mallocinit() 中被赋值.
+	//
 	// span lookup
 	MSpan**	spans;
 	uintptr	spans_mapped;
 
+	// 该值为内存分布图中的 bitmap 区域的起始(虚拟)地址.
+	//
+	// 在 src/pkg/runtime/malloc.goc -> runtime·mallocinit() 中被赋值.
+	//
 	// range of addresses we might see in the heap
 	byte *bitmap;
 	uintptr bitmap_mapped;
@@ -536,8 +579,9 @@ enum
 	// 禁止释放或是扫描目标指针
 	FlagNoGC	= 1<<2,	
 	FlagNoZero	= 1<<3, // don't zero memory
+	// 不引入GC...即此次分配的空间不需要通过GC回收吧, 而是需要通过 runtime·free() 手动释放.
+	//
 	// don't invoke GC
-	// 不引入GC...意思是此次分配的空间不需要通过GC回收吧, 应该是想要手动释放的.
 	FlagNoInvokeGC	= 1<<4, 
 };
 

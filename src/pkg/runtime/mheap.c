@@ -22,14 +22,16 @@ static void MHeap_FreeLocked(MHeap*, MSpan*);
 static MSpan *MHeap_AllocLarge(MHeap*, uintptr);
 static MSpan *BestFit(MSpan*, uintptr, MSpan*);
 
-// 为heap.allspans分配空间, 用来存储所有span对象指针.
-// ...貌似allspans只包含mheap->spanalloc部分, 不包含mcentral, mcache的span???
-// caller: runtime·MHeap_Init()
-// 这个函数只在其他地址出现了一次, 但并不是只调用一次, 
-// 因为ta是作为成员函数被嵌入了heap->spanalloc对象
-// 实际会在runtime·FixAlloc_Alloc()函数中调用. 调用时, 
-// 参数vh是FixAlloc对象的args成员地址(按照ta唯一一次初始化所写的, vh其实是mheap的地址), 
-// 参数p是FixAlloc对象的chunk成员地址(chunk类型其实是byte*, 这里直接当作MSpan*来用了).
+// 为 heap.allspans 分配空间, 用来存储所有 span 对象指针.
+// ...貌似 allspans 只包含 mheap->spanalloc 部分, 不包含 mcentral, mcache的span???
+//
+// param vh: FixAlloc->args 成员地址(按照ta唯一一次初始化所写的, vh 其实是 mheap 的地址);
+// param p: FixAlloc->chunk 成员地址(chunk 类型其实是 byte*, 这里直接当作 MSpan* 来用了).
+//
+// caller: 
+// 	1. runtime·MHeap_Init() 假
+// 	2. src/pkg/runtime/mfixalloc.c -> runtime·FixAlloc_Alloc() 真
+//     在该函数中, 对 FixAlloc->first 对象的调用, 才是真正的调用.
 static void
 RecordSpan(void *vh, byte *p)
 {
@@ -50,7 +52,7 @@ RecordSpan(void *vh, byte *p)
 		all = (MSpan**)runtime·SysAlloc(cap*sizeof(all[0]), &mstats.other_sys);
 
 		if(all == nil) runtime·throw("runtime: cannot allocate memory");
-		// 如果h->allspans不为空, 这是要先释放掉?
+		// 如果 h->allspans 不为空, 这是要先释放掉?
 		if(h->allspans) {
 			runtime·memmove(all, h->allspans, h->nspancap*sizeof(all[0]));
 			runtime·SysFree(h->allspans, h->nspancap*sizeof(all[0]), &mstats.other_sys);
@@ -61,26 +63,35 @@ RecordSpan(void *vh, byte *p)
 	h->allspans[h->nspan++] = s;
 }
 
+// 初始化 MHeap 对象, 并未申请/分配内存.
+//
+// 1. 为 spanalloc, cachealloc 成员构造空对象(分别为 MSpan, MCache 类型);
+// 2. 为 free(列表), large 成员构造空对象(双向循环链表, 成员都为 MSpanList 类型);
+// 3. 为 central 成员构造空对象(MCentral 类型);
+//
+// param: *h runtime·mheap 对象指针
+//
+// caller: 
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocinit()
+//
 // Initialize the heap; fetch memory using alloc.
-// 初始化堆内存, 使用alloc从OS申请初始内存. 
-// 构造mheap的free, large成员为初始的双向循环链表, 但实际只分配了一个表头, 没有真正的分配空间.
-// 然后就是调用runtime·MCentral_Init()初始化mcentral成员.
-// caller: malloc.goc -> runtime·mallocinit()
-// @param: *h runtime·mheap对象指针
 void
 runtime·MHeap_Init(MHeap *h)
 {
 	uint32 i;
-	// FixAlloc_Init()位于mfixalloc.c
 	runtime·FixAlloc_Init(&h->spanalloc, sizeof(MSpan), RecordSpan, h, &mstats.mspan_sys);
 	runtime·FixAlloc_Init(&h->cachealloc, sizeof(MCache), nil, nil, &mstats.mcache_sys);
+
 	// h->mapcache needs no init
-	// runtime·MSpanList_Init()只是将目标对象初始化为空的双向链表, 没有额外操作.
-	// 按照MHeap中对free的定义: `MSpan free[MaxMHeapList]`, free数组可容纳256个双向链表.
+	//
+	// runtime·MSpanList_Init() 只是将目标对象初始化为空的双向链表, 没有额外操作.
+	// 按照 MHeap 中对free的定义: `MSpan free[MaxMHeapList]`, free数组可容纳256个双向链表.
 	for(i=0; i<nelem(h->free); i++) runtime·MSpanList_Init(&h->free[i]);
 
 	runtime·MSpanList_Init(&h->large);
-	// h->central与h->free的作用差不多, 类型也差不多, 只不过为对象分配空间时, h->free的优先级更高.
+
+	// h->central 与 h->free 的作用差不多, 类型也差不多, 
+	// 只不过为对象分配空间时, h->free 的优先级更高.
 	for(i=0; i<nelem(h->central); i++) runtime·MCentral_Init(&h->central[i], i);
 }
 
@@ -101,22 +112,31 @@ runtime·MHeap_MapSpans(MHeap *h)
 	h->spans_mapped = n;
 }
 
+// 从 heap 分配一组大小为 npage 个页的空间, 并且在 HeapMap 和 HeapMapCache 记录其 size 等级...
+// 超过32k的对象才从 heap 分配, 哪还有 size 等级???
+// 好吧, 在 runtime·mallocgc() 中调用时的确是为大对象分配空间, 而且 sizeclass 值指定为0.
+//
+// param h: runtime·mheap 对象指针
+// param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
+// param sizeclass: 
+//       在被 runtime·mallocgc() 调用时, 由于是为大对象分配空间, 所以此值为 0.
+//
+// caller: 
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc()
+// 	2. src/pkg/runtime/mcentral.c -> MCentral_Grow()
+//
 // Allocate a new span of npage pages from the heap
 // and record its size class in the HeapMap and HeapMapCache.
-// 从heap分配一组大小为npage个页的空间, 
-// 并且在HeapMap和HeapMapCache记录其size等级...
-// 超过32k的对象才从heap分配, 哪还有size等级???
-// 好吧, 在runtime·mallocgc()中调用时的确是为大对象分配空间, 而且sizeclass值指定为0.
-// caller: runtime·mallocgc(), MCentral_Grow()
 MSpan*
 runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed)
 {
 	MSpan *s;
-	// 由于heap是被所有线程共享的, 所以对heap的操作需要加锁.
+	// 由于 heap 是被所有线程共享的, 所以对 heap 的操作需要加锁.
 	runtime·lock(h);
-	// ...从mcache分配小于32k对象时会记录在mcahe的local_cachealloc, 但这里是什么意思? 
-	// 是把从mcache中分配的空间全部记算到mheap的头上, 之后归还空间的时候直接还给mheap?
-	// 好像也不是不可以, 毕竟从mcache分配空间时, 直接把内存块从mcache下链表中移除了...
+
+	// 从 mcache 分配小于 32k 对象时会记录在 mcahe 的 local_cachealloc, 但这里是什么意思? 
+	// 是把从 mcache 中分配的空间全部记算到 mheap 的头上, 之后归还空间的时候直接还给 mheap?
+	// 好像也不是不可以, 毕竟从 mcache 分配空间时, 直接把内存块从 mcache 下的链表中移除了...
 	mstats.heap_alloc += m->mcache->local_cachealloc;
 	m->mcache->local_cachealloc = 0;
 
@@ -134,8 +154,10 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 	return s;
 }
 
-// 只有一处调用, 看来是在runtime·MHeap_Alloc()先加锁, 实际的操作在这里啊.
-// caller: MHeap_AllocLocked()
+// 只有一处调用, 看来是在 runtime·MHeap_Alloc() 先加锁, 实际的操作在这里啊.
+//
+// caller: 
+// 	1. MHeap_AllocLocked()
 static MSpan*
 MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 {
@@ -243,8 +265,8 @@ BestFit(MSpan *list, uintptr npage, MSpan *best)
 	MSpan *s;
 
 	for(s=list->next; s != list; s=s->next) {
-		if(s->npages < npage)
-			continue;
+		if(s->npages < npage) continue;
+
 		if(best == nil
 		|| s->npages < best->npages
 		|| (s->npages == best->npages && s->start < best->start))
@@ -572,7 +594,7 @@ runtime·MSpanList_Init(MSpan *list)
 
 // 将目标span从其所在的双向链表中移除
 // 可能出现在:
-// 1. span被回收, 从mcentral的empty链表中移除, 将放到noempty链表中.
+// 1. span被回收, 从mcentral的empty链表中移除, 将放到 noempty 链表中.
 void
 runtime·MSpanList_Remove(MSpan *span)
 {
@@ -593,7 +615,7 @@ runtime·MSpanList_IsEmpty(MSpan *list)
 // ##runtime·MSpanList_Insert
 // 将目标span添加到目标链表list中, 看起来是放到了链表头.
 // 可能出现在:
-// 1. span被回收, 从mcentral的empty链表中移除, 放到noempty链表中.
+// 1. span被回收, 从mcentral的empty链表中移除, 放到 noempty 链表中.
 void
 runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 {

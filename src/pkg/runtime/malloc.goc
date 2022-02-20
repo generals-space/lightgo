@@ -16,21 +16,35 @@ package runtime
 #include "stack.h"
 #include "../../cmd/ld/textflag.h"
 
-// Mark mheap as 'no pointers', it does not contain interesting pointers but occupies ~45K.
+// Mark mheap as 'no pointers', 
+// it does not contain interesting pointers but occupies ~45K.
 #pragma dataflag NOPTR
 MHeap runtime·mheap;
 
 int32	runtime·checking;
 
-extern MStats mstats;	// defined in zruntime_def_$GOOS_$GOARCH.go
+// defined in zruntime_def_$GOOS_$GOARCH.go
+extern MStats mstats;
 
 extern volatile intgo runtime·MemProfileRate;
 
-// 小对象由每个线程(m对象)的cache中的空闲列表(mcache)中分配.
-// 大对象(大于32k)直接从堆中分配.
-// 如果分配的块之后需要调用 runtime·free() 手动释放(即不由GC操作来回收空间), 
-// 则typ参数必须指定为0, 而此时 flag 一般为 FlagNoInvokeGC.
+// 为一个 object 分配至少 size 大小的空间, 这是开发者程序中声明变量时进行的操作.
+//
+// 申请规则如下
+// 1. 小对象由每个线程(M 对象)的 cache 中的空闲列表(mcache)中分配.
+// 2. 大对象(大于32k)直接从堆中分配.
+// 3. 如果分配的块之后需要调用 runtime·free() 手动释放(即不由GC操作来回收空间), 
+// 则 typ 参数必须指定为0(此时 flag 参数一般为 FlagNoInvokeGC).
 // 
+// param size: 申请分配的空间大小
+// param flag: 目标空间的标记, 如 FlagNoInvokeGC 表示该空间不需要 GC 回收.
+//
+// caller:
+// 	1. runtime·malloc()
+// 		1. runtime·mallocinit() 初始化内存分配器完成后, 调用此函数看看效果.
+// 			从代码分析来看, 此时内存分配器里所有的区域都还没有实际分配空间.
+// 	2. runtime·new()
+//
 // 此函数的调用者很多, 创建P, G对象, chan, string对象, 还有栈帧对象等, 
 // 都可以调用此函数创建.
 //
@@ -47,16 +61,17 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	MCacheList *l;
 	uintptr npages;
 	MSpan *s;
+	// 表示为目标对象分配的小块空间的地址
 	MLink *v;
 
 	if(size == 0) {
 		// All 0-length allocations use this pointer.
 		// The language does not require the allocations to have distinct values.
 		// 所有长度为0的分配操作都返回这个指针(...是不是nil对象?)
-		// go不要求nil对象有不同的值.
+		// go 不要求 nil 对象有不同的值.
 		return &runtime·zerobase;
 	}
-	// m在runtime.h中声明, 也是全局变量, m是M类型的列表对象.
+	// m 在 runtime.h 中声明, 也是全局变量, m 是 M 类型的列表对象.
 	if(m->mallocing) runtime·throw("malloc/free - deadlock");
 
 	// Disable preemption during settype_flush.
@@ -67,35 +82,41 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	if(DebugTypeAtBlockEnd) size += sizeof(uintptr);
 
 	c = m->mcache;
+	// 小对象从 mcache 列表中分配.
 	if(size <= MaxSmallSize) {
 		// Inlined version of SizeToClass().
-		// 从mcache空闲列表中分配
-		// 第二句的意思应该是, 下面的语句实现了SizeToClass()的功能, 相当于内联版本.
+		// 下面的语句同样实现了 SizeToClass() 的功能, 相当于内联版本.
 		if(size <= 1024-8) sizeclass = runtime·size_to_class8[(size+7)>>3];
 		else sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
-		// 这里的size与前面的size大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
+
+		// 这里的 size 与前面的 size 大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
 		size = runtime·class_to_size[sizeclass];
-		// 先从当前线程的mcache中分配
+		// 先从当前线程的 mcache 中分配
 		l = &c->list[sizeclass];
-		// 如果list中已经没有成员(分配一个成员就会从list中移除), 从堆中的central空间中拿一些过来.
+		// 如果 list 中已经没有成员(分配一个成员就会从 list 中移除), 则从堆中的 central 空间中拿一些过来.
 		if(l->list == nil) runtime·MCache_Refill(c, sizeclass);
 
-		// ...mcache的span链表分配小对象, 相当于直接从链表中移除了一个成员啊...那之后怎么跟踪啊??? GC怎么办???
+		// 从 mcache 的 span 链表分配小对象, 相当于直接从链表中移除了一个成员.
 		v = l->list;
 		l->list = v->next;
 		l->nlist--;
 		if(!(flag & FlagNoZero)) {
 			v->next = nil;
+			// 目标块地址v的第2个 字段 为空, 就表示整个块已清零, 不需要调用 runtime·memclr()
+			// ...什么原理???
+			//
 			// block is zeroed iff second word is zero ...
-			// 目标块地址v的第2个成员为空, 就表示整个块已清零, 不需要调用runtime·memclr()
-			if(size > sizeof(uintptr) && ((uintptr*)v)[1] != 0)
+			if(size > sizeof(uintptr) && ((uintptr*)v)[1] != 0){
 				runtime·memclr((byte*)v, size);
+			}
 		}
 		// 记录已经分配的大小.
 		c->local_cachealloc += size;
 	} else {
 		// TODO(rsc): Report tracebacks for very large allocations.
-		// 从堆上直接分配
+		// 大对象(超过32k)直接从堆上分配
+
+		// npages 表示目标 size 的空间需要多少页
 		npages = size >> PageShift;
 
 		if((size & PageMask) != 0) npages++;
@@ -112,13 +133,16 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		// 为之后的标记清除做准备(应该是记录下分配空间的位置, 方便GC时的索引)
 		runtime·markspan(v, 0, 0, true);
 	}
-	// 如果flag不包括FlagNoGC标识位, 说明该空间需要被GC, 所以将其标记.
-	if(!(flag & FlagNoGC))
-		// 设置此内存块为noscan类型(即不包含指针, GC时无需从此处开始寻找释放对象).
-		runtime·markallocated(v, size, (flag&FlagNoScan) != 0);
 
-	if(DebugTypeAtBlockEnd)
+	// 如果 flag 不包括 FlagNoGC 标识位, 说明该空间需要被GC, 所以将其标记.
+	if(!(flag & FlagNoGC)){
+		// 设置此内存块 为noscan 类型(即不包含指针, GC时无需从此处开始寻找释放对象).
+		runtime·markallocated(v, size, (flag&FlagNoScan) != 0);
+	}
+
+	if(DebugTypeAtBlockEnd){
 		*(uintptr*)((uintptr)v+size-sizeof(uintptr)) = typ;
+	}
 
 	// TODO: save type even if FlagNoScan? 
 	// Potentially expensive but might help heap profiling/tracing.
@@ -153,26 +177,27 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 			runtime·MProf_Malloc(v, size);
 		}
 	}
-	// 如果flag不包含FlagNoInvokeGC, 说明此次分配会给GC增加压力(因为此次分配需要GC来回收)
-	// 而此时如果next_gc时间到了, 就手动触发gc()
-	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc)
+	// 如果 flag 不包含 FlagNoInvokeGC, 说明此次分配会给GC增加压力(因为此次分配需要GC来回收)
+	// 而此时如果 next_gc 时间到了, 就手动触发gc()
+	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc) {
 		runtime·gc(0);
+	}
 
 	if(raceenabled) runtime·racemalloc(v, size);
 	return v;
 }
 
-// 由于使用了FlagNoInvokeGC标记, 
-// 通过此函数分配的空间都是由调用者再通过runtime·free()释放的,
-// 而不是通过GC来回收.
+// 由于使用了 FlagNoInvokeGC 标记, 
+// 通过此函数分配的空间都是由调用者再通过 runtime·free() 释放的, 而不是通过GC来回收.
 void*
 runtime·malloc(uintptr size)
 {
 	return runtime·mallocgc(size, 0, FlagNoInvokeGC);
 }
 
+// 释放指向地址 v 的对象
+//
 // Free the object whose base pointer is v.
-// 释放指向地址v的对象
 void
 runtime·free(void *v)
 {
@@ -205,7 +230,8 @@ runtime·free(void *v)
 	if(sizeclass == 0) {
 		// Large object.
 		size = s->npages<<PageShift;
-		*(uintptr*)(s->start<<PageShift) = (uintptr)0xfeedfeedfeedfeedll;	// mark as "needs to be zeroed"
+		// mark as "needs to be zeroed"
+		*(uintptr*)(s->start<<PageShift) = (uintptr)0xfeedfeedfeedfeedll;
 		// Must mark v freed before calling unmarkspan and MHeap_Free:
 		// they might coalesce v into other spans and change the bitmap further.
 		runtime·markfreed(v, size);
@@ -216,8 +242,8 @@ runtime·free(void *v)
 	} else {
 		// Small object.
 		size = runtime·class_to_size[sizeclass];
-		if(size > sizeof(uintptr))
-			((uintptr*)v)[1] = (uintptr)0xfeedfeedfeedfeedll;	// mark as "needs to be zeroed"
+		// mark as "needs to be zeroed"
+		if(size > sizeof(uintptr)) ((uintptr*)v)[1] = (uintptr)0xfeedfeedfeedfeedll;
 		// Must mark v freed before calling MCache_Free:
 		// it might coalesce v and other blocks into a bigger span
 		// and change the bitmap further.
@@ -280,12 +306,20 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 	return 1;
 }
 
+// 为 MHeap->cachealloc 对象分配空间, 并返回该块空间的地址.
+//
+// 不过这个分配好像很粗略, 只是分配了 chrunk 空间, 没有为实际存储对象的 list 列表分配空间...
+// 且返回的是 cachealloc->list 的地址, 这是一个 MCache 数组, 不过此时为 nil.
+//
+// caller:
+// 	1. runtime·mallocinit() 初始化内存分配器时被调用;
 MCache*
 runtime·allocmcache(void)
 {
 	intgo rate;
 	MCache *c;
 
+	// 典型的申请空间, 然后清零的操作.
 	runtime·lock(&runtime·mheap);
 	c = runtime·FixAlloc_Alloc(&runtime·mheap.cachealloc);
 	runtime·unlock(&runtime·mheap);
@@ -336,10 +370,14 @@ uintptr runtime·sizeof_C_MStats = sizeof(MStats);
 
 #define MaxArena32 (2U<<30)
 
-// caller: runtime·schedinit()
+// 初始化内存分配器
+//
+// caller: 
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit()
 void
 runtime·mallocinit(void)
 {
+	// 虚拟内存的起始地址, 是计算出来的, 并通过 runtime·SysReserve() 申请.
 	byte *p;
 	uintptr arena_size, bitmap_size, spans_size;
 	extern byte end[];
@@ -366,24 +404,29 @@ runtime·mallocinit(void)
 	limit = 0;
 
 	// Set up the allocation arena, a contiguous area of memory where
-	// allocated data will be found.  The arena begins with a bitmap large
-	// enough to hold 4 bits per allocated word.
+	// allocated data will be found. 
+	// The arena begins with a bitmap large enough to hold 4 bits per allocated word.
+	//
+	// if 条件判断是根据指针 size 大小, 确认 OS 是否为 64 位的.
 	if(sizeof(void*) == 8 && (limit == 0 || limit > (1<<30))) {
 		// On a 64-bit machine, allocate from a single contiguous reservation.
 		// 128 GB (MaxMem) should be big enough for now.
 		//
-		// The code will work with the reservation at any address, but ask
-		// SysReserve to use 0x0000XXc000000000 if possible (XX=00...7f).
-		// Allocating a 128 GB region takes away 37 bits, and the amd64
-		// doesn't let us choose the top 17 bits, so that leaves the 11 bits
-		// in the middle of 0x00c0 for us to choose.  Choosing 0x00c0 means
+		// The code will work with the reservation at any address, 
+		// but ask SysReserve to use 0x0000XXc000000000 if possible (XX=00...7f).
+		// Allocating a 128 GB region takes away 37 bits,
+		// and the amd64 doesn't let us choose the top 17 bits,
+		// so that leaves the 11 bits in the middle of 0x00c0 for us to choose. 
+		// Choosing 0x00c0 means
 		// that the valid memory addresses will begin 0x00c0, 0x00c1, ..., 0x00df.
 		// In little-endian, that's c0 00, c1 00, ..., df 00. None of those are valid
 		// UTF-8 sequences, and they are otherwise as far away from 
-		// ff (likely a common byte) as possible.  If that fails, we try other 0xXXc0
-		// addresses.  An earlier attempt to use 0x11f8 caused out of memory errors
-		// on OS X during thread allocations.  0x00c0 causes conflicts with
-		// AddressSanitizer which reserves all memory up to 0x0100.
+		// ff (likely a common byte) as possible. 
+		// If that fails, we try other 0xXXc0 addresses. 
+		// An earlier attempt to use 0x11f8 caused out of memory errors
+		// on OS X during thread allocations. 
+		// 0x00c0 causes conflicts with AddressSanitizer 
+		// which reserves all memory up to 0x0100.
 		// These choices are both for debuggability and to reduce the
 		// odds of the conservative garbage collector not collecting memory
 		// because some non-pointer block of memory had a bit pattern
@@ -393,6 +436,8 @@ runtime·mallocinit(void)
 		// but it hardly matters: e0 00 is not valid UTF-8 either.
 		//
 		// If this fails we fall back to the 32 bit memory mechanism
+		//
+		// 在 64-bit 系统中，实际保留地址 256MB spans + 8GB bitmap + 128GB arena
 		arena_size = MaxMem;
 		bitmap_size = arena_size / (sizeof(void*)*8/4);
 		spans_size = arena_size / PageSize * sizeof(runtime·mheap.spans[0]);
@@ -403,7 +448,10 @@ runtime·mallocinit(void)
 			p = runtime·SysReserve(p, bitmap_size + spans_size + arena_size);
 			if(p != nil) break;
 		}
-	}
+	} // 64 位 OS 赋值结束
+
+	// 如果 p == nil, 说明没有进到上面的 if case 中, 则将 OS 视作 32 位.
+	// 这部分可以直接略过...
 	if (p == nil) {
 		// On a 32-bit machine, we can't typically get away
 		// with a giant virtual address space reservation.
@@ -446,30 +494,40 @@ runtime·mallocinit(void)
 		if(p == nil)
 			runtime·throw("runtime: cannot reserve arena virtual address space");
 		if((uintptr)p & (((uintptr)1<<PageShift)-1))
-			runtime·printf("runtime: SysReserve returned unaligned address %p; asked for %p", p,
-				bitmap_size+spans_size+arena_size);
-	}
-	if((uintptr)p & (((uintptr)1<<PageShift)-1))
+			runtime·printf(
+				"runtime: SysReserve returned unaligned address %p; asked for %p",
+				p, bitmap_size+spans_size+arena_size
+			);
+	} // 32 位 OS 赋值结束
+
+	if((uintptr)p & (((uintptr)1<<PageShift)-1)){
 		runtime·throw("runtime: SysReserve returned unaligned address");
+	}
+
+	//                        arena_used(初始arena的使用为0, 所以其地址与 arena_start 在同一位置)
+	// span     bitmap        arena_start                 arena_end
+	//   ↓        ↓                ↓                          ↓
+	//   +--------|----------------+--------------------------+
+	//   |  span  |     bitmap     |           arena          |
+	//   +--------|----------------+--------------------------+
+	//
 	// 保留区域头部存储 spans、bitmap. 仅设置地址, 并没有分配内存
-	// runtime·mheap是一个全局变量, 这里规定span, bitmap和arena3个区域的地址划分.
+	// runtime·mheap 是一个全局变量, 这里规定span, bitmap和arena3个区域的地址划分.
 	runtime·mheap.spans = (MSpan**)p;
 	runtime·mheap.bitmap = p + spans_size;
 	runtime·mheap.arena_start = p + spans_size + bitmap_size;
-	runtime·mheap.arena_used = runtime·mheap.arena_start; // 初始arena的使用为0, 所以其地址等于arena_start
+	// 初始arena的使用为0, 所以其地址与 arena_start 在同一位置
+	runtime·mheap.arena_used = runtime·mheap.arena_start; 
 	runtime·mheap.arena_end = runtime·mheap.arena_start + arena_size;
 
 	// Initialize the rest of the allocator.
-	// MHeap_Init()位于mheap.c
-	// 此函数调用了runtime·FixAlloc_Alloc()为其分配空间并清零.
 	runtime·MHeap_Init(&runtime·mheap);
-	// 上面那句runtime·MHeap_Init()对mheap->cachealloc成员执行了runtime·FixAlloc_Init()
-	// 将其初始化为FixAlloc对象, 而且没有指定first函数, 实际上没有其他任何操作.
-	// 其实对mheap->cachealloc成员的分配操作是在runtime·allocmcache()函数中执行的,
-	// 为当前线程创建cache(mcache存在于每个线程中, 并不是在堆上)
+
+	// 为当前线程创建 cache(mcache 存在于每个线程中, 并不是在堆上, 用于小对象无锁分配空间)
+	// m->mcache 为 MCache 数组指针, 不过这里返回的是 nil, 里面还是空的.
 	m->mcache = runtime·allocmcache();
 
-	// 貌似直到这里, mheap的free列表中各个span链表都还是空的, 并未分配过空间啊...
+	// 貌似直到这里, mheap 的 free 列表中各个 span 链表都还是空的, 并未分配过空间啊...
 	// See if it works.
 	// ...先分配一个1byte的对象(参数1即对象size为1), 再回收
 	runtime·free(runtime·malloc(1));
@@ -547,10 +605,21 @@ static struct
 
 enum
 {
+	// 256k
 	PersistentAllocChunk	= 256<<10,
-	PersistentAllocMaxBlock	= 64<<10,  // VM reservation granularity is 64K on windows
+	// 64k
+	//
+	// VM reservation granularity is 64K on windows
+	PersistentAllocMaxBlock	= 64<<10,
 };
 
+// 为 function, type 等内置类型分配指定大小的空间, 并返回该块空间的地址.
+//
+// param size: 待分配的空间大小. 
+//
+// caller:
+// 	1. src/pkg/runtime/mfixalloc.c -> runtime·FixAlloc_Alloc() 初始化内存分配器期间被调用.
+//
 // Wrapper around SysAlloc that can allocate small chunks.
 // There is no associated free operation.
 // Intended for things like function/type/debug-related persistent data.
@@ -565,10 +634,12 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 			runtime·throw("persistentalloc: align is now a power of 2");
 		if(align > PageSize)
 			runtime·throw("persistentalloc: align is too large");
-	} else
+	} else{
 		align = 8;
-	if(size >= PersistentAllocMaxBlock)
-		return runtime·SysAlloc(size, stat);
+	}
+
+	if(size >= PersistentAllocMaxBlock) return runtime·SysAlloc(size, stat);
+
 	runtime·lock(&persistent);
 	persistent.pos = (byte*)ROUND((uintptr)persistent.pos, align);
 	if(persistent.pos + size > persistent.end) {
@@ -582,6 +653,7 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 	p = persistent.pos;
 	persistent.pos += size;
 	runtime·unlock(&persistent);
+
 	if(stat != &mstats.other_sys) {
 		// reaccount the allocation against provided stat
 		runtime·xadd64(stat, size);

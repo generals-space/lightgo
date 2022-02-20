@@ -177,7 +177,7 @@ runtime·schedinit(void)
 	runtime·mprofinit();
 	runtime·mallocinit(); 	// 初始化内存分配器
 	mcommoninit(m); 		// 初始化调度器
-	
+
 	// Initialize the itable value for newErrorCString,
 	// so that the next time it gets called, 
 	// possibly in a fault during a garbage collection, 
@@ -199,7 +199,7 @@ runtime·schedinit(void)
 		if(n > MaxGomaxprocs) n = MaxGomaxprocs;
 		procs = n;
 	}
-	// 为 p 对象申请空间...不过这是按照最大值申请的啊...
+	// 为 P 对象申请空间...不过这是按照最大值申请的啊...
 	// 然后调用 procresize() 创建指定数量的 p 
 	// 并为各p对象的本地任务队列申请空间.
 	runtime·allp = runtime·malloc((MaxGomaxprocs+1)*sizeof(runtime·allp[0]));
@@ -2663,13 +2663,14 @@ runtime·setcpuprofilerate(void (*fn)(uintptr*, int32), int32 hz)
 	m->locks--;
 }
 
-// Change number of processors. 
-// The world is stopped, sched is locked.
 // 修改p对象的数量为new, 不足的补上, 多余的丢掉.
 // 注意最后修改了 runtime·gomaxprocs 的值为new.
 // caller: runtime·schedinit(), runtime·starttheworld()
 // 话说, 按照这两个调用函数的时机, 似乎不会存在动态调整p数量的情况?
 // 还是说每次调整p数量, 是要在本轮gc结束后的 starttheworld() ?
+//
+// Change number of processors. 
+// The world is stopped, sched is locked.
 static void
 procresize(int32 new)
 {

@@ -36,9 +36,15 @@ addrspace_free(void *v, uintptr n)
 }
 
 // 从OS申请从地址v开始处, 大小为n的空间.
-// 该函数的所有参数几乎都是直接传入runtime·mmap()的, 
-// 猜测runtime·mmap()虽然能够分配内存, 但不一定是在地址v处, 
+//
+// 该函数的所有参数几乎都是主调函数直接传入 runtime·mmap() 的, 
+// 猜测 runtime·mmap() 虽然能够分配内存, 但不一定是在地址v处, 
 // mmap_fixed()实现了可以在地址v处分配内存的功能.
+//
+// caller:
+// 	1. runtime·SysReserve()
+// 	2. runtime·SysMap()
+//
 static void *
 mmap_fixed(byte *v, uintptr n, int32 prot, int32 flags, int32 fd, uint32 offset)
 {
@@ -56,8 +62,13 @@ mmap_fixed(byte *v, uintptr n, int32 prot, int32 flags, int32 fd, uint32 offset)
 	return p;
 }
 
-// 向OS申请大小为n的内存空间, 并返回内存地址, 申请成功后将n加到stat指向的数值变量, 用于记录.
-// stat一般是: &mstats.other_sys
+// 向OS申请(mmap)大小为 n 的内存空间, 并返回该块内存地址.
+// 申请成功后将 n 加到 stat 指向的数值变量, 用于记录.
+//
+// param: stat一般是 &mstats.other_sys
+//
+// caller:
+// 	1. src/pkg/runtime/mheap.c -> RecordSpan() 
 void*
 runtime·SysAlloc(uintptr n, uint64 *stat)
 {
@@ -103,13 +114,22 @@ runtime·SysFree(void *v, uintptr n, uint64 *stat)
 	runtime·munmap(v, n);
 }
 
+// 为内存分配器申请预留的虚拟内存地址(并未实际分配, 这个值可以非常大)
+//
+// param *v: 主调函数计算出来的虚拟内存起始地址;
+// param n: 需要申请的内存大小, 256MB spans + 8GB bitmap + 128GB arena;
+//
+// caller: 
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocinit() 初始化内存分配器
 void*
 runtime·SysReserve(void *v, uintptr n)
 {
 	void *p;
 
-	// On 64-bit, people with ulimit -v set complain if we reserve too much address space. 
-	// Instead, assume that the reservation is okay if we can reserve at least 64K and check the assumption in SysMap.
+	// On 64-bit, people with ulimit -v set complain 
+	// if we reserve too much address space. 
+	// Instead, assume that the reservation is okay 
+	// if we can reserve at least 64K and check the assumption in SysMap.
 	// Only user-mode Linux (UML) rejects these requests.
 	if(sizeof(void*) == 8 && (uintptr)v >= 0xffffffffU) {
 		p = mmap_fixed(v, 64<<10, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);

@@ -38,7 +38,7 @@ int32 runtime·class_to_allocnpages[NumSizeClasses];
 // Objects >= 1024 bytes are 128-aligned, 
 // so the second array is indexed by the size divided by 128 (rounded up). 
 // The arrays are filled in by InitSizes.
-// size_to_classXXX相对于class_to_size, 用于反查.
+// size_to_classXXX 相对于 class_to_size, 用于反查.
 int8 runtime·size_to_class8[1024/8 + 1];
 int8 runtime·size_to_class128[(MaxSmallSize-1024)/128 + 1];
 
@@ -52,6 +52,10 @@ SizeToClass(int32 size)
 	return runtime·size_to_class8[(size+7)>>3];
 }
 
+// 初始化 size_to_class 等⼏个全局表
+//
+// caller:
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocinit() 初始化内存分配器时被调用
 void
 runtime·InitSizes(void)
 {
