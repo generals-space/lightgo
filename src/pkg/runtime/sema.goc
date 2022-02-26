@@ -133,9 +133,10 @@ cansemacquire(uint32 *addr)
 	return 0;
 }
 
-// caller: mutex.go->Lock() 中 runtime_Semacquire(), 
-// 实际调用当前源文件的 runtime_Semacquire() 函数, 
-// 最终调用的还是这里.
+// 实际调用当前源文件的 runtime_Semacquire() 函数, 最终调用的还是这里.
+//
+// caller: 
+// 	1. mutex.go->Lock() 中 runtime_Semacquire(), 
 void
 runtime·semacquire(uint32 volatile *addr, bool profile)
 {

@@ -135,6 +135,7 @@ runtime·noteclear(Note *n)
 	n->key = 0;
 }
 
+// src/pkg/runtime/lock_sema.c -> runtime·notewakeup() 不同的实现方式
 void
 runtime·notewakeup(Note *n)
 {

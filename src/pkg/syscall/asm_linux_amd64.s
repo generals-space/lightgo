@@ -12,11 +12,12 @@
 // Trap # in AX, args in DI SI DX R10 R8 R9, return in AX DX
 // Note that this differs from "standard" ABI convention, which
 // would pass 4th arg in CX, not R10.
+//
 // 系统调用号由 AX 寄存器传递, 参数列表分别放在 DI SI DX R10 R8 R9 寄存器中,
 // 返回值则放在 AX DX 中.
-// 注意: 这里与标准API调用约定不太一样, 第4个参数是放在R10而不是CX寄存器中的.
+// 注意: 这里与标准API调用约定不太一样, 第4个参数是放在 R10 而不是 CX 寄存器中的.
 // 
-// 参数SB寄存器(Static Base)只是表示当前语句是用来声明函数(或全局变量的)
+// 参数 SB 寄存器(Static Base)只是表示当前语句是用来声明函数(或全局变量的)
 // 不过这个函数貌似没有被其他地方显式调用, 应该是由编译器来定位的.
 TEXT	·Syscall(SB),NOSPLIT,$0-64
 	CALL	runtime·entersyscall(SB)

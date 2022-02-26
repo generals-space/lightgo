@@ -128,6 +128,10 @@ enum
 	CLONE_NEWIPC = 0x8000000,
 };
 
+// 汇编代码实现 clone 系统调用.
+//
+// caller:
+// 	1. src/pkg/runtime/proc.c -> newm() 创建 m 对象时, 调用此函数创建系统线程.
 void
 runtime·newosproc(M *mp, void *stk)
 {
@@ -145,10 +149,13 @@ runtime·newosproc(M *mp, void *stk)
 		| CLONE_THREAD	/* revisit - okay for now */
 		;
 
-	mp->tls[0] = mp->id;	// so 386 asm can find it
+	// so 386 asm can find it
+	mp->tls[0] = mp->id;
 	if(0){
-		runtime·printf("newosproc stk=%p m=%p g=%p clone=%p id=%d/%d ostk=%p\n",
-			stk, mp, mp->g0, runtime·clone, mp->id, (int32)mp->tls[0], &mp);
+		runtime·printf(
+			"newosproc stk=%p m=%p g=%p clone=%p id=%d/%d ostk=%p\n",
+			stk, mp, mp->g0, runtime·clone, mp->id, (int32)mp->tls[0], &mp
+		);
 	}
 
 	// Disable signals during clone, so that the new thread starts
@@ -158,8 +165,10 @@ runtime·newosproc(M *mp, void *stk)
 	runtime·rtsigprocmask(SIG_SETMASK, &oset, nil, sizeof oset);
 
 	if(ret < 0) {
-		runtime·printf("runtime: failed to create new OS thread (have %d already; errno=%d)\n", 
-			runtime·mcount(), -ret);
+		runtime·printf(
+			"runtime: failed to create new OS thread (have %d already; errno=%d)\n", 
+			runtime·mcount(), -ret
+		);
 		runtime·throw("runtime.newosproc");
 	}
 }

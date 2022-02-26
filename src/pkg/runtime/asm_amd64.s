@@ -6,7 +6,8 @@
 #include "funcdata.h"
 #include "../../cmd/ld/textflag.h"
 
-// caller: src/pkg/runtime/rt0_linux_amd64.s -> main() (程序启动的入口函数)
+// caller: 
+// 	1. src/pkg/runtime/rt0_linux_amd64.s -> main() (程序启动的入口函数)
 TEXT _rt0_go(SB),NOSPLIT,$0
 	// copy arguments forward on an even stack
 	MOVQ	DI, AX		// argc
@@ -66,6 +67,8 @@ needtls:
 	JEQ 2(PC)
 	MOVL	AX, 0	// abort
 ok:
+	// 为当前主线程 m0 设置 g0。
+	//
 	// set the per-goroutine and per-mach "registers"
 	get_tls(BX)
 	LEAQ	runtime·g0(SB), CX
@@ -90,6 +93,8 @@ ok:
 	CALL	runtime·schedinit(SB)
 
 	// 创建 main goroutine 用于执行开发者编写的 main() 函数的函数体语句.
+	// 不过不是 runtime·main·f(), 而是 runtime·main() 函数.
+	//
 	// create a new goroutine to start program
 	PUSHQ	$runtime·main·f(SB)		// entry
 	PUSHQ	$0			// arg size
@@ -106,6 +111,7 @@ ok:
 	MOVL	$0xf1, 0xf1  // crash
 	RET
 
+// runtime·main() 位于 src/pkg/runtime/proc.c
 DATA	runtime·main·f+0(SB)/8,$runtime·main(SB)
 GLOBL	runtime·main·f(SB),RODATA,$8
 
@@ -136,6 +142,9 @@ TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	BX, gobuf_g(AX)
 	RET
 
+// caller: 
+// 	1. src/pkg/runtime/proc.c -> execute()
+//
 // void gogo(Gobuf*)
 // restore state from Gobuf; longjmp
 TEXT runtime·gogo(SB), NOSPLIT, $0-8
@@ -144,22 +153,26 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-8
 	MOVQ	0(DX), CX		// make sure g != nil
 	get_tls(CX)
 	MOVQ	DX, g(CX)
-	MOVQ	gobuf_sp(BX), SP	// restore SP
+	MOVQ	gobuf_sp(BX), SP	// restore SP // ⽤ G.sched.sp 设定 SP 寄存器
 	MOVQ	gobuf_ret(BX), AX
 	MOVQ	gobuf_ctxt(BX), DX
 	MOVQ	$0, gobuf_sp(BX)	// clear to help garbage collector
 	MOVQ	$0, gobuf_ret(BX)
 	MOVQ	$0, gobuf_ctxt(BX)
-	MOVQ	gobuf_pc(BX), BX
-	JMP	BX
+	MOVQ	gobuf_pc(BX), BX 	// 将 G.sched.pc 也就是 goroutine 函数指针放到 BX
+	JMP	BX 						// 跳转, 执⾏ goroutine 函数.
 
+// caller:
+// 	1. src/pkg/runtime/proc.c -> runtime·goexit() 
+//     goroutine 自然结束退出时, 通过此函数切换回 m0.
+//
 // void mcall(void (*fn)(G*))
 // Switch to m->g0's stack, call fn(g).
 // Fn must never return.  It should gogo(&g->sched)
 // to keep running g.
 TEXT runtime·mcall(SB), NOSPLIT, $0-8
 	MOVQ	fn+0(FP), DI
-	
+
 	get_tls(CX)
 	MOVQ	g(CX), AX	// save state in g->sched
 	MOVQ	0(SP), BX	// caller's PC

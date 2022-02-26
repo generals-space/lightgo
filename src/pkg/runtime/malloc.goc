@@ -187,8 +187,12 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	return v;
 }
 
-// 由于使用了 FlagNoInvokeGC 标记, 
+// 调用 runtime·mallocgc(), 并使用 FlagNoInvokeGC 标记, 
 // 通过此函数分配的空间都是由调用者再通过 runtime·free() 释放的, 而不是通过GC来回收.
+//
+// caller:
+// 	1. runtime·mallocinit() 初始化内存分配器完成后, 调用此方法试用.
+// 	2. src/pkg/runtime/proc.c -> runtime·schedinit() (初始化内存分配器与 m0 后)为 P 链表申请空间.
 void*
 runtime·malloc(uintptr size)
 {
@@ -312,7 +316,8 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 // 且返回的是 cachealloc->list 的地址, 这是一个 MCache 数组, 不过此时为 nil.
 //
 // caller:
-// 	1. runtime·mallocinit() 初始化内存分配器时被调用;
+// 	1. runtime·mallocinit() 初始化内存分配器时被调用, 为 m0 创建 mcache 成员;
+// 	2. src/pkg/runtime/proc.c -> procresize() 对 p 的数量进行调整时, 为新创建的 p 对象分配 mcache;
 MCache*
 runtime·allocmcache(void)
 {
@@ -334,6 +339,9 @@ runtime·allocmcache(void)
 	return c;
 }
 
+// caller:
+// 	1. src/pkg/runtime/proc.c -> procresize() 
+//     对 p 的数量进行调整时, 将多余的 p 对象的 mcache 空间回收;
 void
 runtime·freemcache(MCache *c)
 {

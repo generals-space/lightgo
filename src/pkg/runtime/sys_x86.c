@@ -6,13 +6,17 @@
 
 #include "runtime.h"
 
+// caller:
+// 	1. src/pkg/runtime/stack.c -> runtime·gostartcallfn()
+//     此时 gobuf->pc 指向 goexit, 将其地址⼊栈, 在 go func() 结束后执行.
+//
 // adjust Gobuf as it if executed a call to fn with context ctxt
 // and then did an immediate gosave.
 void
 runtime·gostartcall(Gobuf *gobuf, void (*fn)(void), void *ctxt)
 {
 	uintptr *sp;
-	
+
 	sp = (uintptr*)gobuf->sp;
 	*--sp = (uintptr)gobuf->pc;
 	gobuf->sp = (uintptr)sp;
@@ -37,6 +41,9 @@ runtime·rewindmorestack(Gobuf *gobuf)
 		gobuf->pc = gobuf->pc + 2 + *(int8*)(pc+1);
 		return;
 	}
-	runtime·printf("runtime: pc=%p %x %x %x %x %x\n", pc, pc[0], pc[1], pc[2], pc[3], pc[4]);
+	runtime·printf(
+		"runtime: pc=%p %x %x %x %x %x\n", 
+		pc, pc[0], pc[1], pc[2], pc[3], pc[4]
+	);
 	runtime·throw("runtime: misuse of rewindmorestack");
 }

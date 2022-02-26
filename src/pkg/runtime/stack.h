@@ -75,8 +75,7 @@ enum {
 #ifdef GOOS_plan9
 	// The size of the note handler frame varies among architectures,
 	// but 512 bytes should be enough for every implementation.
-	// note handler的大小因体系结构而异, 
-	// 但是512字节对每种实现都应该足够了.
+	// note handler 的大小因体系结构而异, 但是512字节对每种实现都应该足够了.
 	StackSystem = 512,
 #else
 	StackSystem = 0,
@@ -89,13 +88,14 @@ enum {
 	// 创建g对象时分配初始的栈空间时并不会包含这个值.
 	StackExtra = 2048,
 
+	// 栈空间的最小值 8k.
+	// 如果要分配的栈帧空间+StackExtra 的和仍小于此值, 分配时会直接使用这个值. 
+	// 算是标准化吧.
+	//
 	// The minimum stack segment size to allocate.
 	// If the amount needed for the splitting frame + StackExtra
 	// is less than this number, 
 	// the stack will have this size instead.
-	// 分配栈空间的最小值.
-	// 如果要分配的栈帧空间+StackExtra的和仍小于此值, 
-	// 分配时会直接使用这个值. 算是标准化吧.
 	StackMin = 8192,
 	FixedStack = StackMin + StackSystem,
 

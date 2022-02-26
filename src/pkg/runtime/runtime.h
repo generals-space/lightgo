@@ -209,9 +209,10 @@ struct	Slice
 };
 struct	Gobuf
 {
-	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
 	// sp, pc和g字段的偏移量是编译器可预见的.
 	// sp用于定位局部变量(父函数)
+	//
+	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
 	uintptr	sp;
 	uintptr	pc;
 	// g成员指向 gobuf 对象所属的g对象, 相当于反向引用.
@@ -261,15 +262,16 @@ struct	G
 	// 被设置为 StackPreempt 时, 表示当前g对象被抢占(对比 preempt 字段)
 	// 唯一一次有效使用在 stack.c -> runtime·newstack() 函数中.
 	uintptr	stackguard0;
+	// 当前 g 对象栈空间顶部 top 部分的起始地址.
+	//
 	// cannot move - also known to libmach, runtime/cgo
-	// 当前g对象栈空间顶部top部分的起始地址.
 	uintptr	stackbase;
 	uint32	panicwrap;	// cannot move - also known to linker
 	uint32	selgen;		// valid sudog pointer
 	Defer*	defer;
 	Panic*	panic;
-	// 用于存在当前g所执行的函数的父级函数的信息,
-	// 包括父级函数的pc(函数地址), sp(用于定位局部变量)
+	// 用于存储当前 g 的执行现场数据.
+	// 包含所执行的函数的父级函数的信息(父级函数的pc(函数地址), sp(用于定位局部变量))
 	Gobuf	sched;
 	// 以下 syscallXXX 都只在 status == Gsyscall 状态下有效
 	// syscallstack = stackbase to use during gc
@@ -287,24 +289,28 @@ struct	G
 	uintptr	stack0;
 	// 当前g线程的栈大小, 不可超过 runtime·maxstacksize
 	uintptr	stacksize;
+	// 指向了 runtime·allg 全局变量
+	//
 	// on allg
-	// ...这个指向 runtime·allg 变量吧
 	G*	alllink;
 	void*	param;		// passed parameter on wakeup
 	int16	status;
 	int64	goid;
-	// if status==Gwaiting
-	// Gwaiting 状态下被设置, 目前看到的可能值有
+	// Gwaiting 状态下被设置, 表示原因, 目前看到的可能值有
 	// 1. garbage collection
 	// 2. stack unsplit
 	// 3. stack split
+	//
+	// if status==Gwaiting
 	int8*	waitreason;
 	// 貌似这个链表指针指向下一个待调度执行的g对象.
 	G*	schedlink; 
 	bool	ispanic;
-	bool	issystem;	// do not output in stack dump
+	// do not output in stack dump
+	bool	issystem;
+	// 如下 g 处于 isbackground 状态, 将不受死锁检测
+	//
 	// ignore in deadlock detector
-	// 如下g处于 isbackground 状态, 将不受死锁检测
 	bool	isbackground;
 	// preemption signal, duplicates stackguard0 = StackPreempt
 	// 如果当前协程被抢占(如调用 preemptone()时), 则这个字段为true, 
@@ -312,6 +318,8 @@ struct	G
 	bool	preempt;
 	int8	raceignore;	// ignore race detection events
 	M*	m;		// for debuggers, but offset not hard-coded
+	// 当前 g 绑定了一个 m, 只能由这个 m 执行.
+	// 在其他 m 遍历可执行的 g 时, 发现此值不为空, 就会将自己的 p 让出来.
 	M*	lockedm;
 	int32	sig;
 	int32	writenbuf;
@@ -321,14 +329,15 @@ struct	G
 	uintptr	sigcode0;
 	uintptr	sigcode1;
 	uintptr	sigpc;
-	// pc of go statement that created this goroutine
-	// 创建此g对象的go()语句的pc(程序计数器)
-	// 或者说是主调函数的函数地址(不是调用处的地址), 
+	// 创建此g对象的go()语句的pc(程序计数器), 或者说是主调函数的函数地址(不是调用处的地址).
 	// 只在 proc.c -> runtime·newproc1() 函数中被赋值.
+	//
+	// pc of go statement that created this goroutine
 	uintptr	gopc;
 	uintptr	racectx;
 	uintptr	end[];
 };
+
 struct	M
 {
 	// goroutine with scheduling stack
@@ -345,9 +354,12 @@ struct	M
 	uint64	procid;		// for debuggers, but offset not hard-coded
 	G*	gsignal;	// signal-handling G
 	uintptr	tls[4];		// thread-local storage (for x86 extern register)
+	// 如果一个 m 在被创建时(newm()函数)指定了要执行的函数, 就会在这里赋值目标函数地址.
+	// 
 	void	(*mstartfn)(void);
+	// 当前正在运行的 g 对象
+	//
 	// current running goroutine
-	// 当前正在运行的g对象
 	G*	curg;
 	G*	caughtsig;	// goroutine running during fatal signal
 	// attached P for executing Go code (nil if not executing Go code)
@@ -451,15 +463,19 @@ struct P
 {
 	Lock;
 
+	// id 表示当前 p 对象在 runtime·allp[] 数组中的索引值.
 	int32	id;
-	uint32	status;		// one of Pidle/Prunning/...
-	// 这是一个指向下一个p的指针, 组成链表.
+	// one of Pidle/Prunning/...
+	uint32	status;
+	// 这是一个指向下一个 p 的指针, 组成链表.
 	P*	link;
-	// incremented on every scheduler call
 	// 每次被调度器调度时加1, execute()
+	//
+	// incremented on every scheduler call
 	uint32	schedtick;
-	// incremented on every system call
 	// 每次系统调用(完成)时加1, runtime·exitsyscall()
+	//
+	// incremented on every system call
 	uint32	syscalltick;
 	// back-link to associated M (nil if idle)
 	// 反向引用绑定的m对象, 如果p处于 idle状态则为nil
@@ -820,8 +836,9 @@ extern	uintptr runtime·zerobase;
 extern	G*	runtime·allg; 
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
-// P指针链表, 在runtime·schedinit()中按(MaxGomaxprocs+1)申请的空间
-// 就是说这个链表可容纳MaxGomaxprocs+1个P对象.
+
+// P 指针链表, 在 runtime·schedinit() 中按(MaxGomaxprocs+1)申请的空间
+// 就是说这个链表可容纳 MaxGomaxprocs+1 个P对象.
 extern	P**	runtime·allp; 
 extern	int32	runtime·gomaxprocs;
 extern	uint32	runtime·needextram;

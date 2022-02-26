@@ -7,14 +7,17 @@
 #include "malloc.h"
 #include "stack.h"
 
-/* 栈空间布局
-这应该是针对单个函数的, g对象中相关成员只是对当前正在运行的函数来说.
+/* 
 
-stack0       [stackguard0]        stackbase(sp)         stackguard0(上限)      --> High Address
-  ↓               ↓                    ↓                       ↓
-  +---------------+--------------------+--------------+·········
-  | System        | Stack              | Top          |        |
-  +---------------+--------------------+--------------+·········
+栈空间布局
+
+这应该是针对单个函数的, g 对象中相关成员只是对当前正在运行的函数来说.
+
+stack0    [stackguard0]  stackbase(sp)      stackguard0(上限)   --> High Address
+  ↓            ↓              ↓                    ↓
+  +------------+--------------+-----------+·········
+  | System     | Stack        | Top       |        |
+  +------------+--------------+-----------+·········
 
  */
 
@@ -34,14 +37,16 @@ struct StackCacheNode
 static StackCacheNode *stackcache;
 static Lock stackcachemu;
 
-// stackcacherefill/stackcacherelease implement a global cache of stack segments.
-// The cache is required to prevent unlimited growth of per-thread caches.
 // refill 与 release 这两个函数实现了全局栈段的缓存.
 // ...说是全局, 其实cache是属于m对象的, 用于某个m的栈分配.
 // 这种全局栈缓存的存在是为了防止每个线程的缓存的无限增长.
-// 此函数被调用, 意味着当前m的 stackcache 数组为空了,
-// 调用此函数来补充.
-// caller: runtime·stackalloc()
+// 此函数被调用, 意味着当前 m 的 stackcache 数组为空了, 调用此函数来补充.
+//
+// caller: 
+// 	1. runtime·stackalloc()
+//
+// stackcacherefill/stackcacherelease implement a global cache of stack segments.
+// The cache is required to prevent unlimited growth of per-thread caches.
 static void
 stackcacherefill(void)
 {
@@ -103,8 +108,10 @@ stackcacherelease(void)
 }
 
 // 分配大小为n的栈空间, 返回这段空间的起始地址.
-// caller: stack.c -> runtime·newstack(), 
-// proc.c -> runtime·malg()
+//
+// caller: 
+// 	1. stack.c -> runtime·newstack()
+// 	2. proc.c -> runtime·malg()
 void*
 runtime·stackalloc(uint32 n)
 {
@@ -115,25 +122,24 @@ runtime·stackalloc(uint32 n)
 	// so that we never try to grow the stack 
 	// during the code that stackalloc runs.
 	// Doing so would cause a deadlock (issue 1547).
-	// 此函数只能在调度栈 g0 上调用, 普通g对象只能调用 mstackalloc()
-	if(g != m->g0)
-		runtime·throw("stackalloc not on scheduler stack");
+	//
+	// 此函数只能在调度栈 g0 上调用, 普通 g 对象只能调用 mstackalloc()
+	if(g != m->g0) runtime·throw("stackalloc not on scheduler stack");
 
 	// Stacks are usually allocated with a fixed-size free-list allocator,
-	// but if we need a stack of non-standard size, 
-	// we fall back on malloc
-	// (assuming that inside malloc 
-	// and GC all the stack frames are small,
+	// but if we need a stack of non-standard size, we fall back on malloc
+	// (assuming that inside malloc and GC all the stack frames are small,
 	// so that we do not deadlock).
-	// 栈对象通常是由固定大小的空闲链表分配器来分配的,
-	// 所以可以直接向缓存的栈对象链表获取.
-	// 但是如果 n 值与常规的栈大小不符, 则需要单独为其分配, 
-	// 使用 malloc 完成.
+	//
+	// 栈对象通常是由固定大小的空闲链表分配器来分配的, 所以可以直接向缓存的栈对象链表获取.
+	// 但是如果 n 值与常规的栈大小不符, 则需要单独为其分配, 使用 malloc 完成.
 	//
 	if(n == FixedStack || m->mallocing || m->gcing) {
 		// ...这个检查, 呵呵
 		if(n != FixedStack) {
-			runtime·printf("stackalloc: in malloc, size=%d want %d\n", FixedStack, n);
+			runtime·printf(
+				"stackalloc: in malloc, size=%d want %d\n", FixedStack, n
+			);
 			runtime·throw("stackalloc");
 		}
 		if(m->stackcachecnt == 0) stackcacherefill();
@@ -147,19 +153,24 @@ runtime·stackalloc(uint32 n)
 		m->stackinuse++;
 		return v;
 	}
-	return runtime·mallocgc(n, 0, FlagNoProfiling|FlagNoGC|FlagNoZero|FlagNoInvokeGC);
+	return runtime·mallocgc(
+		n, 0, FlagNoProfiling|FlagNoGC|FlagNoZero|FlagNoInvokeGC
+	);
 }
 
 // 调用 runtime·free 直接释放指定空间 v
-// caller: runtime·oldstack()
+//
+// caller: 
+// 	1. runtime·oldstack()
 void
 runtime·stackfree(void *v, uintptr n)
 {
 	uint32 pos;
 
 	if(n == FixedStack || m->mallocing || m->gcing) {
-		if(m->stackcachecnt == StackCacheSize)
+		if(m->stackcachecnt == StackCacheSize){
 			stackcacherelease();
+		}
 		pos = m->stackcachepos;
 		m->stackcache[pos] = v;
 		m->stackcachepos = (pos + 1) % StackCacheSize;
@@ -171,11 +182,15 @@ runtime·stackfree(void *v, uintptr n)
 	runtime·free(v);
 }
 
+// 在函数结束时被调用(函数调用时一般会分配新栈段)
+//
+// caller: 
+// 	1. runtime·lessstack() 只有这一种调用情况
+//
 // Called from runtime·lessstack when returning from a function 
 // which allocated a new stack segment. 
 // The function's return value is in m->cret.
-// 在函数结束时被调用(函数调用时一般会分配新栈段)
-// caller: runtime·lessstack() 只有这一种调用情况
+//
 void
 runtime·oldstack(void)
 {
@@ -190,19 +205,22 @@ runtime·oldstack(void)
 	gp = m->curg;
 	top = (Stktop*)gp->stackbase;
 	old = (byte*)gp->stackguard - StackGuard;
-	// sp用于定位局部变量
+	// sp 用于定位局部变量
 	sp = (byte*)top;
 	argsize = top->argsize;
 
 	if(StackDebug) {
-		runtime·printf("runtime: oldstack gobuf={pc:%p sp:%p lr:%p} cret=%p argsize=%p\n",
-			top->gobuf.pc, top->gobuf.sp, top->gobuf.lr, m->cret, (uintptr)argsize);
+		runtime·printf(
+			"runtime: oldstack gobuf={pc:%p sp:%p lr:%p} cret=%p argsize=%p\n",
+			top->gobuf.pc, top->gobuf.sp, top->gobuf.lr, m->cret, (uintptr)argsize
+		);
 	}
 
 	// gp->status is usually Grunning, but it could be Gsyscall if a stack split
 	// happens during a function call inside entersyscall.
-	// gp->status一般是 Grunning, 但如果在 entersyscall 内部的函数调用期间
-	// 发生栈分割, 则可能是 Gsyscall
+	//
+	// gp->status一般是 Grunning, 
+	// 但如果在 entersyscall 内部的函数调用期间发生栈分割, 则可能是 Gsyscall
 	oldstatus = gp->status;
 
 	gp->sched = top->gobuf;
@@ -238,17 +256,18 @@ runtime·oldstack(void)
 // enough until runtime.main sets it for real
 uintptr runtime·maxstacksize = 1<<20; 
 
+// 分配一个至少 m->moreframesize 字节的栈空间.
+// 
+// caller: 
+// 	1. runtime·newstackcall()
+// 	2. runtime·morestack() 
+// 两个都是汇编代码. 在原来的栈空间不足, 需要新的栈段的时候被调用.
+//
 // Called from runtime·newstackcall or from runtime·morestack 
 // when a new stack segment is needed. 
 // Allocate a new stack big enough for m->moreframesize bytes, 
 // copy m->moreargsize bytes to the new frame,
-// and then act as though runtime·lessstack 
-// called the function at m->morepc.
-// 分配一个至少 m->moreframesize 字节的栈空间.
-// 
-// caller: runtime·newstackcall(), runtime·morestack() 
-// 两个都是汇编代码.
-// 在原来的栈空间不足, 需要新的栈段的时候被调用.
+// and then act as though runtime·lessstack called the function at m->morepc.
 void
 runtime·newstack(void)
 {
@@ -264,9 +283,11 @@ runtime·newstack(void)
 	uintptr free;
 
 	if(m->morebuf.g != m->curg) {
-		runtime·printf("runtime: newstack called from g=%p\n"
+		runtime·printf(
+			"runtime: newstack called from g=%p\n"
 			"\tm=%p m->curg=%p m->g0=%p m->gsignal=%p\n",
-			m->morebuf.g, m, m->curg, m->g0, m->gsignal);
+			m->morebuf.g, m, m->curg, m->g0, m->gsignal
+		);
 		runtime·throw("runtime: wrong goroutine in newstack");
 	}
 
@@ -294,13 +315,15 @@ runtime·newstack(void)
 		sp -= sizeof(uintptr);
 	}
 	if(StackDebug || sp < gp->stackguard - StackGuard) {
-		runtime·printf("runtime: newstack framesize=%p argsize=%p sp=%p stack=[%p, %p]\n"
+		runtime·printf(
+			"runtime: newstack framesize=%p argsize=%p sp=%p stack=[%p, %p]\n"
 			"\tmorebuf={pc:%p sp:%p lr:%p}\n"
 			"\tsched={pc:%p sp:%p lr:%p ctxt:%p}\n",
 			(uintptr)framesize, (uintptr)argsize, 
 			sp, gp->stackguard - StackGuard, gp->stackbase,
 			m->morebuf.pc, m->morebuf.sp, m->morebuf.lr,
-			gp->sched.pc, gp->sched.sp, gp->sched.lr, gp->sched.ctxt);
+			gp->sched.pc, gp->sched.sp, gp->sched.lr, gp->sched.ctxt
+		);
 	}
 	// 栈溢出检查
 	if(sp < gp->stackguard - StackGuard) {
@@ -369,7 +392,7 @@ runtime·newstack(void)
 				(uint64)runtime·maxstacksize);
 			runtime·throw("stack overflow");
 		}
-		// 新栈帧的起始地址.
+		// 为新栈帧分配空间, 并返回起始地址.
 		stk = runtime·stackalloc(framesize);
 		top = (Stktop*)(stk+framesize-sizeof(*top));
 		// 此次分配的 framesize 空间目前全部是空闲的.
@@ -380,12 +403,16 @@ runtime·newstack(void)
 		runtime·printf("\t-> new stack [%p, %p]\n", stk, top);
 	}
 
+	// 在新栈帧 top 区记录原栈帧相关指针
 	top->stackbase = gp->stackbase;
 	top->stackguard = gp->stackguard;
+	// 在新栈帧 top 区记录扩张信息
 	top->gobuf = m->morebuf;
 	top->argp = m->moreargp;
 	top->argsize = argsize;
 	top->free = free;
+
+	// 清除 m 上的扩张信息
 	m->moreargp = nil;
 	m->morebuf.pc = (uintptr)nil;
 	m->morebuf.lr = (uintptr)nil;
@@ -407,6 +434,7 @@ runtime·newstack(void)
 	top->panicwrap = gp->panicwrap;
 	gp->panicwrap = 0;
 
+	// 修改 g 对象中的栈信息, 指向新栈帧.
 	gp->stackbase = (uintptr)top;
 	gp->stackguard = (uintptr)stk + StackGuard;
 	gp->stackguard0 = gp->stackguard;
@@ -444,6 +472,9 @@ runtime·newstack(void)
 	*(int32*)345 = 123;
 }
 
+// caller:
+// 	1. runtime·newproc1() 创建完一个 g 对象后, 调用此函数让该 g 执行目标函数 fn.
+//
 // adjust Gobuf as if it executed a call to fn
 // and then did an immediate gosave.
 void

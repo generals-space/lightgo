@@ -268,6 +268,11 @@ TEXT runtime·futex(SB),NOSPLIT,$0
 	SYSCALL
 	RET
 
+// 创建系统线程, 实际是对 clone 系统调用的封装.
+//
+// caller:
+// 	1. src/pkg/runtime/os_linux.c -> runtime·newosproc()
+//     创建系统线程对象
 // int64 clone(int32 flags, void *stack, M *mp, G *gp, void (*fn)(void));
 TEXT runtime·clone(SB),NOSPLIT,$0
 	MOVL	flags+8(SP), DI
