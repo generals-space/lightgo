@@ -1,6 +1,6 @@
 {
     "files.associations": {
         "*.goc": "c",
-        "lexbody": "c"
+        "*.h": "c"
     }
 }

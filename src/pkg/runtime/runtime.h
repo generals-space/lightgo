@@ -348,7 +348,11 @@ struct	M
 	Gobuf	morebuf;	
 
 	// Fields not known to debuggers.
-	uint32	moreframesize;	// size arguments to morestack
+
+	// 发生栈分割(stack split)时, 由汇编代码赋值, 不过查询时需要使用 m_moreframesize 关键字
+	//
+	// size arguments to morestack
+	uint32	moreframesize;
 	uint32	moreargsize;
 	uintptr	cret;		// return value from C
 	uint64	procid;		// for debuggers, but offset not hard-coded

@@ -1938,7 +1938,7 @@ void
 	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
 
-	// 这里if语句的第一个条件是判断栈溢出的, 可参考 stack.c -> runtime·newstack() 
+	// 这里 if 语句的第一个条件是判断栈溢出的, 可参考 stack.c -> runtime·newstack() 
 	// 中的 overflow 检查.
 	// 至于第二个条件, 由于 g->stackbase 本来就表示
 	if(g->syscallsp < g->syscallguard-StackGuard || 
@@ -3219,7 +3219,7 @@ struct Pdesc
 // pdesc 没有地方初始化, 所以第一次使用时需要判断各字段的空值情况
 static Pdesc pdesc[MaxGomaxprocs];
 
-// retake 回收陷入系统调用的p对象, 同时也抢占运行时间比较长的g任务.
+// retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的g任务.
 // (防止某一个任务占用CPU太久影响其他任务的执行)
 //
 // param now: 为绝对时间 nanotime
@@ -3293,18 +3293,26 @@ retake(int64 now)
 	return n;
 }
 
+// 告诉所有的正在运行的goroutines(其实遍历的是p对象链表), ta们被抢占了, 需要停止.
+// 只在 gc STW 时会用到.
+//
+// ta只是用for循环对每个处于running状态的p对象调用 preemptone(p),
+// 然后返回结果, 没有额外操作.
+//
+// 1. 这个函数纯粹就是尽最大努力, 并不保证结果.
+// 当一个 p 刚开始运行一个goroutine时, 这个函数对这个 g 的通知可能会失败.
+// 2. 无需持有锁.
+// 3. 只要有一个goroutine被通知到了, 结果就是true.
+//
+// caller: 
+// 	1. runtime·freezetheworld()
+// 	2. runtime·stoptheworld()
+//
 // Tell all goroutines that they have been preempted and they should stop.
 // This function is purely best-effort. 
 // It can fail to inform a goroutine if a processor just started running it.
 // No locks need to be held.
 // Returns true if preemption request was issued to at least one goroutine.
-// preempt all: 告诉所有的正在运行的goroutines(其实遍历的是p对象链表), 他们...被抢占了, 需要停止.
-// 1. 这个函数纯粹就是尽最大努力, 并不保证结果.
-// 当一个P刚开始运行一个goroutine时, 这个函数对这个goroutine的通知可能会失败.
-// 2. 无需持有锁.
-// 3. 只要有一个goroutine被通知到了, 结果就是true
-// ta只是用for循环对每个处于running状态的p对象调用preemptone(p),
-// 然后返回结果, 没有额外操作.
 static bool
 preemptall(void)
 {
@@ -3313,7 +3321,7 @@ preemptall(void)
 	bool res;
 
 	res = false;
-	// 遍历p队列
+	// 遍历 p 队列
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
 		if(p == nil || p->status != Prunning) continue;
@@ -3322,6 +3330,23 @@ preemptall(void)
 	return res;
 }
 
+
+// preemptone 告知目标 p 上正在运行的 goroutine 停止(被抢占)
+//
+// 1. ta同样只是尽最大努力, 并不保证结果.
+//    1. 很可能错误的没有通知到.
+//    2. 可能通知到别的 g (协程切换的时候吧..)
+//    3. 即使通知到了, 目标 g 也可能会忽略, 比如ta正在执行 runtime·newstack() 操作.
+// 2. 无需持有锁
+// 3. 如果抢占请求被通知到了, 就返回true.
+//
+// 那么问题来了, 这里顶多只设置了g对象的标识位就返回了, 
+// g 应该并不是立刻停止运行吧? 从哪一时刻真正停止呢???
+//
+// caller:
+// 	1. retake() 由 sysmon() 线程回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的g任务.
+// 	2. preemptall() 对所有 p 循环调用此函数.
+//
 // Tell the goroutine running on processor P to stop.
 // This function is purely best-effort. 
 // It can incorrectly fail to inform the goroutine. 
@@ -3331,15 +3356,7 @@ preemptall(void)
 // simultaneously executing runtime·newstack.
 // No lock needs to be held. 
 // Returns true if preemption request was issued.
-// preempt one 告知目标p上正在运行的goroutine停止(被抢占)
-// 1. ta同样只是尽最大努力, 并不保证结果, 很可能错误的没有通知到.
-// 也可能通知到别的gorotine(协程切换的时候吧..)
-// 即使通知到了, 目标goroutine也可能会忽略, 
-// 比如ta正在执行runtime·newstack()操作.
-// 2. 无需持有锁
-// 3. 如果抢占请求被通知到了, 就返回true.
-// 那么问题来了, 这里顶多只设置了g对象的标识位就返回了, 
-// g应该并不是立刻停止运行吧? 从哪一时刻真正停止呢???
+//
 static bool
 preemptone(P *p)
 {

@@ -261,6 +261,7 @@ uintptr runtime·maxstacksize = 1<<20;
 // caller: 
 // 	1. runtime·newstackcall()
 // 	2. runtime·morestack() 
+//
 // 两个都是汇编代码. 在原来的栈空间不足, 需要新的栈段的时候被调用.
 //
 // Called from runtime·newstackcall or from runtime·morestack 
@@ -291,9 +292,8 @@ runtime·newstack(void)
 		runtime·throw("runtime: wrong goroutine in newstack");
 	}
 
-	// gp->status is usually Grunning, 
-	// but it could be Gsyscall if a stack split
-	// happens during a function call inside entersyscall.
+	// gp->status is usually Grunning, but it could be Gsyscall 
+	// if a stack split happens during a function call inside entersyscall.
 	gp = m->curg;
 	oldstatus = gp->status;
 
@@ -327,8 +327,10 @@ runtime·newstack(void)
 	}
 	// 栈溢出检查
 	if(sp < gp->stackguard - StackGuard) {
-		runtime·printf("runtime: split stack overflow: %p < %p\n", 
-			sp, gp->stackguard - StackGuard);
+		runtime·printf(
+			"runtime: split stack overflow: %p < %p\n", 
+			sp, gp->stackguard - StackGuard
+		);
 		runtime·throw("runtime: split stack overflow");
 	}
 
@@ -338,7 +340,7 @@ runtime·newstack(void)
 		runtime·throw("runtime: stack split argsize");
 	}
 	// g->stackguard0 的唯一一次有效使用...? 其他地方都是赋值操作...
-	// if条件成立, 表示当前g对象已被通知抢占, 但还未让出CPU.
+	// if 条件成立, 表示当前 g 对象已被通知抢占, 但还未让出CPU.
 	if(gp->stackguard0 == (uintptr)StackPreempt) {
 		// g0不可被抢占
 		if(gp == m->g0)
