@@ -6,7 +6,7 @@
 // 并行算法.
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 
 struct ParForThread
 {

@@ -5,7 +5,7 @@
 // +build amd64 386
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 #include "funcdata.h"
 

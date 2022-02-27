@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "stack.h"
 #include "malloc.h"
 #include "../../cmd/ld/textflag.h"

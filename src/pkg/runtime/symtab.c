@@ -8,7 +8,7 @@
 #include "runtime.h"
 #include "defs_GOOS_GOARCH.h"
 #include "os_GOOS.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 #include "funcdata.h"
 

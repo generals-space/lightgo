@@ -7,7 +7,7 @@
 // See malloc.h for overview.
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 
 // 初始化 f 以分配指定大小 size 的对象, 其实就是为 f 对象的各个成员字段赋值, 其他的啥也没做.

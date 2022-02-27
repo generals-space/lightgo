@@ -6,7 +6,7 @@
 // +build race
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 #include "race.h"
 #include "../../cmd/ld/textflag.h"

@@ -7,7 +7,7 @@
 // See malloc.h for an overview.
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 
 // 当线程中 mcache 对象没有多余的内存时, 会调用此函数向 mcentral 获取一批内存块.

@@ -847,7 +847,7 @@ install(char *dir)
 
 	// For package runtime, copy some files into the work space.
 	if(streq(dir, "pkg/runtime")) {
-		copy(bpathf(&b, "%s/arch_GOARCH.h", workdir),
+		copy(bpathf(&b, "%s/arch_amd64.h", workdir),
 			bpathf(&b1, "%s/arch_%s.h", bstr(&path), goarch), 0);
 		copy(bpathf(&b, "%s/defs_GOOS_GOARCH.h", workdir),
 			bpathf(&b1, "%s/defs_%s_%s.h", bstr(&path), goos, goarch), 0);

@@ -5,7 +5,7 @@
 // Lock-free stack.
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 
 #ifdef _64BIT
 // Amd64 uses 48-bit virtual addresses, 47-th bit is used as kernel/user flag.

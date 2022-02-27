@@ -8,7 +8,7 @@ package net
 
 #include "runtime.h"
 #include "defs_GOOS_GOARCH.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 
 // Integrated network poller (platform-independent part).

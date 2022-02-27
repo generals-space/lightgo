@@ -7,7 +7,7 @@
 
 package runtime
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "malloc.h"
 #include "defs_GOOS_GOARCH.h"
 #include "type.h"

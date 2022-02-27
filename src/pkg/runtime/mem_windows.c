@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #include "runtime.h"
-#include "arch_GOARCH.h"
+#include "arch_amd64.h"
 #include "os_GOOS.h"
 #include "defs_GOOS_GOARCH.h"
 #include "malloc.h"
