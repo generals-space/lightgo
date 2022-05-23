@@ -142,10 +142,17 @@ TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	BX, gobuf_g(AX)
 	RET
 
+// void gogo(Gobuf*)
+//
+// 继续执行(之前执行到一半的) goroutine.
+//
+// 参数为 Gobuf 对象, 其中包含着当前 g 对象的执行现场数据
+// (父级函数的pc(函数地址), sp(用于定位局部变量)等).
+//
 // caller: 
 // 	1. src/pkg/runtime/proc.c -> execute()
+// 	2. src/pkg/runtime/stack.c -> runtime·newstack()
 //
-// void gogo(Gobuf*)
 // restore state from Gobuf; longjmp
 TEXT runtime·gogo(SB), NOSPLIT, $0-8
 	MOVQ	8(SP), BX		// gobuf
@@ -202,6 +209,29 @@ TEXT runtime·mcall(SB), NOSPLIT, $0-8
  * support for morestack
  */
 
+/*
+
+  runtime.morestack 在链接期间, 被链接器插入到每个函数的函数入口(prolog)
+  (除了明确要求不需要栈扩容的函数, ta们一般添加了"#pragma textflag 7"注解)
+  在执行实际的函数逻辑之前, 先判断判断栈大小是否已经超过 stackguard 警戒线, 
+  如果是的话, 则会默认进入 morestack 这里.
+
+  # 6l -a main.6 | head
+  codeblk [0x400c00,0x41c01a) at offset 0xc00
+  400c00	main.main            | (3)	TEXT	main.main+0(SB),$0
+  400c00	64488b0c25f0ffffff   | (3)	MOVQ	-16(FS),CX
+  400c09	483b21               | (3)	CMPQ	SP,(CX)
+  400c0c	7707                 | (3)	JHI	,400c15
+  400c0e	e87da60100           | (3)	CALL	,41b290+runtime.morestack00
+  400c13	ebeb                 | (3)	JMP	,400c00
+  400c15	                     | (3)	NOP	,
+  400c15	                     | (3)	NOP	,
+  400c15	                     | (3)	FUNCDATA	$0,main.gcargs·0+0(SB)
+
+  morestack 会把将要执行的函数信息(如函数入口地址, 参数列表地址, 返回值地址, 栈大小等), 
+  存放到当前 M 对象中, 然后调用 runtime·newstack 去申请新的栈空间,
+  完成后将新旧两个栈空间连接起来.
+ */
 // Called during function prolog when more stack is needed.
 // Caller has already done get_tls(CX); MOVQ m(CX), BX.
 //
@@ -210,12 +240,16 @@ TEXT runtime·mcall(SB), NOSPLIT, $0-8
 // calling the scheduler calling newm calling gc), so we must
 // record an argument size. For that purpose, it has no arguments.
 TEXT runtime·morestack(SB),NOSPLIT,$0-0
+	// 判断 g 对象是不是当前 m 对象的 g0 对象(主协程对象), 调度线程是不可以扩容栈空间的.
+	// 
 	// Cannot grow scheduler stack (m->g0).
-	MOVQ	m_g0(BX), SI
-	CMPQ	g(CX), SI
+	MOVQ	m_g0(BX), SI		// 将当前 m 的主协程 g0 的地址, 放到 SI 寄存器中保存
+	CMPQ	g(CX), SI			// (m_g0(BX) 是 AT&T 汇编中间接寻址的语法)
 	JNE	2(PC)
 	INT	$3
 
+	// 将当前函数(morestack)的 pc, sp 等地址信息, 保存到当前 m 对象的成员中, 
+	// 之后 newstack 会用到这些信息来计算.
 	// Called from f.
 	// Set m->morebuf to f's caller.
 	MOVQ	8(SP), AX	// f's caller's PC

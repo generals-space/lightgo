@@ -209,8 +209,8 @@ struct	Slice
 };
 struct	Gobuf
 {
-	// sp, pc和g字段的偏移量是编译器可预见的.
-	// sp用于定位局部变量(父函数)
+	// sp, pc 和 g 字段的偏移量是编译器可预见的.
+	// sp 用于定位局部变量(父函数)
 	//
 	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
 	uintptr	sp;
@@ -256,11 +256,12 @@ struct	WinCallbackContext
 
 struct	G
 {
-	// stackguard0 can be set to StackPreempt as opposed to stackguard
-	// cannot move - also known to linker, libmach, runtime/cgo
 	// stackguard0 目前发现有两个可能值: stackguard, 或 StackPreempt
 	// 被设置为 StackPreempt 时, 表示当前g对象被抢占(对比 preempt 字段)
 	// 唯一一次有效使用在 stack.c -> runtime·newstack() 函数中.
+	//
+	// stackguard0 can be set to StackPreempt as opposed to stackguard
+	// cannot move - also known to linker, libmach, runtime/cgo
 	uintptr	stackguard0;
 	// 当前 g 对象栈空间顶部 top 部分的起始地址.
 	//
@@ -271,25 +272,27 @@ struct	G
 	Defer*	defer;
 	Panic*	panic;
 	// 用于存储当前 g 的执行现场数据.
-	// 包含所执行的函数的父级函数的信息(父级函数的pc(函数地址), sp(用于定位局部变量))
+	// 包含所执行的函数的父级函数的信息(父级函数的pc(函数地址), sp(用于定位局部变量)等)
 	Gobuf	sched;
 	// 以下 syscallXXX 都只在 status == Gsyscall 状态下有效
 	// syscallstack = stackbase to use during gc
-	uintptr	syscallstack;	
+	uintptr	syscallstack;
 	// syscallsp = sched.sp to use during gc
-	uintptr	syscallsp;	
+	uintptr	syscallsp;
 	// syscallpc = sched.pc to use during gc
-	uintptr	syscallpc;	
+	uintptr	syscallpc;
 	// syscallguard = stackguard to use during gc
 	uintptr	syscallguard;
 
 	// same as stackguard0, but not set to StackPreempt
 	uintptr	stackguard;
-	// 当前g对象正在执行的函数的栈空间的起始地址
+	// 当前 g 对象正在执行的函数的栈空间的起始地址
 	uintptr	stack0;
-	// 当前g线程的栈大小, 不可超过 runtime·maxstacksize
+	// 当前 g 线程的栈大小, 不可超过 runtime·maxstacksize
+	// 每次在调用 runtime·newstack() 时, 都会将新申请的栈空间大小, 加到这个成员变量中.
 	uintptr	stacksize;
-	// 指向了 runtime·allg 全局变量
+
+	// 指向了 runtime·allg 全局变量(是一个链表)
 	//
 	// on allg
 	G*	alllink;
@@ -340,8 +343,11 @@ struct	G
 
 struct	M
 {
+	// 所有 M 对象的 g0 是同一个???
+	//
 	// goroutine with scheduling stack
 	G*	g0;
+	// ~~发生栈分割~~新建栈空间时, 将要申请的大小, 
 	void*	moreargp;	// argument pointer for more stack
 	// gobuf arg to morestack
 	// morebuf 应该等于 curg->sched, 表示当前运行的g对象的 Gobuf
@@ -349,7 +355,8 @@ struct	M
 
 	// Fields not known to debuggers.
 
-	// 发生栈分割(stack split)时, 由汇编代码赋值, 不过查询时需要使用 m_moreframesize 关键字
+	// 发生栈分割(stack split)时, 由汇编代码赋值, 
+	// 不过 ctrl+f 查询时需要使用 m_moreframesize 关键字.
 	//
 	// size arguments to morestack
 	uint32	moreframesize;

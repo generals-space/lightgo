@@ -88,7 +88,7 @@ enum {
 	// 创建g对象时分配初始的栈空间时并不会包含这个值.
 	StackExtra = 2048,
 
-	// 栈空间的最小值 8k.
+	// 栈空间的最小(初始)值 8k(每个 goroutine 都拥有独立的栈).
 	// 如果要分配的栈帧空间+StackExtra 的和仍小于此值, 分配时会直接使用这个值. 
 	// 算是标准化吧.
 	//
@@ -100,33 +100,31 @@ enum {
 	FixedStack = StackMin + StackSystem,
 
 	// Functions that need frames bigger than this use an extra
-	// instruction to do the stack split check, to avoid overflow
-	// in case SP - framesize wraps below zero.
-	// This value can be no bigger than the size of the unmapped
-	// space at zero.
+	// instruction to do the stack split check,
+	// to avoid overflow in case SP - framesize wraps below zero.
+	// This value can be no bigger than the size of the unmapped space at zero.
 	StackBig = 4096,
 
+	// stack guard 是一个指针, 指向栈底往上 StackGurad 个字节的位置.
+	//
 	// The stack guard is a pointer this many bytes 
 	// above the bottom of the stack.
-	// stack guard 是一个指针, 指向栈底往上 StackGurad 
-	// 这么多字节的位置.
 	StackGuard = 256 + StackSystem,
 
 	// After a stack split check the SP is allowed to be this
 	// many bytes below the stack guard. 
-	// This saves an instruction
-	// in the checking sequence for tiny frames.
+	// This saves an instruction in the checking sequence for tiny frames.
 	StackSmall = 128,
 
-	// The maximum number of bytes that a chain of NOSPLIT
-	// functions can use.
+	// The maximum number of bytes that a chain of NOSPLIT functions can use.
 	StackLimit = StackGuard - StackSystem - StackSmall,
 	
+	// 每个栈帧的栈顶都存在一个数据块, StackTop 为此数据块的预设大小.
+	// 实际值可能被这个值要小, 不会更大.
+	//
 	// The assumed size of the top-of-stack data block.
 	// The actual size can be smaller than this but cannot be larger.
 	// Checked in proc.c's runtime.malg.
-	// 每个栈帧的栈顶都存在一个数据块, StackTop 为此数据块的预设大小.
-	// 实际值可能被这个值要小, 不会更大.
 	StackTop = 96,
 };
 

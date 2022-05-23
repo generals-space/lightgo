@@ -26,10 +26,18 @@ void runtime·sigpanic(void);
 // 用于处理runtime的栈关系打印(需要 pcbuf == nil)
 // 或是用于实现 runtime.Callers() 函数(需要 pcbuf != nil),
 // 也可以用于gc回收(需要callback != nil)
-// 虽然将这此合并起来比较麻烦, 但也避免了重复代码, 
-// 也避免了一些细微的, 易出错的地方.
+// 虽然将这此合并起来比较麻烦, 但也避免了重复代码, 也避免了一些细微的, 易出错的地方.
+//
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> addstackroots()
+// 	2. src/pkg/runtime/proc.c -> runtime·sigprof()
+// 	3. runtime·traceback()
+// 	4. runtime·callers()
 int32
-runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, int32 max, void (*callback)(Stkframe*, void*), void *v, bool printall)
+runtime·gentraceback(
+	uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, 
+	int32 max, void (*callback)(Stkframe*, void*), void *v, bool printall
+)
 {
 	int32 i, n, nprint, line;
 	uintptr tracepc;
@@ -264,19 +272,23 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 	// Print traceback. By default, omits runtime frames.
 	// If that means we print nothing at all, 
 	// repeat forcing all frames printed.
+	//
 	// 打印栈调用信息, 默认不打印runtime的函数帧
 	// 如果打印的数量(即返回值为0), 那么把最后一个参数改成true再来一遍.
 	// skip 在参数 gp 之后, 这里值为0.
 	// 最后一个参数为 printall.
-	if(runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, false) == 0)
+	if(runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, false) == 0) {
 		runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, true);
+	}
 	// 打印gp协程当前正在运行的g的主调函数的栈信息, 包括函数名称, 声明时所在的文件, 行号和pc地址等.
 	runtime·printcreatedby(gp);
 }
 
 // 返回在主调函数所在的调用链上, 函数的个数...???
 // pcbuf应该是一个uintptr[2]数组
-// caller: runtime.c -> runtime·Caller()
+//
+// caller: 
+// 	1. runtime.c -> runtime·Caller()
 int32
 runtime·callers(int32 skip, uintptr *pcbuf, int32 m)
 {

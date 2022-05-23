@@ -2719,12 +2719,13 @@ runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp)
 	int32 n;
 	bool traceback;
 
-	if(prof.fn == nil || prof.hz == 0)
-		return;
+	if(prof.fn == nil || prof.hz == 0) return;
 	traceback = true;
+
 	// Windows does profiling in a dedicated thread w/o m.
-	if(!Windows && (m == nil || m->mcache == nil))
+	if(!Windows && (m == nil || m->mcache == nil)) {
 		traceback = false;
+	}
 	
 	// Define that a "user g" is a user-created goroutine, and a "system g"
 	// is one that is m->g0 or m->gsignal. We've only made sure that we
@@ -2818,8 +2819,12 @@ runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp)
 		return;
 	}
 	n = 0;
-	if(traceback)
-		n = runtime·gentraceback((uintptr)pc, (uintptr)sp, (uintptr)lr, gp, 0, prof.pcbuf, nelem(prof.pcbuf), nil, nil, false);
+	if(traceback) {
+		n = runtime·gentraceback(
+			(uintptr)pc, (uintptr)sp, (uintptr)lr, gp, 0, 
+			prof.pcbuf, nelem(prof.pcbuf), nil, nil, false
+		);
+	}
 	if(!traceback || n <= 0) {
 		n = 2;
 		prof.pcbuf[0] = (uintptr)pc;
@@ -3818,9 +3823,13 @@ runtime·testSchedLocalQueueSteal(void)
 
 extern void runtime·morestack(void);
 
-// Does f mark the top of a goroutine stack?
-// f是否已经是处于栈顶的函数(再没有更上层的主调函数了)
+// f 是否已经是处于栈顶的函数(再没有更上层的主调函数了)
 // 比如 runtime·goexit()
+//
+// caller:
+// 	1. src/pkg/runtime/traceback_x86.c -> runtime·gentraceback()
+//
+// Does f mark the top of a goroutine stack?
 bool
 runtime·topofstack(Func *f)
 {

@@ -1555,7 +1555,9 @@ addframeroots(Stkframe *frame, void*)
 // addroots操作遍历栈空间时调用.
 // 由于此时已经经过了STW, 所以理论上所有的g对象都处于休眠状态.
 // 对所有处于 runnable, waiting 和 syscall 状态的g对象都调用此函数.
-// caller: addroots()
+//
+// caller: 
+// 	1. addroots()
 static void
 addstackroots(G *gp)
 {
@@ -1632,8 +1634,9 @@ addfinroots(void *v)
 	void *base;
 
 	size = 0;
-	if(!runtime·mlookup(v, &base, &size, nil) || !runtime·blockspecial(base))
+	if(!runtime·mlookup(v, &base, &size, nil) || !runtime·blockspecial(base)) {
 		runtime·throw("mark - finalizer inconsistency");
+	}
 
 	// do not mark the finalizer block itself. 
 	// just mark the things it points at.
@@ -1641,7 +1644,9 @@ addfinroots(void *v)
 }
 
 // 这就是添加传说中的根节点吗?
-// caller: gc(), 只有一处被调用过.
+//
+// caller: 
+// 	1. gc() 只有一处被调用过.
 static void
 addroots(void)
 {

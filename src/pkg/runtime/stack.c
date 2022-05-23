@@ -262,7 +262,7 @@ uintptr runtime·maxstacksize = 1<<20;
 // 	1. runtime·newstackcall()
 // 	2. runtime·morestack() 
 //
-// 两个都是汇编代码. 在原来的栈空间不足, 需要新的栈段的时候被调用.
+// 两个都是汇编代码. 在当前goroutine的栈空间不足(函数深层嵌套调用), 需要新的栈段的时候被调用.
 //
 // Called from runtime·newstackcall or from runtime·morestack 
 // when a new stack segment is needed. 
@@ -300,6 +300,7 @@ runtime·newstack(void)
 	// framesize 表示本次调用需要分配的栈大小 
 	framesize = m->moreframesize;
 	argsize = m->moreargsize;
+	// 发生栈分割时, 需要将正在执行的 g 暂时挂起, 分割完成后再重新执行(在此期间不切换 m 和 g).
 	gp->status = Gwaiting;
 	gp->waitreason = "stack split";
 	newstackcall = framesize==1;
@@ -308,7 +309,7 @@ runtime·newstack(void)
 
 	// For newstackcall the context already points to beginning of runtime·newstackcall.
 	if(!newstackcall) runtime·rewindmorestack(&gp->sched);
-
+	// sp: 当前 g 所运行的函数的起始地址, 用于定位函数内部的局部变量(其实应该叫 bp 才对吧?)
 	sp = gp->sched.sp;
 	if(thechar == '6' || thechar == '8') {
 		// The call to morestack cost a word.
@@ -335,8 +336,9 @@ runtime·newstack(void)
 	}
 
 	if(argsize % sizeof(uintptr) != 0) {
-		runtime·printf("runtime: stack split with misaligned argsize %d\n", 
-			argsize);
+		runtime·printf(
+			"runtime: stack split with misaligned argsize %d\n", argsize
+		);
 		runtime·throw("runtime: stack split argsize");
 	}
 	// g->stackguard0 的唯一一次有效使用...? 其他地方都是赋值操作...
@@ -375,6 +377,7 @@ runtime·newstack(void)
 		// and we have enough space on the current stack.
 		// the new Stktop* is necessary to unwind, 
 		// but we don't need to create a new segment.
+		//
 		// 特殊情况: 主调函数为 runtime·newstackcall() framesize == 1
 		top = (Stktop*)(m->morebuf.sp - sizeof(*top));
 		stk = (byte*)gp->stackguard - StackGuard;
@@ -388,7 +391,7 @@ runtime·newstack(void)
 		if(framesize < StackMin) framesize = StackMin;
 		framesize += StackSystem;
 		gp->stacksize += framesize;
-		// 不可超过最大值
+		// 栈溢出: 不可超过最大值
 		if(gp->stacksize > runtime·maxstacksize) {
 			runtime·printf("runtime: goroutine stack exceeds %D-byte limit\n", 
 				(uint64)runtime·maxstacksize);
@@ -408,7 +411,7 @@ runtime·newstack(void)
 	// 在新栈帧 top 区记录原栈帧相关指针
 	top->stackbase = gp->stackbase;
 	top->stackguard = gp->stackguard;
-	// 在新栈帧 top 区记录扩张信息
+	// 在新栈帧 top 区记录本次扩张的信息(本次扩张了多大的空间)
 	top->gobuf = m->morebuf;
 	top->argp = m->moreargp;
 	top->argsize = argsize;
@@ -461,9 +464,9 @@ runtime·newstack(void)
 	label.sp = sp;
 	label.pc = (uintptr)runtime·lessstack;
 	label.g = m->curg;
-	if(newstackcall)
+	if(newstackcall){
 		runtime·gostartcallfn(&label, (FuncVal*)m->cret);
-	else {
+	} else {
 		runtime·gostartcall(&label, (void(*)(void))gp->sched.pc, gp->sched.ctxt);
 		gp->sched.ctxt = nil;
 	}
