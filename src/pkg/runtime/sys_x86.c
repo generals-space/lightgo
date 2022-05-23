@@ -31,7 +31,7 @@ void
 runtime·rewindmorestack(Gobuf *gobuf)
 {
 	byte *pc;
-	
+
 	pc = (byte*)gobuf->pc;
 	if(pc[0] == 0xe9) { // jmp 4-byte offset
 		gobuf->pc = gobuf->pc + 5 + *(int32*)(pc+1);
