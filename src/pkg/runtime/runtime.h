@@ -284,6 +284,8 @@ struct	G
 	// syscallguard = stackguard to use during gc
 	uintptr	syscallguard;
 
+	// 可以见 src/pkg/runtime/proc.c -> runtime·malg() 
+	// 先为一个空的 g 对象分配空间, 然后再创建一个 stack 对象, 给 g 对象的这几个字段赋值.
 	// same as stackguard0, but not set to StackPreempt
 	uintptr	stackguard;
 	// 当前 g 对象正在执行的函数的栈空间的起始地址
@@ -480,7 +482,8 @@ struct P
 	uint32	status;
 	// 这是一个指向下一个 p 的指针, 组成链表.
 	P*	link;
-	// 每次被调度器调度时加1, execute()
+	// 每次被调度器调度时加1, 在 src/pkg/runtime/proc.c -> execute() 中使用
+	// ...这是用来统计当前 p 服务了多少个 g 任务的吧?
 	//
 	// incremented on every scheduler call
 	uint32	schedtick;
@@ -500,6 +503,7 @@ struct P
 	int32	runqsize;
 
 	// Available G's (status == Gdead)
+	// p 队列本地空闲 g 队列的链表头.
 	G*	gfree;
 	int32	gfreecnt;
 

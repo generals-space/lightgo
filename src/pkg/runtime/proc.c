@@ -59,6 +59,7 @@ struct Sched {
 	// Global cache of dead G's.
 	// gflock 是较小粒度的锁, 用于保护 gfree
 	Lock	gflock;
+	// 全局空闲g队列的链表头
 	G*	gfree;
 
     // 取值0或1, 在gc操作前后的 runtime·stoptheworld(),
@@ -1348,8 +1349,9 @@ stoplockedm(void)
 {
 	P *p;
 
-	if(m->lockedg == nil || m->lockedg->lockedm != m)
+	if(m->lockedg == nil || m->lockedg->lockedm != m) {
 		runtime·throw("stoplockedm: inconsistent locking");
+	}
 	if(m->p) {
 		// Schedule another M to run this p.
 		// 将当前m与其p对象解绑, 然后绑定另外一个m
@@ -1360,8 +1362,9 @@ stoplockedm(void)
 	// Wait until another thread schedules lockedg again.
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
-	if(m->lockedg->status != Grunnable)
+	if(m->lockedg->status != Grunnable) {
 		runtime·throw("stoplockedm: not runnable");
+	}
 	// 为当前m绑定下一个p(只是修改了一下m->p的值)...但是就没有下下一个p了.
 	// 注意能运行到这里, 说明 m->p 已经是 nil 了
 	acquirep(m->nextp);
@@ -1414,8 +1417,7 @@ gcstopm(void)
 {
 	P *p;
 	// 只在gc操作过程中执行此函数
-	if(!runtime·sched.gcwaiting) 
-		runtime·throw("gcstopm: not waiting for gc");
+	if(!runtime·sched.gcwaiting) runtime·throw("gcstopm: not waiting for gc");
 	if(m->spinning) {
 		// 如果m处于自旋, 则移除其自旋状态, 并将调度器中的自旋记录减1.
 		m->spinning = false;
@@ -1428,8 +1430,9 @@ gcstopm(void)
 	p->status = Pgcstop;
 	// stopwait减1, 此时如果其值等于0, 就可以唤醒在stopnote休眠的函数了.
 	// 比如runtime·stoptheworld()
-	if(--runtime·sched.stopwait == 0) 
+	if(--runtime·sched.stopwait == 0) {
 		runtime·notewakeup(&runtime·sched.stopnote);
+	}
 	runtime·unlock(&runtime·sched);
 
 	stopm();
@@ -1754,7 +1757,10 @@ runtime·park(void(*unlockf)(Lock*), Lock *lock, int8 *reason)
 	runtime·mcall(park0);
 }
 
-// 在 g0 上继续执行 park 操作, gp 是上面提到的当前g对象.
+// 在 g0 上继续执行 park 操作, gp 是上面提到的当前 g 对象.
+//
+// caller:
+// 	1. runtime·park()
 //
 // runtime·park continuation on g0.
 static void
@@ -2285,7 +2291,7 @@ runtime·malg(int32 stacksize)
 	newg = runtime·malloc(sizeof(G));
 	// runtime·allocm() 中调用时, 为 cgo/win 分配 g0 时, stacksize 会指定为-1.
 	if(stacksize >= 0) {
-		if(g == m->g0) {
+		if(g == m->g0) { // 这里的 g 是全局 g 对象?
 			// running on scheduler stack already.
 			// stk 是分配的栈空间的起始地址
 			stk = runtime·stackalloc(StackSystem + stacksize);
@@ -2298,7 +2304,7 @@ runtime·malg(int32 stacksize)
 			stk = g->param;
 			g->param = nil;
 		}
-		// stacksize 为当前分配的栈大小
+		// stacksize 为当前分配的栈大小(即上面的 stk 变量的大小)
 		newg->stacksize = StackSystem + stacksize;
 		// stack0 是当前栈空间的起始地址
 		newg->stack0 = (uintptr)stk;
@@ -2387,7 +2393,7 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 			runtime·throw("invalid stack in newg");
 		}
 	} else {
-		// 如果获取失败, 则新建一个 g 对象.
+		// 如果获取失败(比如进程初始启动, 要创建第1个 g 对象), 则新建一个 g.
 		newg = runtime·malg(StackMin);
 		runtime·lock(&runtime·sched);
 		// 如果全局 g 队列为空, 则将新建的 g 对象添加进去, 否则追加到队尾.
@@ -2433,7 +2439,7 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 		fn->fn != runtime·main) { // TODO: fast atomic
 		wakep();
 	}
-	
+
 	m->locks--;
 	// 重新开启抢占
 	// restore the preemption request in case we've cleared it in newstack
@@ -2478,13 +2484,17 @@ gfget(P *p)
 	G *gp;
 
 retry:
+	// gp 是 p 队列本地的 g 队列
 	gp = p->gfree;
+	// 如果 p 本地的 g 空闲队列为空, 但全局 g 空闲队列还有值, 则从全局队列中取一些过来.
 	if(gp == nil && runtime·sched.gfree) {
 		runtime·lock(&runtime·sched.gflock);
+		// 如果全局 g 队列的数量足够, 则最多可以取 32 个 g 对象放到本地.
 		while(p->gfreecnt < 32 && runtime·sched.gfree) {
 			p->gfreecnt++;
 			gp = runtime·sched.gfree;
 			runtime·sched.gfree = gp->schedlink;
+			// 每从全局 g 队列中取出一个成员, 就放到本地 g 队列的链表头.
 			gp->schedlink = p->gfree;
 			p->gfree = gp;
 		}
@@ -2508,7 +2518,7 @@ static void
 gfpurge(P *p)
 {
 	G *gp;
-	// 注意: p->gfree 是不需要加锁的, 
+	// 注意: p->gfree 是不需要加锁的.
 	// 加锁要保护的是 runtime·sched.gfree
 	runtime·lock(&runtime·sched.gflock);
 	while(p->gfreecnt) {
@@ -3641,7 +3651,7 @@ runqget(P *p)
 		runtime·unlock(p);
 		return nil;
 	}
-	gp = p->runq[h++];
+	gp = p->runq[h++]; // 指针++操作, 就是指针后移吧?
 	// 这里是什么意思? h指针怎么可以与s相比了???
 	if(h == s) h = 0;
 

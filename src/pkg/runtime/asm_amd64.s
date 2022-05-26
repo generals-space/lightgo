@@ -103,7 +103,7 @@ ok:
 	ARGSIZE(-1)
 	POPQ	AX
 	POPQ	AX
-	
+
 	// 让当前线程开始执行 main goroutine
 	// start this M
 	CALL	runtime·mstart(SB)
@@ -128,6 +128,9 @@ TEXT runtime·asminit(SB),NOSPLIT,$0-0
  */
 
 // void gosave(Gobuf*)
+// 
+// 将当前 g 对象的上下文存储到 g->sched 成员字段中.
+//
 // save state in Gobuf; setjmp
 TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	8(SP), AX		// gobuf
@@ -169,11 +172,12 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-8
 	MOVQ	gobuf_pc(BX), BX 	// 将 G.sched.pc 也就是 goroutine 函数指针放到 BX
 	JMP	BX 						// 跳转, 执⾏ goroutine 函数.
 
+// void mcall(void (*fn)(G*))
+//
 // caller:
 // 	1. src/pkg/runtime/proc.c -> runtime·goexit() 
 //     goroutine 自然结束退出时, 通过此函数切换回 m0.
 //
-// void mcall(void (*fn)(G*))
 // Switch to m->g0's stack, call fn(g).
 // Fn must never return.  It should gogo(&g->sched)
 // to keep running g.

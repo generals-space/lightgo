@@ -1,6 +1,36 @@
 {
     "files.associations": {
         "*.goc": "c",
-        "*.h": "c"
+        "*.h": "c",
+        "lexbody": "c",
+        "macbody": "c",
+        "*.tcc": "c",
+        "ccomplex": "c",
+        "cctype": "c",
+        "cerrno": "c",
+        "climits": "c",
+        "clocale": "c",
+        "cmath": "c",
+        "complex": "c",
+        "cstdarg": "c",
+        "cstdint": "c",
+        "cstdio": "c",
+        "cstdlib": "c",
+        "cwchar": "c",
+        "cwctype": "c",
+        "string": "c",
+        "exception": "c",
+        "initializer_list": "c",
+        "ios": "c",
+        "iosfwd": "c",
+        "istream": "c",
+        "limits": "c",
+        "new": "c",
+        "ostream": "c",
+        "sstream": "c",
+        "streambuf": "c",
+        "cinttypes": "c",
+        "type_traits": "c",
+        "typeinfo": "c"
     }
 }

@@ -36,14 +36,25 @@ struct	WaitQ
 // and cannot contain pointers into the heap.
 struct	Hchan
 {
-	uintgo	qcount;			// total data in the q
-	uintgo	dataqsiz;		// size of the circular q
+	// channel 队列中
+	//
+	// total data in the q
+	uintgo	qcount;
+	// dataqsiz 表示该 channel 可缓冲的元素数量, 
+	// 如果 dataqsiz > 0 则表示为异步队列, 否则为同步队列.
+	//
+	// size of the circular q
+	uintgo	dataqsiz;
 	uint16	elemsize;
-	uint16	pad;			// ensures proper alignment of the buffer that follows Hchan in memory
+	// ensures proper alignment of the buffer that follows Hchan in memory
+	uint16	pad;
+	// closed 表示该 channel 是否被关闭了.
 	bool	closed;
 	Alg*	elemalg;		// interface for element type
 	uintgo	sendx;			// send index
 	uintgo	recvx;			// receive index
+	// recvq/sendq 表示向该 channel 中等待接收/发送的 goroutine 队列.
+	// 每有一处 <- chan, 或是 chan <-, 都会将该 goroutine 加到这两个队列中.
 	WaitQ	recvq;			// list of recv waiters
 	WaitQ	sendq;			// list of send waiters
 	Lock;
@@ -90,6 +101,13 @@ static	void	enqueue(WaitQ*, SudoG*);
 static	void	destroychan(Hchan*);
 static	void	racesync(Hchan*, SudoG*);
 
+// golang原生: make(chan string, 10) 函数
+//
+// 调用 malloc 创建一个 channel 对象, 并分配内存.
+//
+// param t: channel类型(如 string, int, struct 等)
+// param hint: channel 容量.
+//
 Hchan*
 runtime·makechan_c(ChanType *t, int64 hint)
 {
@@ -99,13 +117,16 @@ runtime·makechan_c(ChanType *t, int64 hint)
 	elem = t->elem;
 
 	// compiler checks this but be safe.
-	if(elem->size >= (1<<16))
+	if(elem->size >= (1<<16)) {
 		runtime·throw("makechan: invalid channel element type");
-	if((sizeof(*c)%MAXALIGN) != 0 || elem->align > MAXALIGN)
+	}
+	if((sizeof(*c)%MAXALIGN) != 0 || elem->align > MAXALIGN) {
 		runtime·throw("makechan: bad alignment");
+	}
 
-	if(hint < 0 || (intgo)hint != hint || (elem->size > 0 && hint > MaxMem / elem->size))
+	if(hint < 0 || (intgo)hint != hint || (elem->size > 0 && hint > MaxMem / elem->size)) {
 		runtime·panicstring("makechan: size out of range");
+	}
 
 	// allocate memory in one call
 	c = (Hchan*)runtime·mallocgc(sizeof(*c) + hint*elem->size, (uintptr)t | TypeInfo_Chan, 0);
@@ -113,9 +134,12 @@ runtime·makechan_c(ChanType *t, int64 hint)
 	c->elemalg = elem->alg;
 	c->dataqsiz = hint;
 
-	if(debug)
-		runtime·printf("makechan: chan=%p; elemsize=%D; elemalg=%p; dataqsiz=%D\n",
-			c, (int64)elem->size, elem->alg, (int64)c->dataqsiz);
+	if(debug) {
+		runtime·printf(
+			"makechan: chan=%p; elemsize=%D; elemalg=%p; dataqsiz=%D\n",
+			c, (int64)elem->size, elem->alg, (int64)c->dataqsiz
+		);
+	}
 
 	return c;
 }
@@ -137,19 +161,21 @@ runtime·makechan(ChanType *t, int64 hint, Hchan *ret)
 	FLUSH(&ret);
 }
 
+// chan <- var, 向 channel 对象中发送数据.
+//
+// 在同一个函数中同时实现了"同步"与"异步"
+//
+// param pres: 是否"接收"成功, 指针类型, 此值被修改后, 主调函数可以得知结果.
 /*
  * generic single channel send/recv
  * if the bool pointer is nil,
- * then the full exchange will
- * occur. if pres is not nil,
- * then the protocol will not
- * sleep but return if it could
- * not complete.
+ * then the full exchange will occur.
+ * if pres is not nil,
+ * then the protocol will not sleep but return if it could not complete.
  *
  * sleep can wake up with g->param == nil
- * when a channel involved in the sleep has
- * been closed.  it is easiest to loop and re-run
- * the operation; we'll see that it's now closed.
+ * when a channel involved in the sleep has been closed. 
+ * it is easiest to loop and re-run the operation; we'll see that it's now closed.
  */
 void
 runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
@@ -159,6 +185,7 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	G* gp;
 	int64 t0;
 
+	// 如果 channel 对象为 nil
 	if(c == nil) {
 		USED(t);
 		if(pres != nil) {
@@ -183,30 +210,27 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	}
 
 	runtime·lock(c);
-	if(raceenabled)
-		runtime·racereadpc(c, pc, runtime·chansend);
-	if(c->closed)
-		goto closed;
+	if(raceenabled) runtime·racereadpc(c, pc, runtime·chansend);
 
-	if(c->dataqsiz > 0)
-		goto asynch;
+	// 向已经关闭的 channel 中写入数据, 会引发 panic.
+	if(c->closed) goto closed;
+	// 如果是有缓冲队列, 则执行异步版本函数.
+	if(c->dataqsiz > 0) goto asynch;
 
 	sg = dequeue(&c->recvq);
 	if(sg != nil) {
-		if(raceenabled)
-			racesync(c, sg);
+		if(raceenabled) racesync(c, sg);
+		// 运行到此处, 说明是同步收发的流程, 同步收发完全可以两个 goroutine 一对一完成,
+		// 不需要经过 channel, 这里直接把锁释放.
 		runtime·unlock(c);
 
 		gp = sg->g;
 		gp->param = sg;
-		if(sg->elem != nil)
-			c->elemalg->copy(c->elemsize, sg->elem, ep);
-		if(sg->releasetime)
-			sg->releasetime = runtime·cputicks();
+		if(sg->elem != nil) c->elemalg->copy(c->elemsize, sg->elem, ep);
+		if(sg->releasetime) sg->releasetime = runtime·cputicks();
 		runtime·ready(gp);
 
-		if(pres != nil)
-			*pres = true;
+		if(pres != nil) *pres = true;
 		return;
 	}
 
@@ -225,20 +249,19 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 
 	if(g->param == nil) {
 		runtime·lock(c);
-		if(!c->closed)
-			runtime·throw("chansend: spurious wakeup");
+		if(!c->closed) runtime·throw("chansend: spurious wakeup");
 		goto closed;
 	}
 
-	if(mysg.releasetime > 0)
-		runtime·blockevent(mysg.releasetime - t0, 2);
+	if(mysg.releasetime > 0) runtime·blockevent(mysg.releasetime - t0, 2);
 
 	return;
 
 asynch:
-	if(c->closed)
-		goto closed;
+	if(c->closed) goto closed;
 
+	// 异步队列的缓冲区只有 dataqsiz 这么大, 如果其中的成员数量等于这个值, 说明已经满了,
+	// 则发送端所在的 goroutine 需要挂起, 无法发送.
 	if(c->qcount >= c->dataqsiz) {
 		if(pres != nil) {
 			runtime·unlock(c);
@@ -252,37 +275,34 @@ asynch:
 		runtime·park(runtime·unlock, c, "chan send");
 
 		runtime·lock(c);
+		// 被唤醒, 则回到 asynch 开头, 再次尝试向 channel 写数据.
 		goto asynch;
 	}
 
-	if(raceenabled)
-		runtime·racerelease(chanbuf(c, c->sendx));
+	if(raceenabled) runtime·racerelease(chanbuf(c, c->sendx));
 
 	c->elemalg->copy(c->elemsize, chanbuf(c, c->sendx), ep);
-	if(++c->sendx == c->dataqsiz)
-		c->sendx = 0;
+	if(++c->sendx == c->dataqsiz) c->sendx = 0;
 	c->qcount++;
 
 	sg = dequeue(&c->recvq);
 	if(sg != nil) {
 		gp = sg->g;
 		runtime·unlock(c);
-		if(sg->releasetime)
-			sg->releasetime = runtime·cputicks();
+		if(sg->releasetime) sg->releasetime = runtime·cputicks();
 		runtime·ready(gp);
-	} else
+	} else {
 		runtime·unlock(c);
-	if(pres != nil)
-		*pres = true;
-	if(mysg.releasetime > 0)
-		runtime·blockevent(mysg.releasetime - t0, 2);
+	}
+
+	if(pres != nil) *pres = true;
+	if(mysg.releasetime > 0) runtime·blockevent(mysg.releasetime - t0, 2);
 	return;
 
 closed:
 	runtime·unlock(c);
 	runtime·panicstring("send on closed channel");
 }
-
 
 void
 runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *received)
@@ -292,8 +312,7 @@ runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *receive
 	G *gp;
 	int64 t0;
 
-	if(debug)
-		runtime·printf("chanrecv: chan=%p\n", c);
+	if(debug) runtime·printf("chanrecv: chan=%p\n", c);
 
 	if(c == nil) {
 		USED(t);
@@ -1249,8 +1268,7 @@ closechan(Hchan *c, void *pc)
 	SudoG *sg;
 	G* gp;
 
-	if(c == nil)
-		runtime·panicstring("close of nil channel");
+	if(c == nil) runtime·panicstring("close of nil channel");
 
 	runtime·lock(c);
 	if(c->closed) {
@@ -1268,8 +1286,7 @@ closechan(Hchan *c, void *pc)
 	// release all readers
 	for(;;) {
 		sg = dequeue(&c->recvq);
-		if(sg == nil)
-			break;
+		if(sg == nil) break;
 		gp = sg->g;
 		gp->param = nil;
 		if(sg->releasetime)
@@ -1280,8 +1297,7 @@ closechan(Hchan *c, void *pc)
 	// release all writers
 	for(;;) {
 		sg = dequeue(&c->sendq);
-		if(sg == nil)
-			break;
+		if(sg == nil) break;
 		gp = sg->g;
 		gp->param = nil;
 		if(sg->releasetime)
@@ -1316,6 +1332,7 @@ reflect·chancap(Hchan *c, intgo cap)
 	FLUSH(&cap);
 }
 
+// 从 recvq/sendq 队列中, 随便取一个 goroutine 返回.
 static SudoG*
 dequeue(WaitQ *q)
 {
@@ -1323,8 +1340,7 @@ dequeue(WaitQ *q)
 
 loop:
 	sgp = q->first;
-	if(sgp == nil)
-		return nil;
+	if(sgp == nil) return nil;
 	q->first = sgp->link;
 
 	// if sgp is stale, ignore it
@@ -1347,8 +1363,7 @@ dequeueg(WaitQ *q)
 	for(l=&q->first; (sgp=*l) != nil; l=&sgp->link, prevsgp=sgp) {
 		if(sgp->g == g) {
 			*l = sgp->link;
-			if(q->last == sgp)
-				q->last = prevsgp;
+			if(q->last == sgp) q->last = prevsgp;
 			break;
 		}
 	}

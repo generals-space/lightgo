@@ -2,3 +2,5 @@
 **/pkg
 src/cmd/dist
 *.gobin
+6.out
+main.6
