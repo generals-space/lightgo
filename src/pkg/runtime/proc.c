@@ -181,7 +181,11 @@ runtime·schedinit(void)
 
 	runtime·mprofinit();
 	runtime·mallocinit(); 	// 初始化内存分配器
-	mcommoninit(m); 		// 初始化当前M, 即m0
+	// m 对象为全局对象(应该是所谓的 m0), 在 src/pkg/runtime/runtime.h 中, 
+	// 通过"extern	register	G*	g;"声明,
+	// 在 src/pkg/runtime/asm_amd64.s -> _rt0_go() 初始化过程被赋值,
+	// (在 runtime·osinit 和 runtime·schedinit 之前)
+	mcommoninit(m); 		// 初始化当前M, 即 m0
 
 	// Initialize the itable value for newErrorCString,
 	// so that the next time it gets called, 
@@ -189,9 +193,9 @@ runtime·schedinit(void)
 	// it will not need to allocated memory.
 	runtime·newErrorCString(0, &i);
 
-	runtime·goargs(); // 处理命令行参数
-	runtime·goenvs(); // 处理环境变量
-	runtime·parsedebugvars(); // 处理 GODEBUG, GOTRACEBACK 调试相关的环境变量设置
+	runtime·goargs(); 			// 处理命令行参数
+	runtime·goenvs(); 			// 处理环境变量
+	runtime·parsedebugvars(); 	// 处理 GODEBUG, GOTRACEBACK 调试相关的环境变量设置
 
 	// Allocate internal symbol table representation now, 
 	// we need it for GC anyway.
@@ -248,10 +252,12 @@ runtime·main(void)
 	//
 	// 64位系统上栈空间最大为1G, 32位上则是250M.
 	// 这里用了10进制而不是2进制(1000而不是1024), 这样在出现栈溢出时, 错误消息比较好看.
-	if(sizeof(void*) == 8)
+	if(sizeof(void*) == 8) {
 		runtime·maxstacksize = 1000000000;
-	else
+	}
+	else {
 		runtime·maxstacksize = 250000000;
+	}
 
 	// 创建监控线程(定期垃圾回收, 以及并发任务调试相关)
 	newm(sysmon, nil);
@@ -1111,7 +1117,7 @@ unlockextra(M *mp)
 // caller:
 // 	1. runtime·main() runtime 初始化完成后, 启动主协程 g0, 
 //     并由 g0 调用此函数创建监控线程, 运⾏调度器监控.
-//
+// 	2. startm()
 // Create a new m. 
 // It will start off with a call to fn, or else the scheduler.
 // 
@@ -2318,9 +2324,9 @@ runtime·malg(int32 stacksize)
 	return newg;
 }
 
-// 创建一个 g 对象, 用来运行 fn, 传入 siz 个字节的参数, 然后将g对象放到 waiting 队列等待执行.
+// golang原生: go func() 函数创建协程.
 //
-// 编译器会将 go func() 语句转换成对这个函数的调用.
+// 创建一个 g 对象, 用来运行 fn, 传入 siz 个字节的参数, 然后将g对象放到 waiting 队列等待执行.
 //
 // 调用栈不可分割, 因为这里假设传入的参数紧随在 fn 的地址之后, 栈分割发生时就无法被正确获取到.
 // ...因为此函数直接通过 siz 参数确定传给 fn 的参数, 栈分割会影响其参数的获取.

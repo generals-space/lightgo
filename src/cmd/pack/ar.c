@@ -1423,6 +1423,8 @@ int	m7[] = { 1, ROTH, 'r', '-' };
 int	m8[] = { 1, WOTH, 'w', '-' };
 int	m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
 
+// 不知道为为什么全局的 m 对象声明会跳转到这里...
+// 应该转到 src/pkg/runtime/runtime.h -> "extern	register	M*	m;"
 int	*m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9};
 
 void

@@ -289,6 +289,8 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 //
 // caller: 
 // 	1. runtime.c -> runtime·Caller()
+// 	2. src/pkg/runtime/proc.c -> mcommoninit()
+//
 int32
 runtime·callers(int32 skip, uintptr *pcbuf, int32 m)
 {

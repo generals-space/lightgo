@@ -284,6 +284,7 @@ TEXT runtime·clone(SB),NOSPLIT,$0
 	MOVQ	gg+32(SP), R9
 	MOVQ	fn+40(SP), R12
 
+	// 56 是 clone 的系统调用号
 	MOVL	$56, AX
 	SYSCALL
 

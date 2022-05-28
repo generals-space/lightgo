@@ -91,6 +91,10 @@ typedef	struct	DebugVars	DebugVars;
 /*
  * Per-CPU declaration.
  *
+ * 这里声明的是全局 m 和 g 对象, g = m->g0
+ * 在 src/pkg/runtime/asm_amd64.s -> _rt0_go() 初始化过程被赋值
+ * (在 runtime·osinit 和 runtime·schedinit 之前)
+ * 
  * "extern register" is a special storage class implemented by 6c, 8c, etc.
  * register 寄存器?
  * On the ARM, it is an actual register; 
@@ -419,6 +423,7 @@ struct	M
 	// m 休眠|等待的地址.
 	// 在 stoplockedm(), stopm() 两处被调用 notesleep().
 	Note	park;
+	// 指向全局调度器的 m 列表
 	M*	alllink;	// on allm
 	M*	schedlink;
 	uint32	machport;	// Return address for Mach IPC (OS X)

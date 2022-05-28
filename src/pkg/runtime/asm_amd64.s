@@ -71,12 +71,20 @@ ok:
 	//
 	// set the per-goroutine and per-mach "registers"
 	get_tls(BX)
+	// 以下两条指令的作用: 将 runtime·g0 变量的地址, 赋值给 g 变量
+	// ...所以 g 表示 runtime·g0 的指针???
+	// 全局变量 m 和 g, 在 src/pkg/runtime/runtime.h 中, 
+	// 通过"extern	register	G*	g;"声明
 	LEAQ	runtime·g0(SB), CX
 	MOVQ	CX, g(BX)
+	// 以下两条指令的作用: 将 runtime·m0 变量的地址, 赋值给 m 变量
 	LEAQ	runtime·m0(SB), AX
 	MOVQ	AX, m(BX)
 
 	// save m->g0 = g0
+	//
+	// 将变量 g 的值, 赋值给 m->g0
+	// 不过这里应该是只给此处的全局 m 对象赋值, 其他 fork 出的 m 对象应该不会再赋值给 g0 了吧?
 	MOVQ	CX, m_g0(AX)
 
 	CLD				// convention is D is always left cleared
@@ -150,7 +158,7 @@ TEXT runtime·gosave(SB), NOSPLIT, $0-8
 // 继续执行(之前执行到一半的) goroutine.
 //
 // 参数为 Gobuf 对象, 其中包含着当前 g 对象的执行现场数据
-// (父级函数的pc(函数地址), sp(用于定位局部变量)等).
+// (栈空间地址, 父级函数的pc(函数地址), sp(用于定位局部变量)等).
 //
 // caller: 
 // 	1. src/pkg/runtime/proc.c -> execute()
