@@ -1653,17 +1653,18 @@ injectglist(G *glist)
 	}
 	runtime·unlock(&runtime·sched);
 	// 如果全局队列中还有处于 idle 状态的p, 就创建更多的m来运行这些任务.
-	for(; n && runtime·sched.npidle; n--)
+	for(; n && runtime·sched.npidle; n--) {
 		startm(nil, false);
+	}
 }
 
-// 一轮调度, 找到一个待执行的goroutine并运行ta
+// 找到一个待执行的 g 并运行ta
 //
 // caller: 
 // 	1. runtime·mstart() 新建的 m 对象完成并启动后, 调用此函数参与调度循环.
-// 	2. park0()
-// 	3. runtime·gosched0()
-// 	4. goexit0()
+// 	2. park0() 好像只与 channel 有关
+// 	3. runtime·gosched0() 开发者在代码中, 或是gc过程中在start the world后, 通知 m0 主动进行重新调度;
+// 	4. goexit0() g 对象(如go func()) 执行结束时, 需要为此 m 对象寻找新的 g 任务
 // 	5. exitsyscall0()
 //
 // One round of scheduler: find a runnable goroutine and execute it.
@@ -1732,6 +1733,19 @@ top:
 		startlockedm(gp);
 		goto top;
 	}
+
+	// 自定义 runtime 信息打印
+	if(runtime·debug.scheddetail >= 3) {
+		int64 curg_id = -1;
+		if(m->curg != nil) {
+			curg_id = m->curg->goid;
+		}
+		runtime·printf(
+			"schedule() called - global g: %D, m: %d, m.g0: %D, m.curg: %D, m.p: %d, target g: %D\n",
+			g->goid, m->id, m->g0->goid, curg_id, m->p->id, gp->goid
+		);
+	}
+
 	// 在当前 m 上运行 g 任务, 此时 g 的状态必须为 runnable
 	execute(gp);
 }
@@ -1751,6 +1765,7 @@ top:
 //
 // caller:
 // 	1. src/pkg/runtime/chan.c -> 很多
+// 	2. src/pkg/runtime/mgc0.c -> runfinq()
 //
 // Puts the current goroutine into a waiting state and unlocks the lock.
 // The goroutine can be made runnable again by calling runtime·ready(gp).
@@ -1766,12 +1781,24 @@ runtime·park(void(*unlockf)(Lock*), Lock *lock, int8 *reason)
 // 在 g0 上继续执行 park 操作, gp 是上面提到的当前 g 对象.
 //
 // caller:
-// 	1. runtime·park()
+// 	1. runtime·park() 只有这一处
 //
 // runtime·park continuation on g0.
 static void
 park0(G *gp)
 {
+	// 自定义 runtime 信息打印
+	if(runtime·debug.scheddetail >= 3) {
+		int64 curg_id = -1;
+		if(m->curg != nil) {
+			curg_id = m->curg->goid;
+		}
+		runtime·printf(
+			"park0() called - global g: %D, m: %d, m.g0: %D, m.curg: %D, m.p: %d, source g: %D\n",
+			g->goid, m->id, m->g0->goid, curg_id, m->p->id, gp->goid
+		);
+	}
+
 	gp->status = Gwaiting;
 	gp->m = nil;
 	m->curg = nil;
@@ -1794,8 +1821,8 @@ park0(G *gp)
 // 与 runtime·park() 很像, 不过后者的 g 会一直阻塞, 而不是被放到全局队列, 直到被唤醒.
 //
 // caller:
-// 	1. runtime·Gosched
-// 	2. src/pkg/runtime/mgc0.c -> runtime·gc()
+// 	1. runtime·Gosched 开发者可以在代码中主动触发
+// 	2. src/pkg/runtime/mgc0.c -> runtime·gc() gc过程中, start the world 时可主动触发
 //
 // Scheduler yield.
 void
@@ -1813,6 +1840,19 @@ runtime·gosched(void)
 void
 runtime·gosched0(G *gp)
 {
+	// 自定义 runtime 信息打印
+	if(runtime·debug.scheddetail >= 3) {
+		int64 curg_id = -1;
+		if(m->curg != nil) {
+			curg_id = m->curg->goid;
+		}
+		runtime·printf(
+			"runtime·gosched0() called - global g: %D, m: %d, m.g0: %D, m.curg: %D, m.p: %d, source g: %D\n",
+			g->goid, m->id, m->g0->goid, curg_id, m->p->id, gp->goid
+		);
+	}
+
+	// gp->status 本来应该是 Grunning, 毕竟是处于运行状态中主动中断的.
 	gp->status = Grunnable;
 
 	// 解绑
@@ -1866,6 +1906,17 @@ runtime·goexit(void)
 static void
 goexit0(G *gp)
 {
+	// 自定义 runtime 信息打印
+	if(runtime·debug.scheddetail >= 3) {
+		int64 curg_id = -1;
+		if(m->curg != nil) {
+			curg_id = m->curg->goid;
+		}
+		runtime·printf(
+			"goexit0() called - global g: %D, m: %d, m.g0: %D, m.curg: %D, m.p: %d, source g: %D\n",
+			g->goid, m->id, m->g0->goid, curg_id, m->p->id, gp->goid
+		);
+	}
 	gp->status = Gdead;
 	gp->m = nil;
 	gp->lockedm = nil;
@@ -2200,6 +2251,18 @@ exitsyscallfast(void)
 static void
 exitsyscall0(G *gp)
 {
+	// 自定义 runtime 信息打印
+	if(runtime·debug.scheddetail >= 3) {
+		int64 curg_id = -1;
+		if(m->curg != nil) {
+			curg_id = m->curg->goid;
+		}
+		runtime·printf(
+			"exitsyscall0() called - global g: %D, m: %d, m.g0: %D, m.curg: %D, m.p: %d, source g: %D\n",
+			g->goid, m->id, m->g0->goid, curg_id, m->p->id, gp->goid
+		);
+	}
+
 	P *p;
 
 	gp->status = Grunnable;
@@ -2297,7 +2360,7 @@ runtime·malg(int32 stacksize)
 	newg = runtime·malloc(sizeof(G));
 	// runtime·allocm() 中调用时, 为 cgo/win 分配 g0 时, stacksize 会指定为-1.
 	if(stacksize >= 0) {
-		if(g == m->g0) { // 这里的 g 是全局 g 对象?
+		if(g == m->g0) {
 			// running on scheduler stack already.
 			// stk 是分配的栈空间的起始地址
 			stk = runtime·stackalloc(StackSystem + stacksize);
@@ -3095,11 +3158,14 @@ checkdead(void)
 	// ...那为啥叫running
 	grunning = 0;
 	for(gp = runtime·allg; gp; gp = gp->alllink) {
-		if(gp->isbackground) continue;
+		if(gp->isbackground) {
+			continue;
+		}
 		// 除了下面这些, 还有 Gidle, Gdead
 		s = gp->status;
-		if(s == Gwaiting)
+		if(s == Gwaiting) {
 			grunning++;
+		}
 		else if(s == Grunnable || s == Grunning || s == Gsyscall) {
 			// 因为 run == 0, 所以目前所有的g任务中不应该存在 
 			// 这些状态(因为没有m在运行).
@@ -3109,7 +3175,9 @@ checkdead(void)
 	}
 	// possible if main goroutine calls runtime·Goexit()
 	// 如果主协程调用了 runtime·Goexit() 可能出现为0的情况.
-	if(grunning == 0) runtime·exit(0);
+	if(grunning == 0) {
+		runtime·exit(0);
+	}
 	// 记得这个报错一般出现在锁没有被释放, 或是通道一直被阻塞的时候.
 	// 所以 run 的值很大可能是0.
 	m->throwing = -1; // do not dump full stacks
@@ -3126,6 +3194,8 @@ checkdead(void)
 //
 // caller: 
 // 	1. runtime·main() 在执行用户代码前, 启动独立线程执行此函数.
+//
+// 注意: 此函数并不是以 g 的形式执行(因此也不需要 p), 而是由 m 直接执行, 直接绑定一个系统线程.
 static void
 sysmon(void)
 {
@@ -3152,7 +3222,9 @@ sysmon(void)
 
 		// up to 10ms
 		// delay 最大为 10ms
-		if(delay > 10*1000) delay = 10*1000;
+		if(delay > 10*1000) {
+			delay = 10*1000;
+		} 
 		// runtime·usleep 是汇编代码, 实际是 select 的系统调用. 
 		runtime·usleep(delay);
 
@@ -3279,8 +3351,9 @@ retake(int64 now)
 			// 且有m对象处于 spinning (没活干) 或是p对象处于 idle 状态
 			// 总之, 没必要抢占当前的p, 把任务分配给那些空闲的worker更好.
 			if(p->runqhead == p->runqtail &&
-				runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0)
+				runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0) {
 				continue;
+			}
 
 			// Need to decrement number of idle locked M's
 			// (pretending that one more is running) before the CAS.
@@ -3307,7 +3380,9 @@ retake(int64 now)
 				pd->schedwhen = now;
 				continue;
 			}
-			if(pd->schedwhen + 10*1000*1000 > now) continue;
+			if(pd->schedwhen + 10*1000*1000 > now) {
+				continue;
+			}
 			preemptone(p);
 		}
 	}
@@ -3345,12 +3420,13 @@ preemptall(void)
 	// 遍历 p 队列
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p == nil || p->status != Prunning) continue;
+		if(p == nil || p->status != Prunning) {
+			continue;
+		}
 		res |= preemptone(p);
 	}
 	return res;
 }
-
 
 // preemptone 告知目标 p 上正在运行的 goroutine 停止(被抢占)
 //
@@ -3387,16 +3463,29 @@ preemptone(P *p)
 	// 既然是抢占, 当然是我抢占别人啊.
 	// m就是调用者本身所在的M对象吧, 肯定不能抢啊.
 	mp = p->m;
-	if(mp == nil || mp == m) return false;
+	if(mp == nil || mp == m) {
+		return false;
+	} 
 
 	gp = mp->curg;
-	if(gp == nil || gp == mp->g0) return false;
+	if(gp == nil || gp == mp->g0) {
+		return false;
+	}
 	// 设置一个p->m->g对象的状态标记就可以了.
 	gp->preempt = true;
 	gp->stackguard0 = StackPreempt;
 	return true;
 }
 
+// GODEBUG=schedtrace=1000 时生效的方法, 打印出当前GMP调度信息.
+//
+// param detailed: 添加有 GODEBUG=scheddetail=1 参数时为 true, 否则默认为 false.
+//
+// 注意: GODEBUG=gctrace=1 在 src/pkg/runtime/mgc0.c -> gc() 方法中实现
+//
+// caller:
+// 	1. sysmon()
+// 	2. src/pkg/runtime/panic.c -> runtime·startpanic()
 void
 runtime·schedtrace(bool detailed)
 {
@@ -3410,16 +3499,22 @@ runtime·schedtrace(bool detailed)
 	P *p;
 
 	now = runtime·nanotime();
-	if(starttime == 0) starttime = now;
+	if(starttime == 0) {
+		starttime = now;
+	}
 
 	runtime·lock(&runtime·sched);
-	runtime·printf("SCHED %Dms: gomaxprocs=%d idleprocs=%d threads=%d idlethreads=%d runqueue=%d",
+	runtime·printf(
+		"SCHED %Dms: gomaxprocs=%d idleprocs=%d threads=%d idlethreads=%d runqueue=%d",
 		(now-starttime)/1000000, runtime·gomaxprocs, runtime·sched.npidle, runtime·sched.mcount,
-		runtime·sched.nmidle, runtime·sched.runqsize);
+		runtime·sched.nmidle, runtime·sched.runqsize
+	);
 	if(detailed) {
-		runtime·printf(" gcwaiting=%d nmidlelocked=%d nmspinning=%d stopwait=%d sysmonwait=%d\n",
+		runtime·printf(
+			" gcwaiting=%d nmidlelocked=%d nmspinning=%d stopwait=%d sysmonwait=%d\n",
 			runtime·sched.gcwaiting, runtime·sched.nmidlelocked, runtime·sched.nmspinning,
-			runtime·sched.stopwait, runtime·sched.sysmonwait);
+			runtime·sched.stopwait, runtime·sched.sysmonwait
+		);
 	}
 	// We must be careful while reading data from P's, M's and G's.
 	// Even if we hold schedlock, most data can be changed concurrently.
@@ -3432,21 +3527,28 @@ runtime·schedtrace(bool detailed)
 		h = p->runqhead;
 		s = p->runqsize;
 		q = t - h;
-		if(q < 0)
+		if(q < 0) {
 			q += s;
-		if(detailed)
-			runtime·printf("  P%d: status=%d schedtick=%d syscalltick=%d m=%d runqsize=%d/%d gfreecnt=%d\n",
-				i, p->status, p->schedtick, p->syscalltick, mp ? mp->id : -1, q, s, p->gfreecnt);
+		}
+		if(detailed) {
+			runtime·printf(
+				"  P%d: status=%d schedtick=%d syscalltick=%d m=%d runqsize=%d/%d gfreecnt=%d\n",
+				i, p->status, p->schedtick, p->syscalltick, mp ? mp->id : -1, q, s, p->gfreecnt
+			);
+		}
 		else {
 			// In non-detailed mode format lengths of per-P run queues as:
 			// [len1 len2 len3 len4]
 			fmt = " %d";
-			if(runtime·gomaxprocs == 1)
+			if(runtime·gomaxprocs == 1) {
 				fmt = " [%d]\n";
-			else if(i == 0)
+			}
+			else if(i == 0) {
 				fmt = " [%d";
-			else if(i == runtime·gomaxprocs-1)
+			}
+			else if(i == runtime·gomaxprocs-1) {
 				fmt = " %d]\n";
+			}
 			runtime·printf(fmt, q);
 		}
 	}
@@ -3459,34 +3561,41 @@ runtime·schedtrace(bool detailed)
 		gp = mp->curg;
 		lockedg = mp->lockedg;
 		id1 = -1;
-		if(p)
+		if(p) {
 			id1 = p->id;
+		}
 		id2 = -1;
-		if(gp)
+		if(gp) {
 			id2 = gp->goid;
+		}
 		id3 = -1;
-		if(lockedg)
+		if(lockedg) {
 			id3 = lockedg->goid;
-		runtime·printf("  M%d: p=%D curg=%D mallocing=%d throwing=%d gcing=%d"
+		}
+		runtime·printf(
+			"  M%d: p=%D curg=%D mallocing=%d throwing=%d gcing=%d"
 			" locks=%d dying=%d helpgc=%d spinning=%d lockedg=%D\n",
-			mp->id, id1, id2,
-			mp->mallocing, mp->throwing, mp->gcing, mp->locks, mp->dying, mp->helpgc,
-			mp->spinning, id3);
+			mp->id, id1, id2, mp->mallocing, mp->throwing, mp->gcing, 
+			mp->locks, mp->dying, mp->helpgc, mp->spinning, id3
+		);
 	}
 	for(gp = runtime·allg; gp; gp = gp->alllink) {
 		mp = gp->m;
 		lockedm = gp->lockedm;
-		runtime·printf("  G%D: status=%d(%s) m=%d lockedm=%d\n",
-			gp->goid, gp->status, gp->waitreason, mp ? mp->id : -1,
-			lockedm ? lockedm->id : -1);
+		runtime·printf(
+			"  G%D: status=%d(%s) m=%d lockedm=%d\n",
+			gp->goid, gp->status, gp->waitreason, mp ? mp->id : -1, lockedm ? lockedm->id : -1
+		);
 	}
 	runtime·unlock(&runtime·sched);
 }
 
+// 将 mp 放到全局调度器的 midle 链表头部, 并将其标记为 idle.
+//
+// 调用此函数时必须对sched全局调度器加锁
+//
 // Put mp on midle list.
 // Sched must be locked.
-// 将 mp 放到全局调度器的 midle 链表头部, 并将其标记为 idle
-// 调用此函数时必须对sched全局调度器加锁
 static void
 mput(M *mp)
 {

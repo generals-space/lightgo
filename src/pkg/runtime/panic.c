@@ -377,12 +377,14 @@ runtime·startpanic(void)
 		runtime·exit(3);
 	}
 	m->dying = 1;
-	if(g != nil)
+	if(g != nil) {
 		g->writebuf = nil;
+	}
 	runtime·xadd(&runtime·panicking, 1);
 	runtime·lock(&paniclk);
-	if(runtime·debug.schedtrace > 0 || runtime·debug.scheddetail > 0)
+	if(runtime·debug.schedtrace > 0 || runtime·debug.scheddetail > 0) {
 		runtime·schedtrace(true);
+	}
 	runtime·freezetheworld();
 }
 
@@ -393,9 +395,12 @@ runtime·dopanic(int32 unused)
 	bool crash;
 	int32 t;
 
-	if(g->sig != 0)
-		runtime·printf("[signal %x code=%p addr=%p pc=%p]\n",
-			g->sig, g->sigcode0, g->sigcode1, g->sigpc);
+	if(g->sig != 0) {
+		runtime·printf(
+			"[signal %x code=%p addr=%p pc=%p]\n",
+			g->sig, g->sigcode0, g->sigcode1, g->sigpc
+		);
+	}
 
 	if((t = runtime·gotraceback(&crash)) > 0){
 		if(g != m->g0) {

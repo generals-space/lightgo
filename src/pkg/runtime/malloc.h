@@ -297,6 +297,7 @@ struct MStats
 	uint64  last_gc;
 	uint64	pause_total_ns;
 	uint64	pause_ns[256];
+	// 进程启动以来, 执行过的 gc 次数.
 	uint32	numgc;
 	bool	enablegc;
 	bool	debuggc;

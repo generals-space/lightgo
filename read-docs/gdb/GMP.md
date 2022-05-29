@@ -6,10 +6,20 @@ set print pretty on
 dir /root/go/src/pkg/runtime
 ```
 
+
+
 ```
 b main.main
 b newm
 b startm
 b schedule
 b runtime.newproc
+b runtime.gc
+```
+
+GODEBUG=gctrace=1
+
+
+```
+b gc
 ```

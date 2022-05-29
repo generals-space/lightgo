@@ -2275,9 +2275,13 @@ gc(struct gc_args *args)
 	t0 = args->start_time;
 
 	// 清空gcstats, 记录本次gc的数据
-	if(CollectStats) runtime·memclr((byte*)&gcstats, sizeof(gcstats));
+	if(CollectStats) {
+		runtime·memclr((byte*)&gcstats, sizeof(gcstats));
+	} 
 
-	for(mp=runtime·allm; mp; mp=mp->alllink) runtime·settype_flush(mp);
+	for(mp=runtime·allm; mp; mp=mp->alllink) {
+		runtime·settype_flush(mp);
+	} 
 
 	heap0 = 0;
 	obj0 = 0;
@@ -2290,8 +2294,12 @@ gc(struct gc_args *args)
 	// disable gc during mallocs in parforalloc
 	// ...这还要啥disable啊, 现在就是gc啊
 	m->locks++;
-	if(work.markfor == nil) work.markfor = runtime·parforalloc(MaxGcproc);
-	if(work.sweepfor == nil) work.sweepfor = runtime·parforalloc(MaxGcproc);
+	if(work.markfor == nil) {
+		work.markfor = runtime·parforalloc(MaxGcproc);
+	}
+	if(work.sweepfor == nil) {
+		work.sweepfor = runtime·parforalloc(MaxGcproc);
+	}
 	m->locks--;
 
 	if(itabtype == nil) {
@@ -2328,7 +2336,9 @@ gc(struct gc_args *args)
 	scanblock(nil, nil, 0, true);
 
 	if(DebugMark) {
-		for(i=0; i<work.nroot; i++) debug_scanblock(work.roots[i].p, work.roots[i].n);
+		for(i=0; i<work.nroot; i++){
+			debug_scanblock(work.roots[i].p, work.roots[i].n);
+		} 
 		runtime·atomicstore(&work.debugmarkdone, 1);
 	}
 
@@ -2356,9 +2366,12 @@ gc(struct gc_args *args)
 	mstats.pause_ns[mstats.numgc%nelem(mstats.pause_ns)] = t4 - t0;
 	mstats.pause_total_ns += t4 - t0;
 	mstats.numgc++; // gc次数加1
-	if(mstats.debuggc) runtime·printf("pause %D\n", t4-t0);
+	if(mstats.debuggc){
+		runtime·printf("pause %D\n", t4-t0);
+	} 
 
 	// 打印gc调试信息
+	// GODEBUG=gctrace=1 
 	if(runtime·debug.gctrace) {
 		updatememstats(&stats);
 		heap1 = mstats.heap_alloc;
@@ -2368,24 +2381,35 @@ gc(struct gc_args *args)
 		stats.nosyield += work.sweepfor->nosyield;
 		stats.nsleep += work.sweepfor->nsleep;
 
-		runtime·printf("gc%d(%d): %D+%D+%D ms, %D -> %D MB %D -> %D (%D-%D) objects,"
-				" %D(%D) handoff, %D(%D) steal, %D/%D/%D yields\n",
+		runtime·printf(
+			"gc%d(%d): %D+%D+%D ms, %D -> %D MB %D -> %D (%D-%D) objects,"
+			" %D(%D) handoff, %D(%D) steal, %D/%D/%D yields\n",
 			mstats.numgc, work.nproc, (t2-t1)/1000000, (t3-t2)/1000000, (t1-t0+t4-t3)/1000000,
-			heap0>>20, heap1>>20, obj0, obj1,
-			mstats.nmalloc, mstats.nfree,
+			heap0>>20, heap1>>20, obj0, obj1, mstats.nmalloc, mstats.nfree,
 			stats.nhandoff, stats.nhandoffcnt,
 			work.sweepfor->nsteal, work.sweepfor->nstealcnt,
-			stats.nprocyield, stats.nosyield, stats.nsleep);
+			stats.nprocyield, stats.nosyield, stats.nsleep
+		);
 		if(CollectStats) {
-			runtime·printf("scan: %D bytes, %D objects, %D untyped, %D types from MSpan\n",
-				gcstats.nbytes, gcstats.obj.cnt, gcstats.obj.notype, gcstats.obj.typelookup);
-			if(gcstats.ptr.cnt != 0)
-				runtime·printf("avg ptrbufsize: %D (%D/%D)\n",
-					gcstats.ptr.sum/gcstats.ptr.cnt, gcstats.ptr.sum, gcstats.ptr.cnt);
-			if(gcstats.obj.cnt != 0)
-				runtime·printf("avg nobj: %D (%D/%D)\n",
-					gcstats.obj.sum/gcstats.obj.cnt, gcstats.obj.sum, gcstats.obj.cnt);
-			runtime·printf("rescans: %D, %D bytes\n", gcstats.rescan, gcstats.rescanbytes);
+			runtime·printf(
+				"scan: %D bytes, %D objects, %D untyped, %D types from MSpan\n",
+				gcstats.nbytes, gcstats.obj.cnt, gcstats.obj.notype, gcstats.obj.typelookup
+			);
+			if(gcstats.ptr.cnt != 0) {
+				runtime·printf(
+					"avg ptrbufsize: %D (%D/%D)\n",
+					gcstats.ptr.sum/gcstats.ptr.cnt, gcstats.ptr.sum, gcstats.ptr.cnt
+				);
+			}
+			if(gcstats.obj.cnt != 0) {
+				runtime·printf(
+					"avg nobj: %D (%D/%D)\n",
+					gcstats.obj.sum/gcstats.obj.cnt, gcstats.obj.sum, gcstats.obj.cnt
+				);
+			}
+			runtime·printf(
+				"rescans: %D, %D bytes\n", gcstats.rescan, gcstats.rescanbytes
+			);
 
 			runtime·printf("instruction counts:\n");
 			ninstr = 0;
@@ -2395,10 +2419,18 @@ gc(struct gc_args *args)
 			}
 			runtime·printf("\ttotal:\t%D\n", ninstr);
 
-			runtime·printf("putempty: %D, getfull: %D\n", gcstats.putempty, gcstats.getfull);
+			runtime·printf(
+				"putempty: %D, getfull: %D\n", gcstats.putempty, gcstats.getfull
+			);
 
-			runtime·printf("markonly base lookup: bit %D word %D span %D\n", gcstats.markonly.foundbit, gcstats.markonly.foundword, gcstats.markonly.foundspan);
-			runtime·printf("flushptrbuf base lookup: bit %D word %D span %D\n", gcstats.flushptrbuf.foundbit, gcstats.flushptrbuf.foundword, gcstats.flushptrbuf.foundspan);
+			runtime·printf(
+				"markonly base lookup: bit %D word %D span %D\n", 
+				gcstats.markonly.foundbit, gcstats.markonly.foundword, gcstats.markonly.foundspan
+			);
+			runtime·printf(
+				"flushptrbuf base lookup: bit %D word %D span %D\n", 
+				gcstats.flushptrbuf.foundbit, gcstats.flushptrbuf.foundword, gcstats.flushptrbuf.foundspan
+			);
 		}
 	}
 
@@ -2431,22 +2463,25 @@ runtime∕debug·readGCStats(Slice *pauses)
 	uint32 i, n;
 
 	// Calling code in runtime/debug should make the slice large enough.
-	if(pauses->cap < nelem(mstats.pause_ns)+3)
+	if(pauses->cap < nelem(mstats.pause_ns)+3) {
 		runtime·throw("runtime: short slice passed to readGCStats");
+	}
 
 	// Pass back: pauses, last gc (absolute time), number of gc, total pause ns.
 	p = (uint64*)pauses->array;
 	runtime·lock(&runtime·mheap);
 	n = mstats.numgc;
-	if(n > nelem(mstats.pause_ns))
+	if(n > nelem(mstats.pause_ns)) {
 		n = nelem(mstats.pause_ns);
+	}
 	
 	// The pause buffer is circular. The most recent pause is at
 	// pause_ns[(numgc-1)%nelem(pause_ns)], and then backward
 	// from there to go back farther in time. We deliver the times
 	// most recent first (in p[0]).
-	for(i=0; i<n; i++)
+	for(i=0; i<n; i++) {
 		p[i] = mstats.pause_ns[(mstats.numgc-1-i)%nelem(mstats.pause_ns)];
+	}
 
 	p[n] = mstats.last_gc;
 	p[n+1] = mstats.numgc;
@@ -2471,16 +2506,21 @@ runtime∕debug·setGCPercent(intgo in, intgo out)
 	FLUSH(&out);
 }
 
-// caller: runtime·gchelper(), gc()
+// caller: 
+// 	1. runtime·gchelper()
+// 	2. gc()
 static void
 gchelperstart(void)
 {
-	if(m->helpgc < 0 || m->helpgc >= MaxGcproc)
+	if(m->helpgc < 0 || m->helpgc >= MaxGcproc) {
 		runtime·throw("gchelperstart: bad m->helpgc");
-	if(runtime·xchg(&bufferList[m->helpgc].busy, 1))
+	}
+	if(runtime·xchg(&bufferList[m->helpgc].busy, 1)) {
 		runtime·throw("gchelperstart: already busy");
-	if(g != m->g0)
+	}
+	if(g != m->g0) {
 		runtime·throw("gchelper not running on g0 stack");
+	}
 }
 
 static void
@@ -2532,8 +2572,9 @@ runfinq(void)
 					// convert to interface with methods, via empty interface.
 					ef1.type = f->ot;
 					ef1.data = f->arg;
-					if(!runtime·ifaceE2I2((InterfaceType*)f->fint, ef1, (Iface*)frame))
+					if(!runtime·ifaceE2I2((InterfaceType*)f->fint, ef1, (Iface*)frame)) {
 						runtime·throw("invalid type conversion in runfinq");
+					}
 				}
 				reflect·call(f->fn, frame, framesz);
 				f->fn = nil;
