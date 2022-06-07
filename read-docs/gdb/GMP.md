@@ -21,5 +21,5 @@ GODEBUG=gctrace=1
 
 
 ```
-b gc
+
 ```

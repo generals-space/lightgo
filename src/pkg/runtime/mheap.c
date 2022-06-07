@@ -437,17 +437,21 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 
 	// Insert s into appropriate list.
 	// 将span添加到合适的链表中.
-	if(s->npages < nelem(h->free))
+	if(s->npages < nelem(h->free)) {
 		// 记得h->free数组的每个成员都是span链表
 		// 各成员中, h->free[n]中拥有n个页, 
 		// 最后一个成员成员可容纳的页数即是MaxMHeapList.
 		// 所以在if语句中, 实际是判断free各链表中是否可容纳这个span, 
 		// 如果容纳不下, 就放到large成员里
 		runtime·MSpanList_Insert(&h->free[s->npages], s);
-	else
+	}
+	else {
 		runtime·MSpanList_Insert(&h->large, s);
+	}
 }
 
+// caller:
+// 	1. runtime·MHeap_Scavenger() 超过2分钟没有进行常规 gc 时, 调用此函数进行例行 gc(也叫强制 gc).
 static void
 forcegchelper(Note *note)
 {
@@ -455,14 +459,19 @@ forcegchelper(Note *note)
 	runtime·notewakeup(note);
 }
 
+// param list: runtime·mheap -> free 数组中的每个成员, 都会遍历一遍
+// 
+// caller:
+// 	1. scavenge() 只有这一处
 static uintptr
 scavengelist(MSpan *list, uint64 now, uint64 limit)
 {
 	uintptr released, sumreleased;
 	MSpan *s;
 
-	if(runtime·MSpanList_IsEmpty(list))
+	if(runtime·MSpanList_IsEmpty(list)) {
 		return 0;
+	}
 
 	sumreleased = 0;
 	for(s=list->next; s != list; s=s->next) {
@@ -477,6 +486,14 @@ scavengelist(MSpan *list, uint64 now, uint64 limit)
 	return sumreleased;
 }
 
+// 将 mheap 中, 各级别 span list, 以及 large list 中长时间未被使用的成员, 归还给OS.
+//
+// param k: 已经进行过的 gc 总次数
+//
+// caller:
+// 	1. runtime·MHeap_Scavenger()
+// 	2. runtime∕debug·freeOSMemory()
+//
 static void
 scavenge(int32 k, uint64 now, uint64 limit)
 {
@@ -486,27 +503,34 @@ scavenge(int32 k, uint64 now, uint64 limit)
 	
 	h = &runtime·mheap;
 	sumreleased = 0;
-	for(i=0; i < nelem(h->free); i++)
+	for(i=0; i < nelem(h->free); i++) {
 		sumreleased += scavengelist(&h->free[i], now, limit);
+	}
 	sumreleased += scavengelist(&h->large, now, limit);
 
 	if(runtime·debug.gctrace > 0) {
-		if(sumreleased > 0)
+		if(sumreleased > 0) {
 			runtime·printf("scvg%d: %D MB released\n", k, (uint64)sumreleased>>20);
-		runtime·printf("scvg%d: inuse: %D, idle: %D, sys: %D, released: %D, consumed: %D (MB)\n",
+		}
+		runtime·printf(
+			"scvg%d: inuse: %D, idle: %D, sys: %D, released: %D, consumed: %D (MB)\n",
 			k, mstats.heap_inuse>>20, mstats.heap_idle>>20, mstats.heap_sys>>20,
-			mstats.heap_released>>20, (mstats.heap_sys - mstats.heap_released)>>20);
+			mstats.heap_released>>20, (mstats.heap_sys - mstats.heap_released)>>20
+		);
 	}
 }
 
 static FuncVal forcegchelperv = {(void(*)(void))forcegchelper};
 
+// 定期释放未使用的内存给操作系统, 无限循环.
+//
+// caller: 
+// 	1. src/pkg/runtime/proc.c -> runtime·main() 只有这一处, 作为 scavenger 变量进行调用.
+// 	在进程启动初期就创建一个协程完成这项工作.
+//
 // Release (part of) unused memory to OS.
 // Goroutine created at startup.
 // Loop forever.
-// 定期释放未使用的内存给操作系统, 无限循环.
-// caller: runtime·main() 
-// 在进程启动初期就创建一个线程独立完成这项工作.
 void
 runtime·MHeap_Scavenger(void)
 {
@@ -524,10 +548,12 @@ runtime·MHeap_Scavenger(void)
 	// we hand it back to the operating system.
 	limit = 5*60*1e9;
 	// Make wake-up period small enough for the sampling to be correct.
-	if(forcegc < limit)
+	if(forcegc < limit) {
 		tick = forcegc/2;
-	else
+	}
+	else {
 		tick = limit/2;
+	}
 
 	h = &runtime·mheap;
 	for(k=0;; k++) {
@@ -543,10 +569,13 @@ runtime·MHeap_Scavenger(void)
 			// GC blocks other goroutines via the runtime·worldsema.
 			runtime·noteclear(&note);
 			notep = &note;
-			runtime·newproc1(&forcegchelperv, (byte*)&notep, sizeof(notep), 0, runtime·MHeap_Scavenger);
+			runtime·newproc1(
+				&forcegchelperv, (byte*)&notep, sizeof(notep), 0, runtime·MHeap_Scavenger
+			);
 			runtime·notetsleepg(&note, -1);
-			if(runtime·debug.gctrace > 0)
+			if(runtime·debug.gctrace > 0) {
 				runtime·printf("scvg%d: GC forced\n", k);
+			}
 			runtime·lock(h);
 			now = runtime·nanotime();
 		}

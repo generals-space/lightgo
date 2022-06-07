@@ -288,12 +288,15 @@ struct MStats
 	// Statistics about garbage collector.
 	// Protected by mheap or stopping the world during GC.
 
-	// next GC (in heap_alloc time)
 	// 下一次GC触发的时间...好像不能说是时间, 而是空间吧.
-	// 这个值总是用来与heap_alloc做比较
+	// 这个值总是用来与 heap_alloc 做比较
+	//
+	// next GC (in heap_alloc time)
 	uint64	next_gc;
+	// GC 完成时通过runtime·nanotime() 获取到的系统时间.
+	// 表示最近一次 gc 的时间
+	//
 	// last GC (in absolute time)
-	// GC完成时通过runtime·nanotime()获取到的系统时间.
 	uint64  last_gc;
 	uint64	pause_total_ns;
 	uint64	pause_ns[256];
@@ -487,7 +490,7 @@ struct MHeap
 {
 	Lock;
 
-	// free数组的每个成员都是 span 链表.
+	// free 数组的每个成员都是 span 链表(循环链表).
 	// 各成员中, h->free[n]中拥有n个页, 最后一个成员成员可容纳的页数即是MaxMHeapList.
 	//
 	// free lists of given length

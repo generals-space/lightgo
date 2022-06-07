@@ -686,6 +686,8 @@ extern bool runtime·precisestack;
  *    you need super-gopher-guru privilege
  *    to add this list.
  */
+// nelem 这个应该是 len() 的变体吧, 用来求目标数组长度的.
+// 用整个数组所占用的空间(sizeof(x)), 除以每个元素占用的空间(sizeof((x)[0])).
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define	nil		((void*)0)
 #define	offsetof(s,m)	(uint32)(&(((s*)0)->m))

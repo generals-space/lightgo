@@ -284,7 +284,9 @@ runtime·main(void)
 	d.free = false;
 	g->defer = &d;
 
-	if(m != &runtime·m0) runtime·throw("runtime·main not on m0");
+	if(m != &runtime·m0) {
+		runtime·throw("runtime·main not on m0");
+	} 
 	// 通过 scavenger 变量启动独立的协程运行 runtime·MHeap_Scavenger(), 进行垃圾回收.
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
 
@@ -501,7 +503,11 @@ needaddgcproc(void)
 }
 
 // 当确定执行gc操作的协程数量大于1时调用此函数.
-// caller: mgc0.c -> gc()
+//
+// param nproc: 执行 gc 的协程数量.
+//
+// caller: 
+// 	1. mgc0.c -> gc()
 void
 runtime·helpgc(int32 nproc)
 {
@@ -512,9 +518,11 @@ runtime·helpgc(int32 nproc)
 	pos = 0;
 	// one M is currently running
 	for(n = 1; n < nproc; n++) { 
-		// m中的mcache用的其实是ta绑定的p的mcache
+		// m 中的 mcache 用的其实是ta绑定的 p 的 mcache
 		// 如果这个if条件为true, 说明遍历到了当前m的p对象, 需要跳过.
-		if(runtime·allp[pos]->mcache == m->mcache) pos++;
+		if(runtime·allp[pos]->mcache == m->mcache) {
+			pos++;
+		}
 
 		// 从sched获取一个空闲的m对象, 设置其helpgc序号,
 		// 并且与 allp[pos] 绑定.
@@ -522,7 +530,9 @@ runtime·helpgc(int32 nproc)
 		// 这里报的错是什么意思?
 		// 由于 nproc = min(GOMAXPROCS, ncpu, MaxGcproc), 
 		// 而m的数量一定是比p多的, 所以???
-		if(mp == nil) runtime·throw("runtime·gcprocs inconsistency");
+		if(mp == nil) {
+			runtime·throw("runtime·gcprocs inconsistency");
+		}
 		// 这是设置序号吧?
 		mp->helpgc = n;
 		// 为什么只绑定 mcache? 不使用 acquirep() 完成?
@@ -542,7 +552,9 @@ runtime·freezetheworld(void)
 {
 	int32 i;
 
-	if(runtime·gomaxprocs == 1) return;
+	if(runtime·gomaxprocs == 1) {
+		return;
+	}
 	// stopwait and preemption requests can be lost
 	// due to races with concurrently executing threads,
 	// so try several times
@@ -554,7 +566,9 @@ runtime·freezetheworld(void)
 		runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 		// this should stop running goroutines
 		// no running goroutines
-		if(!preemptall()) break; 
+		if(!preemptall()) {
+			break; 
+		}
 		runtime·usleep(1000);
 	}
 	// to be sure
@@ -594,8 +608,9 @@ runtime·stoptheworld(void)
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
 		s = p->status;
-		if(s == Psyscall && runtime·cas(&p->status, s, Pgcstop))
+		if(s == Psyscall && runtime·cas(&p->status, s, Pgcstop)) {
 			runtime·sched.stopwait--;
+		}
 	}
 	// stop idle P's
 	// 3. 将空闲的P转换成Pgcstop
@@ -631,7 +646,9 @@ runtime·stoptheworld(void)
 	// 或者p链表中还有状态未成为 Pgcstop 的, 也表示失败.
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p->status != Pgcstop) runtime·throw("stoptheworld: not stopped");
+		if(p->status != Pgcstop) {
+			runtime·throw("stoptheworld: not stopped");
+		}
 	}
 }
 
@@ -2418,6 +2435,9 @@ runtime·newproc(int32 siz, FuncVal* fn, ...)
 // 创建一个新的 g 对象, 用来执行 fn 函数, 传入的参数起始地址为 argp, 一共 narg bytes,
 // 并且返回 nret bytes 的结果.
 //
+// param argp: 传入参数的地址
+// param narg: 传入参数的大小
+// param nret: 返回值大小.
 // param callerpc: 主调函数的地址, pc即程序计数器, 对 g 切换是有用的.
 //
 // 新创建的 g 对象会放到 waiting 队列等待执行.

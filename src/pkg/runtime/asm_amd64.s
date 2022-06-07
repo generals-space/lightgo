@@ -187,8 +187,8 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-8
 //     goroutine 自然结束退出时, 通过此函数切换回 m0.
 //
 // Switch to m->g0's stack, call fn(g).
-// Fn must never return.  It should gogo(&g->sched)
-// to keep running g.
+// Fn must never return. 
+// It should gogo(&g->sched) to keep running g.
 TEXT runtime·mcall(SB), NOSPLIT, $0-8
 	MOVQ	fn+0(FP), DI
 

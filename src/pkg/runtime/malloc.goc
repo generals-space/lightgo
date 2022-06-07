@@ -72,29 +72,39 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		return &runtime·zerobase;
 	}
 	// m 在 runtime.h 中声明, 也是全局变量, m 是 M 类型的列表对象.
-	if(m->mallocing) runtime·throw("malloc/free - deadlock");
+	if(m->mallocing) {
+		runtime·throw("malloc/free - deadlock");
+	} 
 
 	// Disable preemption during settype_flush.
 	// We can not use m->mallocing for this, because settype_flush calls mallocgc.
 	m->locks++;
 	m->mallocing = 1; // 加锁
 
-	if(DebugTypeAtBlockEnd) size += sizeof(uintptr);
+	if(DebugTypeAtBlockEnd) {
+		size += sizeof(uintptr);
+	} 
 
 	c = m->mcache;
 	// 小对象从 mcache 列表中分配.
 	if(size <= MaxSmallSize) {
 		// Inlined version of SizeToClass().
 		// 下面的语句同样实现了 SizeToClass() 的功能, 相当于内联版本.
-		if(size <= 1024-8) sizeclass = runtime·size_to_class8[(size+7)>>3];
-		else sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
+		if(size <= 1024-8) {
+			sizeclass = runtime·size_to_class8[(size+7)>>3];
+		} 
+		else {
+			sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
+		} 
 
 		// 这里的 size 与前面的 size 大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
 		size = runtime·class_to_size[sizeclass];
 		// 先从当前线程的 mcache 中分配
 		l = &c->list[sizeclass];
 		// 如果 list 中已经没有成员(分配一个成员就会从 list 中移除), 则从堆中的 central 空间中拿一些过来.
-		if(l->list == nil) runtime·MCache_Refill(c, sizeclass);
+		if(l->list == nil) {
+			runtime·MCache_Refill(c, sizeclass);
+		} 
 
 		// 从 mcache 的 span 链表分配小对象, 相当于直接从链表中移除了一个成员.
 		v = l->list;
@@ -119,11 +129,15 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		// npages 表示目标 size 的空间需要多少页
 		npages = size >> PageShift;
 
-		if((size & PageMask) != 0) npages++;
+		if((size & PageMask) != 0) {
+			npages++;
+		}
 
 		s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, !(flag & FlagNoZero));
 
-		if(s == nil) runtime·throw("out of memory");
+		if(s == nil) {
+			runtime·throw("out of memory");
+		} 
 
 		s->limit = (byte*)(s->start<<PageShift) + size;
 		size = npages<<PageShift;
@@ -157,33 +171,45 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	}
 
 	m->mallocing = 0; // 解锁
-	if(UseSpanType && !(flag & FlagNoScan) && typ != 0 && m->settype_bufsize == nelem(m->settype_buf))
+	if(UseSpanType && !(flag & FlagNoScan) && typ != 0 && m->settype_bufsize == nelem(m->settype_buf)) {
 		runtime·settype_flush(m);
+	}
 	m->locks--;
 	// restore the preemption request in case we've cleared it in newstack
-	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
+	if(m->locks == 0 && g->preempt){
+		g->stackguard0 = StackPreempt;
+	} 
 
 	if(!(flag & FlagNoProfiling) && (rate = runtime·MemProfileRate) > 0) {
-		if(size >= rate) goto profile;
-		if(m->mcache->next_sample > size) m->mcache->next_sample -= size;
+		if(size >= rate) {
+			goto profile;
+		} 
+		if(m->mcache->next_sample > size) {
+			m->mcache->next_sample -= size;
+		} 
 		else {
 			// pick next profile time
 			// If you change this, also change allocmcache.
 			// make 2*rate not overflow
-			if(rate > 0x3fffffff) rate = 0x3fffffff;
+			if(rate > 0x3fffffff) {
+				rate = 0x3fffffff;
+			} 
 			m->mcache->next_sample = runtime·fastrand1() % (2*rate);
 		profile:
 			runtime·setblockspecial(v, true);
 			runtime·MProf_Malloc(v, size);
 		}
 	}
+
 	// 如果 flag 不包含 FlagNoInvokeGC, 说明此次分配会给GC增加压力(因为此次分配需要GC来回收)
 	// 而此时如果 next_gc 时间到了, 就手动触发gc()
 	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc) {
 		runtime·gc(0);
 	}
 
-	if(raceenabled) runtime·racemalloc(v, size);
+	if(raceenabled) {
+		runtime·racemalloc(v, size);
+	} 
 	return v;
 }
 
@@ -211,12 +237,16 @@ runtime·free(void *v)
 	uint32 prof;
 	uintptr size;
 
-	if(v == nil) return;
+	if(v == nil) {
+		return;
+	} 
 	
 	// If you change this also change mgc0.c:/^sweep,
 	// which has a copy of the guts of free.
 
-	if(m->mallocing) runtime·throw("malloc/free - deadlock");
+	if(m->mallocing) {
+		runtime·throw("malloc/free - deadlock");
+	} 
 	m->mallocing = 1;
 
 	if(!runtime·mlookup(v, nil, nil, &s)) {
@@ -225,8 +255,9 @@ runtime·free(void *v)
 	}
 	prof = runtime·blockspecial(v);
 
-	if(raceenabled)
+	if(raceenabled) {
 		runtime·racefree(v);
+	}
 
 	// Find size class for v.
 	sizeclass = s->sizeclass;
@@ -247,7 +278,9 @@ runtime·free(void *v)
 		// Small object.
 		size = runtime·class_to_size[sizeclass];
 		// mark as "needs to be zeroed"
-		if(size > sizeof(uintptr)) ((uintptr*)v)[1] = (uintptr)0xfeedfeedfeedfeedll;
+		if(size > sizeof(uintptr)) {
+			((uintptr*)v)[1] = (uintptr)0xfeedfeedfeedfeedll;
+		} 
 		// Must mark v freed before calling MCache_Free:
 		// it might coalesce v and other blocks into a bigger span
 		// and change the bitmap further.
@@ -255,7 +288,9 @@ runtime·free(void *v)
 		c->local_nsmallfree[sizeclass]++;
 		runtime·MCache_Free(c, v, sizeclass, size);
 	}
-	if(prof) runtime·MProf_Free(v, size);
+	if(prof) {
+		runtime·MProf_Free(v, size);
+	} 
 	m->mallocing = 0;
 }
 
@@ -843,6 +878,7 @@ runtime·cnewarray(Type *typ, intgo n)
 	return cnew(typ, n, TypeInfo_Array);
 }
 
+// golang原生: runtime.GC() 函数, 由开发者手动触发 GC 行为.
 func GC() {
 	runtime·gc(1);
 }
@@ -863,22 +899,29 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 		goto throw;
 	}
 	if(obj.type->kind != KindPtr) {
-		runtime·printf("runtime.SetFinalizer: first argument is %S, not pointer\n", *obj.type->string);
+		runtime·printf(
+			"runtime.SetFinalizer: first argument is %S, not pointer\n", 
+			*obj.type->string
+		);
 		goto throw;
 	}
 	if(!runtime·mlookup(obj.data, &base, &size, nil) || obj.data != base) {
-		runtime·printf("runtime.SetFinalizer: pointer not at beginning of allocated block\n");
+		runtime·printf(
+			"runtime.SetFinalizer: pointer not at beginning of allocated block\n"
+		);
 		goto throw;
 	}
 	nret = 0;
 	ot = (PtrType*)obj.type;
 	fint = nil;
 	if(finalizer.type != nil) {
-		if(finalizer.type->kind != KindFunc)
+		if(finalizer.type->kind != KindFunc) {
 			goto badfunc;
+		}
 		ft = (FuncType*)finalizer.type;
-		if(ft->dotdotdot || ft->in.len != 1)
+		if(ft->dotdotdot || ft->in.len != 1) {
 			goto badfunc;
+		}
 		fint = *(Type**)ft->in.array;
 		if(fint == obj.type) {
 			// ok - same type
@@ -889,8 +932,9 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 			// ok - satisfies empty interface
 		} else if(fint->kind == KindInterface && runtime·ifaceE2I2((InterfaceType*)fint, obj, &iface)) {
 			// ok - satisfies non-empty interface
-		} else
+		} else {
 			goto badfunc;
+		}
 
 		// compute size needed for return parameters
 		for(i=0; i<ft->out.len; i++) {
