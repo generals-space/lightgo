@@ -14,3 +14,21 @@
     - p 'main.S'
     - as main.S is the symbol name.
     - 可以解决打印 runtime 包中变量时, 出现"No symbol "runtime" in current context."的问题
+
+打断点时
+
+```
+(gdb) b main.main
+(gdb) b runtime.main
+```
+
+打印变量时
+
+```
+(gdb) p 'runtime.m0'
+(gdb) p 'runtime.m0'.mallocing
+$4 = 1
+```
+
+> m0不是指针类型.
+

@@ -95,7 +95,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		} 
 		else {
 			sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
-		} 
+		}
 
 		// 这里的 size 与前面的 size 大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
 		size = runtime·class_to_size[sizeclass];
@@ -106,7 +106,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 			runtime·MCache_Refill(c, sizeclass);
 		} 
 
-		// 从 mcache 的 span 链表分配小对象, 相当于直接从链表中移除了一个成员.
+		// 从 mcache 的 span 链表分配小对象, 相当于直接从链表头移除了一个成员.
 		v = l->list;
 		l->list = v->next;
 		l->nlist--;

@@ -2282,7 +2282,7 @@ runtime·gc(int32 force)
 		g->waitreason = "garbage collection";
 		// mgc上下面定义的函数名, 是实际执行GC的函数.
 		// runtime·mcall 是汇编代码, 原型为void mcall(void (*fn)(G*))
-		// 作用是切换到m->g0的上下文, 并调用mgc(g).
+		// 作用是切换到 m->g0 的上下文, 并调用mgc(g).
 		// 注意参数g应该就是此处的局部变量g.
 		runtime·mcall(mgc);
 		// record a new start time in case we're going around again
@@ -2431,8 +2431,10 @@ gc(struct gc_args *args)
 	// 如果执行GC的协程数量多于1个, 那就等待直到ta们全部完成.
 	// wakeup 的操作在 runtime·gchelper() 函数中.
 	// ...如果只有1个就不用了? 只有一个协程时运行到这里说明sweepfor已经完成了是吗???
-	if(work.nproc > 1) runtime·notesleep(&work.alldone);
-	
+	if(work.nproc > 1) {
+		runtime·notesleep(&work.alldone);
+	}
+
 	// 统计数据
 	cachestats();
 	// 计算下一次GC触发的时间...好像不能说是时间, 而是空间吧.

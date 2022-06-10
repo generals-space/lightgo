@@ -99,8 +99,6 @@ $ ll -h
 
 ### go tool: no such tool "dist"
 
-
-
 ```console
 $ go tool dist install -vv
 go tool: no such tool "dist"

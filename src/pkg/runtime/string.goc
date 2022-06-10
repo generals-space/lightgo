@@ -314,8 +314,9 @@ func stringtoslicerune(s String) (b Slice) {
 	b.cap = n;
 	p = s.str;
 	r = (int32*)b.array;
-	while(p < ep)
+	while(p < ep) {
 		p += runtime·charntorune(r++, p, ep-p);
+	}
 }
 
 enum
