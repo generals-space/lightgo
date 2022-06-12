@@ -120,7 +120,8 @@ if [ "$(uname)" == "Darwin" ]; then
 	# golang.org/issue/5261
 	mflag="$mflag -mmacosx-version-min=10.6"
 fi
-${CC:-gcc} $mflag -O2 -Wall -Werror -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
+## ${CC:-gcc} $mflag -O2 -Wall -Werror -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
+${CC:-gcc} $mflag -Wall -Werror -g -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
 
 # -e doesn't propagate out of eval, so check success by hand.
 eval $(./cmd/dist/dist env -p || echo FAIL=true)

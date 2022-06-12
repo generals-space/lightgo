@@ -302,6 +302,8 @@ struct MStats
 	uint64	pause_ns[256];
 	// 进程启动以来, 执行过的 gc 次数.
 	uint32	numgc;
+	// enablegc == 0 表示 runtime 还未启动完成, 
+	// 这个值在 runtime·schedinit() 末尾才被赋值为 1
 	bool	enablegc;
 	bool	debuggc;
 

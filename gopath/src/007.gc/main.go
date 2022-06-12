@@ -1,16 +1,11 @@
 package main
 
-import (
-	"log"
-)
-
 func main() {
-	str := "hello world"
-	log.Printf("%s", str)
+	a := new([100]byte)
+	_ = a
 
-	list := make([]int, 1, 5)
-	list[0] = 1
-	log.Printf("%+v", list)
+	b := new([32*1024]byte)
+	_ = b
 }
 
 // go build -gcflags='-l -N' -o main.gobin main.go

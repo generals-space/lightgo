@@ -58,10 +58,12 @@ enum {
 // Each word in the bitmap describes wordsPerBitmapWord words of heap memory. 
 // bitmap中的每个字(word)都描述了arena中wordsPerBitmapWord(即16)个字.
 // (我觉得这里word只是一个大小的单位, 并没有具体意义)
+//
 // There are 4 bitmap bits dedicated to each heap word,
 // so on a 64-bit system there is one bitmap word per 16 heap words.
 // arena区域中的每个指针, 都可以用bitmap区域中4 bit来描述, 
 // 所以在64位系统中, bitmap区域中一个字可以指定16个堆中的字(大小4 bits).
+//
 // The bits in the word are packed together by type first, then by heap location, 
 // so each 64-bit bitmap word consists of, from top to bottom,
 // the 16 bitSpecial bits for the corresponding heap words, then the 16 bitMarked bits,
@@ -72,6 +74,7 @@ enum {
 // 16个bitSpecial, 用于表示指定的heap中的字, 然后是16个bitMarked,
 // 还有16个bitNoScan/bitBlockBoundary, 然后是16个bitAllocated.
 // 这样的布局使得迭代一个指定类型的bit位时更加容易.
+//
 // The bitmap starts at mheap.arena_start and extends *backward* from there. 
 // On a 64-bit system the off'th word in the arena is tracked by
 // the off/16+1'th word before mheap.arena_start. 
@@ -79,6 +82,7 @@ enum {
 // bitmap区域从mheap.arena_start开始, 并且向后扩展.
 // 在64位系统中, arena区域的第off个字, 可以通过mheap.arena_start前
 // (就是bitmap区域了)的第(off/16+1)个字查询到(没毛病).
+//
 // To pull out the bits corresponding to a given pointer p, we use:
 // 为了找到 bitmap 中描述指定指针 p 的相关 bit 位, 通常进行如下计算:
 // 
@@ -115,13 +119,16 @@ enum {
 //                                +----+----+----+----+----+----+----+----|----+----+----+----+----+----+----+----+
 //                                | <-------------- x16 ----------------> |
 //
-// 0000 0000 0000 0001
+// FFFF FFFF FFFF FFFF
+// 使用 printf() 打印时, 格式需要使用"%D", 才能打印64位长整型(与常规c语言的"%ld"不太一样)
+//
+// 0000 0000 0000 0001(1)
 #define bitAllocated		((uintptr)1<<(bitShift*0))
-// 0000 0000 0001 0000
+// 0000 0000 0001 0000(65536)
 #define bitNoScan		((uintptr)1<<(bitShift*1))	/* when bitAllocated is set */
-// 0000 0001 0000 0000
+// 0000 0001 0000 0000(4294967296)
 #define bitMarked		((uintptr)1<<(bitShift*2))	/* when bitAllocated is set */
-// 0001 0000 0000 0000
+// 0001 0000 0000 0000(281474976710656)
 #define bitSpecial		((uintptr)1<<(bitShift*3))	/* when bitAllocated is set - has finalizer or being profiled */
 #define bitBlockBoundary	((uintptr)1<<(bitShift*1))	/* when bitAllocated is NOT set */
 // 0001 0001 0000 0001
@@ -235,7 +242,9 @@ static struct {
 	byte	*chunk;
 	uintptr	nchunk;
 
-	Obj	*roots; // 此数组下存储着nroot个obj
+	// 此数组下存储着 nroot 个 Obj 对象.
+	Obj	*roots; 
+	// roots 数组中的成员数量
 	uint32	nroot;
 	uint32	rootcap; // nroot <= rootcap, 为roots可容纳的最大root数量.
 } work;
@@ -1786,11 +1795,12 @@ handlespecial(byte *p, uintptr size)
 	return true;
 }
 
-// Sweep frees or collects finalizers for blocks not marked in the mark phase.
-// It clears the mark bits in preparation for the next GC round.
 // sweep释放或收集在mark阶段没有被标记的块的finalizers终结器.
 // 并且清理了mark标识位, 为下一次GC做准备.
 // desc为work.sweepfor, idx为任务索引, 这里是[0 到 (runtime·mheap.nspan-1)]
+//
+// Sweep frees or collects finalizers for blocks not marked in the mark phase.
+// It clears the mark bits in preparation for the next GC round.
 static void
 sweepspan(ParFor *desc, uint32 idx)
 {
@@ -1809,7 +1819,9 @@ sweepspan(ParFor *desc, uint32 idx)
 	USED(&desc);
 	// 这个s才是本次sweep的目标吧
 	s = runtime·mheap.allspans[idx];
-	if(s->state != MSpanInUse) return;
+	if(s->state != MSpanInUse) {
+		return;
+	} 
 
 	arena_start = runtime·mheap.arena_start;
 	p = (byte*)(s->start << PageShift); // s的起始地址, 指针类型(start为页号)
@@ -2693,19 +2705,29 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 	}
 
 	// 如果v+n的区域超出了arena部分, 则抛出异常.
-	if((byte*)v+n > (byte*)runtime·mheap.arena_used || 
-		(byte*)v < runtime·mheap.arena_start) {
+	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start) {
 		runtime·throw("markallocated: bad pointer");
 	}
-	
-	// 起始地址距arena开始处的偏移量, 单位是字(即指针大小)
-	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;  // word offset
-	// 这是计算映射在bitmap区域中的位置.
+
+	// off 是起始地址 v 距 arena_start 处的偏移量, 是一个整数.
+	// word offset
+	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;
+	// 这是计算映射在bitmap区域中的位置, b 是一个指针.
+	//
+	// 注意: 指针-指针, 得到的数值应该乘以8, 才能真正表示两个指针间的差值.
+	// 如果将 arena_start 和 b 将 0xXXX 形式的16进制指针, 转换成10进制,
+	// 那下面的公式其实应该为 arena_start - b = (off/wordsPerBitmapWord + 1) * 8
+	// 假设 off 为 15360, 则 arena_start - b = (15360 / 16 + 1) * 8
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
+	// 注意: shift 是取模结果, 用来测整除的.
 	shift = off % wordsPerBitmapWord;
 
+	// 无限循环, 直到设置成功才结束.
 	for(;;) {
-		// 取出在地址b处的描述字的值.
+		// 注意: bits, obits 都是64位整型, 需要 8 个 bytes 的空间存储这些标记,
+		// b 只是一个地址起点位置吧???
+
+		// 取出在地址b处的描述字的值(obits = old bits).
 		obits = *b; 
 		// 为obits设置bitMask和bitAllocated标记
 		bits = (obits & ~(bitMask<<shift)) | (bitAllocated<<shift);
@@ -2719,8 +2741,9 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 			*b = bits;
 			break;
 		} else {
-			// more than one goroutine is potentially running: use atomic op
 			// 比较地址b处的值是否与obits相同, 如相同则将其替换为bits
+			//
+			// more than one goroutine is potentially running: use atomic op
 			if(runtime·casp((void**)b, (void*)obits, (void*)bits)) {
 				break;
 			}
@@ -2789,10 +2812,14 @@ runtime·checkfreed(void *v, uintptr n)
 	}
 }
 
+// 标记在内存span的地址v处, 分配了n个大小为size的块.
+//
+// caller: 
+// 	1. malloc.goc -> runtime·mallocgc()
+// 	2. mcentral.c -> MCentral_Grow()
+//
 // mark the span of memory at v as having n blocks of the given size.
 // if leftover is true, there is left over space at the end of the span.
-// 标记在内存span的地址v处, 分配了n个大小为size的块.
-// caller: malloc.goc -> runtime·mallocgc(), mcentral.c -> MCentral_Grow()
 void
 runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 {
@@ -2821,9 +2848,9 @@ runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 	}
 }
 
-// ##runtime·unmarkspan
-// unmark the span of memory at v of length n bytes.
 // 从地址v开始的n bytes的内存块在bitmap中的标识位清空为0.
+//
+// unmark the span of memory at v of length n bytes.
 void
 runtime·unmarkspan(void *v, uintptr n)
 {
