@@ -279,11 +279,11 @@ flagparse(int *argcp, char ***argvp, void (*usage)(void))
 			continue;
 		}
 
-		f->set(q, f->arg);			
+		f->set(q, f->arg);
 	}
 	
 	*argcp = argc;
-	*argvp = argv;		
+	*argvp = argv;
 }
 
 void

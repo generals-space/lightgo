@@ -14,6 +14,8 @@
     - p 'main.S'
     - as main.S is the symbol name.
     - 可以解决打印 runtime 包中变量时, 出现"No symbol "runtime" in current context."的问题
+7. [gdb no symbol in current context研究](http://www.lujun.org.cn/?p=4504)
+    - dwarf-2
 
 打断点时
 

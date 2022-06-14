@@ -738,8 +738,11 @@ func gccTmp() string {
 	return *objDir + "_cgo_.o"
 }
 
-// gccCmd returns the gcc command line to use for compiling
-// the input.
+// caller:
+// 	1. Package.gccDebug()
+// 	2. Package.gccError()
+//
+// gccCmd returns the gcc command line to use for compiling the input.
 func (p *Package) gccCmd() []string {
 	c := append(p.gccBaseCmd(),
 		"-w",          // no warnings

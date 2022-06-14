@@ -348,6 +348,9 @@ static char *unreleased[] = {
 	"src/pkg/old",
 };
 
+// 好像只做了一些清理工作, 查看一下 bin, pkg/tools, pkg/linux_amd64 等目录, 
+// 如果这些目录不存在则创建, 如果这此目录下有文件就删掉.
+//
 // setup sets up the tree for the initial build.
 static void
 setup(void)
@@ -1562,8 +1565,9 @@ cmdbootstrap(int argc, char **argv)
 
 	for(i=0; i<nelem(buildorder); i++) {
 		install(bprintf(&b, buildorder[i], gohostchar));
-		if(!streq(oldgochar, gohostchar) && xstrstr(buildorder[i], "%s"))
+		if(!streq(oldgochar, gohostchar) && xstrstr(buildorder[i], "%s")) {
 			install(bprintf(&b, buildorder[i], oldgochar));
+		}
 	}
 
 	goos = oldgoos;

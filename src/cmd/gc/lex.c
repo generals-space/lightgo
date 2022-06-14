@@ -177,6 +177,8 @@ doversion(void)
 	exits(0);
 }
 
+// 这个函数是 6g 命令的入口.
+//
 int
 main(int argc, char *argv[])
 {
@@ -234,6 +236,7 @@ main(int argc, char *argv[])
 	setexp();
 
 	outfile = nil;
+	// 下面的选项是 6g 命令的参数选项.
 	flagcount("+", "compiling runtime", &compiling_runtime);
 	flagcount("%", "debug non-static initializers", &debug['%']);
 	flagcount("A", "for bootstrapping, allow 'any' type", &debug['A']);
@@ -422,6 +425,9 @@ main(int argc, char *argv[])
 		errorexit();
 
 	// Phase 4: Inlining
+	//
+	// 禁用内联
+	//
 	if(debug['l'] > 1) {
 		// Typecheck imported function bodies if debug['l'] > 1,
 		// otherwise lazily when used or re-exported.
@@ -436,6 +442,8 @@ main(int argc, char *argv[])
 	}
 
 	if(debug['l']) {
+		// 如果允许内联, 则进入此块
+		
 		// Find functions that can be inlined and clone them before walk expands them.
 		for(l=xtop; l; l=l->next)
 			if(l->n->op == ODCLFUNC)
@@ -447,7 +455,13 @@ main(int argc, char *argv[])
 				inlcalls(l->n);
 	}
 
+	
 	// Phase 5: Escape analysis.
+	//
+	// 禁用优化 - 逃逸分析
+	// 1. 指针变量
+	// 2. 大对象
+	//
 	if(!debug['N'])
 		escapes(xtop);
 	
@@ -471,6 +485,7 @@ main(int argc, char *argv[])
 	if(nerrors+nsavederrors)
 		errorexit();
 
+	// 实际输出 main.6 文件语句.
 	dumpobj();
 
 	if(nerrors+nsavederrors)

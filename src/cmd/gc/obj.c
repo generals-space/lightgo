@@ -13,6 +13,10 @@
 static	void	outhist(Biobuf *b);
 static	void	dumpglobls(void);
 
+// 执行`6g main.go`时, 输出`main.6`文件
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main()
 void
 dumpobj(void)
 {
@@ -25,6 +29,7 @@ dumpobj(void)
 		errorexit();
 	}
 
+	// 下面通过`Bprint()`写入的部分, 可以使用`head main.6`查看(会有一点乱码信息).
 	Bprint(bout, "go object %s %s %s %s\n", getgoos(), thestring, getgoversion(), expstring());
 	Bprint(bout, "  exports automatically generated from\n");
 	Bprint(bout, "  %s in package \"%s\"\n", curio.infile, localpkg->name);

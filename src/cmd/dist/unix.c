@@ -691,6 +691,7 @@ main(int argc, char **argv)
 #endif
 
 	if(gohostarch == nil) {
+		// uname() 可以把"uname -a"命令的结果赋值给变量 u, 包含CPU架构, 内核版本等信息.
 		if(uname(&u) < 0)
 			fatal("uname: %s", strerror(errno));
 		if(contains(u.machine, "x86_64") || contains(u.machine, "amd64"))

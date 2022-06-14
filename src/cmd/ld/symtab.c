@@ -454,6 +454,8 @@ putsymb(Sym *s, char *name, int t, vlong v, vlong size, int ver, Sym *typ)
 	}
 }
 
+// caller:
+// 	1. src/cmd/6l/obj.c -> main()
 void
 symtab(void)
 {

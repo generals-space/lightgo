@@ -8,6 +8,8 @@
  * Helpers for building cmd/go and cmd/cgo.
  */
 
+// 只是生成了一个 cmd/go/zdefaultcc.go 文件, 而且这个文件还特短, 基本没什么作用...???
+//
 // mkzdefaultcc writes zdefaultcc.go:
 //
 //	package main

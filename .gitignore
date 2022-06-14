@@ -1,6 +1,6 @@
 **/bin
 **/pkg
-src/cmd/dist
+src/cmd/dist/dist
 *.gobin
 6.out
 main.6
