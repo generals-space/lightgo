@@ -41,6 +41,7 @@ crashhandler(int sig)
 
 extern void p9main(int, char**);
 
+// 6c 命令的入口函数
 int
 main(int argc, char **argv)
 {

@@ -113,6 +113,10 @@ dodef(char *p)
 	dodefine(p);
 }
 
+// 6c 命令的执行函数
+//
+// caller:
+// 	1. src/lib9/main.c -> main() 
 void
 main(int argc, char *argv[])
 {
@@ -134,6 +138,7 @@ main(int argc, char *argv[])
 	outfile = 0;
 	setinclude(".");
 
+	// 这是 6c 命令的可用选项
 	flagcount("+", "pass -+ to preprocessor", &debug['+']);	
 	flagcount(".", "pass -. to preprocessor", &debug['.']);	
 	flagcount("<", "debug shift", &debug['<']);
@@ -180,26 +185,37 @@ main(int argc, char *argv[])
 	if(thechar == '6')
 		flagcount("largemodel", "generate code that assumes a large memory model", &flag_largemodel);
 	
+	// 解析 argv 中的参数列表, argv 指针会后移(argc也会减小), 最终只剩下待编译的目标 .c 文件
 	flagparse(&argc, &argv, usage);
 
-	if(argc < 1 && outfile == 0)
+	if(argc < 1 && outfile == 0) {
 		usage();
+	}
 
 	if(argc > 1){
 		print("can't compile multiple files\n");
 		errorexit();
 	}
 
-	if(argc == 0)
+	if(argc == 0) {
 		c = compile("stdin", defs, ndef);
-	else
+	}
+	else {
+		// 生成编译出的 .o 对象文件.
 		c = compile(argv[0], defs, ndef);
+	}
 
-	if(c)
+	if(c) {
 		errorexit();
+	}
 	exits(0);
 }
 
+//
+// param *file: 6c 指定的待编译的 .c 文件路径
+//
+// caller:
+// 	1. main()
 int
 compile(char *file, char **defs, int ndef)
 {
@@ -213,11 +229,14 @@ compile(char *file, char **defs, int ndef)
 	p = utfrrune(ofile, pathchar());
 	if(p) {
 		*p++ = 0;
-		if(!debug['.'])
+		if(!debug['.']) {
 			include[0] = strdup(ofile);
-	} else
+		}
+	} else {
 		p = ofile;
+	}
 
+	// outfile: 最终编译输出的 .o 文件
 	if(outfile == 0) {
 		outfile = p;
 		if(outfile) {
@@ -238,11 +257,11 @@ compile(char *file, char **defs, int ndef)
 			outfile = "/dev/null";
 	}
 
-	if (first)
+	if (first) {
 		Binit(&diagbuf, 1, OWRITE);
+	}
 	/*
-	 * if we're writing acid to standard output, don't keep scratching
-	 * outbuf.
+	 * if we're writing acid to standard output, don't keep scratching outbuf.
 	 */
 	if((debug['a'] || debug['q'] || debug['Q']) && !debug['n']) {
 		if (first) {
@@ -251,6 +270,7 @@ compile(char *file, char **defs, int ndef)
 			dup(2, 1);
 		}
 	} else {
+		// 创建一个 .o 空文件
 		c = create(outfile, OWRITE, 0664);
 		if(c < 0) {
 			diag(Z, "cannot open %s - %r", outfile);
@@ -317,14 +337,19 @@ compile(char *file, char **defs, int ndef)
 			break;
 		}
 	} else {
-		if(strcmp(file, "stdin") == 0)
+		if(strcmp(file, "stdin") == 0) {
 			newfile(file, 0);
-		else
+		}
+		else {
 			newfile(file, -1);
+		}
 	}
 	yyparse();
-	if(!debug['a'] && !debug['q'] && !debug['Q'])
+	if(!debug['a'] && !debug['q'] && !debug['Q']) {
+		// 最终的编译行为在这里
+		// src/cmd/6c/txt.c -> gclean()
 		gclean();
+	}
 	return nerrors;
 }
 

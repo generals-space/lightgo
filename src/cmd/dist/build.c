@@ -455,7 +455,7 @@ static char *proto_gccargs[] = {
 	// Fix available at http://patchwork.ozlabs.org/patch/64562/.
 	"-O1",
 #else
-	"-O2",
+	// "-O2",
 #endif
 };
 
@@ -606,6 +606,10 @@ static struct {
 	{"zaexperiment.h", mkzexperiment},
 };
 
+// caller:
+// 	1. cmdbootstrap()
+// 	2. cmdinstall()
+//
 // install installs the library, package, or binary associated with dir,
 // which is relative to $GOROOT/src.
 static void
@@ -995,14 +999,19 @@ install(char *dir)
 				vadd(&compile, bprintf(&b1, "GOEXPERIMENT=\"%s\"", bstr(&b)));
 			}
 		} else {
+			// 对于 .s 源文件, 使用 6a 命令编译
+			// 对于 .c 源文件, 使用 6c 命令编译
+
 			// Supporting files for a Go package.
-			if(hassuffix(files.p[i], ".s"))
+			if(hassuffix(files.p[i], ".s")) {
 				vadd(&compile, bpathf(&b, "%s/%sa", tooldir, gochar));
+			}
 			else {
 				vadd(&compile, bpathf(&b, "%s/%sc", tooldir, gochar));
 				vadd(&compile, "-F");
 				vadd(&compile, "-V");
 				vadd(&compile, "-w");
+				vadd(&compile, "-N");
 			}
 			vadd(&compile, "-I");
 			vadd(&compile, workdir);
@@ -1030,13 +1039,18 @@ install(char *dir)
 		}
 
 		// Change the last character of the output file (which was c or s).
-		if(streq(gohostos, "plan9"))
+		if(streq(gohostos, "plan9")) {
 			b.p[b.len-1] = gohostchar[0];
-		else
+		}
+		else {
+			// 在 linux 系统中, 将源文件的的 .c 后缀改为 .o 作为输出对象.
+			// 如: 6c main.c -o main.o
 			b.p[b.len-1] = 'o';
+		}
 		vadd(&compile, "-o");
 		vadd(&compile, bstr(&b));
 		vadd(&compile, files.p[i]);
+
 		bgrunv(bstr(&path), CheckExit, &compile);
 
 		vadd(&link, bstr(&b));
@@ -1095,8 +1109,9 @@ nobuild:
 
 
 out:
-	for(i=0; i<clean.len; i++)
+	for(i=0; i<clean.len; i++) {
 		xremove(clean.p[i]);
+	}
 
 	bfree(&b);
 	bfree(&b1);

@@ -132,6 +132,9 @@ runv(Buf *b, char *dir, int mode, Vec *argv)
 	genrun(b, dir, mode, argv, 1);
 }
 
+// caller:
+// 	1. build.c -> install()
+//
 // bgrunv is like run but runs the command in the background.
 // bgwait waits for pending bgrunv to finish.
 void

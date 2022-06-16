@@ -615,8 +615,7 @@ write_func_header(char *package, char *name,
 
 /* Write out a function trailer.  */
 static void
-write_func_trailer(char *package, char *name,
-		   struct params *rets)
+write_func_trailer(char *package, char *name, struct params *rets)
 {
 	if (gcc)
 		write_gcc_func_trailer(package, name, rets);
@@ -690,6 +689,9 @@ copy_body(void)
 	}
 }
 
+// caller:
+// 	1. goc2c()
+//
 /* Process the entire file.  */
 static void
 process_file(void)
@@ -723,6 +725,14 @@ process_file(void)
 	xfree(package);
 }
 
+// param goc: goc 文件的绝对路径
+// param c: 输出的 c 文件的绝对路径
+//
+// caller:
+// 	1. src/cmd/dist/build.c -> install()
+//
+// malloc.goc -> zmalloc_linux_amd64.c
+//
 void
 goc2c(char *goc, char *c)
 {

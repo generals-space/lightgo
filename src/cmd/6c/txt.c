@@ -131,6 +131,8 @@ ginit(void)
 	}
 }
 
+// caller:
+// 	1. src/cmd/cc/lex.c -> compile()
 void
 gclean(void)
 {
@@ -162,6 +164,7 @@ gclean(void)
 	}
 	nextpc();
 	p->as = AEND;
+	// 写入 .o 文件
 	outcode();
 }
 

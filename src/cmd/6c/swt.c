@@ -219,6 +219,12 @@ void	zname(Biobuf*, Sym*, int);
 void	zaddr(Biobuf*, Adr*, int);
 void	outhist(Biobuf*);
 
+// 将最终"编译"的内容写入到待生成的 .o 文件中(此时 .o 文件已经事先创建好了).
+// 
+// 需要注意的是, 该函数是自行以二进制格式写入 .o 文件的, 而非使用`gcc -a`命令生成的.
+//
+// caller:
+// 	1. src/cmd/6c/txt.c -> gclean()
 void
 outcode(void)
 {
@@ -246,6 +252,8 @@ outcode(void)
 	}
 	Binit(&b, f, OWRITE);
 
+	// 使用 head 命令查看最终生成的 .o 文件, 可以看到如下1行内容
+	// go object linux amd64 go1.2
 	Bprint(&b, "go object %s %s %s\n", getgoos(), thestring, getgoversion());
 	if(pragcgobuf.to > pragcgobuf.start) {
 		Bprint(&b, "\n");
