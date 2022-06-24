@@ -575,6 +575,7 @@ streq(char *p, char *q)
 	return strcmp(p, q) == 0;
 }
 
+// 获取目标路径中的文件名, 类似于 linux 的 basename 命令.
 // lastelem returns the final path element in p.
 char*
 lastelem(char *p)
@@ -756,6 +757,7 @@ xstrstr(char *a, char *b)
 	return strstr(a, b);
 }
 
+// 返回 p 字符串中最后一个 c 出现的位置
 // xstrrchr returns a pointer to the final occurrence of c in p.
 char*
 xstrrchr(char *p, int c)

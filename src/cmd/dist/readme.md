@@ -1,1 +1,3 @@
-注意, 函数入口`main()`在'unix.c->main()', 而不是'main.c->xmain()'.
+`main.c -> xmain()` -> `unix.c -> main()`
+
+src/cmd/dist/build.c`中对`pkg/runtime`进行构建.

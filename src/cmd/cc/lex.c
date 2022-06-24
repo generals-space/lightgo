@@ -225,7 +225,7 @@ compile(char *file, char **defs, int ndef)
 	static int first = 1;
 
 	ofile = alloc(strlen(file)+10);
-	strcpy(ofile, file);
+	strcpy(ofile, file); // strcpy(dst, src)
 	p = utfrrune(ofile, pathchar());
 	if(p) {
 		*p++ = 0;
@@ -240,21 +240,26 @@ compile(char *file, char **defs, int ndef)
 	if(outfile == 0) {
 		outfile = p;
 		if(outfile) {
-			if(p = utfrrune(outfile, '.'))
-				if(p[1] == 'c' && p[2] == 0)
+			if(p = utfrrune(outfile, '.')) {
+				if(p[1] == 'c' && p[2] == 0) {
 					p[0] = 0;
+				}
+			}
 			p = utfrune(outfile, 0);
-			if(debug['a'] && debug['n'])
+			if(debug['a'] && debug['n']) {
 				strcat(p, ".acid");
-			else if((debug['q'] || debug['Q']) && debug['n'])
+			}
+			else if((debug['q'] || debug['Q']) && debug['n']) {
 				strcat(p, ".go");
+			}
 			else {
 				p[0] = '.';
 				p[1] = thechar;
 				p[2] = 0;
 			}
-		} else
+		} else {
 			outfile = "/dev/null";
+		}
 	}
 
 	if (first) {

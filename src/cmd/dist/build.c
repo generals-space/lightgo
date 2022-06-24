@@ -13,7 +13,7 @@
 char *goarch;
 char *gobin;
 char *gohostarch;
-char *gohostchar;
+char *gohostchar; // 5, 6, 8等
 char *gohostos;
 char *goos;
 char *goarm;
@@ -21,6 +21,8 @@ char *go386;
 char *goroot = GOROOT_FINAL;
 char *goroot_final = GOROOT_FINAL;
 char *goextlinkenabled = "";
+// 一个临时编译目录, 在这里存在编译过程中生成的 .o 文件.
+// /var/tmp/go-cbuild-XXXXXX
 char *workdir;
 char *tooldir;
 char *gochar;
@@ -606,6 +608,10 @@ static struct {
 	{"zaexperiment.h", mkzexperiment},
 };
 
+// 每次调用都构建一个目录.
+//
+// param *dir: buildorder[]数组中的成员
+//
 // caller:
 // 	1. cmdbootstrap()
 // 	2. cmdinstall()
@@ -618,15 +624,20 @@ install(char *dir)
 	char *name, *p, *elem, *prefix, *exe;
 	bool islib, ispkg, isgo, stale;
 	Buf b, b1, path;
-	Vec compile, files, link, go, missing, clean, lib, extra;
+	// 存储在编译过程中生成的, 待清理的文件列表.
+	// 在本函数末尾会有清理的语句.
+	Vec clean;
+	Vec compile, files, link, go, missing, lib, extra;
 	Time ttarg, t;
 	int i, j, k, n, doclean, targ, usecpp;
 
 	if(vflag) {
-		if(!streq(goos, gohostos) || !streq(goarch, gohostarch))
+		if(!streq(goos, gohostos) || !streq(goarch, gohostarch)) {
 			errprintf("%s (%s/%s)\n", dir, goos, goarch);
-		else
+		}
+		else {
 			errprintf("%s\n", dir);
+		}
 	}
 
 	binit(&b);
@@ -655,8 +666,9 @@ install(char *dir)
 
 	// For release, cmd/prof is not included.
 	if((streq(dir, "cmd/prof")) && !isdir(bstr(&path))) {
-		if(vflag > 1)
+		if(vflag > 1) {
 			errprintf("skipping %s - does not exist\n", dir);
+		}
 		goto out;
 	}
 
@@ -664,8 +676,9 @@ install(char *dir)
 	if(gccargs.len == 0) {
 		bprintf(&b, "%s", defaultcc);
 		splitfields(&gccargs, bstr(&b));
-		for(i=0; i<nelem(proto_gccargs); i++)
+		for(i=0; i<nelem(proto_gccargs); i++) {
 			vadd(&gccargs, proto_gccargs[i]);
+		}
 		if(contains(gccargs.p[0], "clang")) {
 			// disable ASCII art in clang errors, if possible
 			vadd(&gccargs, "-fno-caret-diagnostics");
@@ -683,8 +696,9 @@ install(char *dir)
 	isgo = ispkg || streq(dir, "cmd/go") || streq(dir, "cmd/cgo");
 
 	exe = "";
-	if(streq(gohostos, "windows"))
+	if(streq(gohostos, "windows")) {
 		exe = ".exe";
+	}
 
 	// Start final link command line.
 	// Note: code below knows that link.p[targ] is the target.
@@ -704,7 +718,10 @@ install(char *dir)
 		// Go library (package).
 		vadd(&link, bpathf(&b, "%s/pack", tooldir));
 		vadd(&link, "grc");
+		// dir+4 指的是 pkg/ 目录后的子目录名称
 		p = bprintf(&b, "%s/pkg/%s_%s/%s", goroot, goos, goarch, dir+4);
+		// 假如 p 为 /root/go/pkg/linux_amd64/runtime,
+		// 执行下一句后, 会变为 /root/go/pkg/linux_amd64
 		*xstrrchr(p, '/') = '\0';
 		xmkdirall(p);
 		targ = link.len;
@@ -812,14 +829,18 @@ install(char *dir)
 		}
 	}
 
+	// 下面一段是将未发生变动的文件从编译目标中移除吧, 为了加快编译速度?
 	// Is the target up-to-date?
 	stale = rebuildall;
 	n = 0;
 	for(i=0; i<files.len; i++) {
 		p = files.p[i];
-		for(j=0; j<nelem(depsuffix); j++)
-			if(hassuffix(p, depsuffix[j]))
+		// 只编译 .c, .h .s, .go 等后缀的源文件, 其他的像 Makefile, .md 等直接略过
+		for(j=0; j<nelem(depsuffix); j++) {
+			if(hassuffix(p, depsuffix[j])) {
 				goto ok;
+			}
+		}
 		xfree(files.p[i]);
 		continue;
 	ok:
@@ -828,17 +849,20 @@ install(char *dir)
 			xfree(files.p[i]);
 			continue;
 		}
-		if(hassuffix(p, ".go"))
+		// 将 .go 文件单独存在 go 列表中.
+		if(hassuffix(p, ".go")) {
 			vadd(&go, p);
-		if(t > ttarg)
+		}
+		if(t > ttarg) {
 			stale = 1;
+		}
 		if(t == 0) {
 			vadd(&missing, p);
 			files.p[n++] = files.p[i];
 			continue;
 		}
 		files.p[n++] = files.p[i];
-	}
+	} // for() end
 	files.len = n;
 
 	// If there are no files to compile, we're done.
@@ -849,10 +873,13 @@ install(char *dir)
 		if(mtime(lib.p[i]) > ttarg)
 			stale = 1;
 
-	if(!stale)
+	if(!stale) {
+		// 如果没有发生变动的文件, 直接退出, 不用编译.
 		goto out;
+	}
 
 	// For package runtime, copy some files into the work space.
+	// 在编译 pkg/runtime 包的时候, 还需要再拷贝一些头文件到 workdir.
 	if(streq(dir, "pkg/runtime")) {
 		copy(bpathf(&b, "%s/arch_amd64.h", workdir),
 			bpathf(&b1, "%s/arch_%s.h", bstr(&path), goarch), 0);
@@ -873,8 +900,9 @@ install(char *dir)
 		elem = lastelem(p);
 		for(j=0; j<nelem(gentab); j++) {
 			if(hasprefix(elem, gentab[j].nameprefix)) {
-				if(vflag > 1)
+				if(vflag > 1) {
 					errprintf("generate %s\n", p);
+				}
 				gentab[j].gen(bstr(&path), p);
 				// Do not add generated file to clean list.
 				// In pkg/runtime, we want to be able to
@@ -887,8 +915,9 @@ install(char *dir)
 			}
 		}
 		// Did not rebuild p.
-		if(find(p, missing.p, missing.len) >= 0)
+		if(find(p, missing.p, missing.len) >= 0) {
 			fatal("missing file %s", p);
+		}
 	built:;
 	}
 
@@ -900,12 +929,14 @@ install(char *dir)
 			bpathf(&b1, "%s/zasm_%s_%s.h", bstr(&path), goos, goarch), 0);
 	}
 
+	// 在编译 pkg/runtime 时, 先将 .goc 文件转换成 .c 文件
 	// Generate .c files from .goc files.
 	if(streq(dir, "pkg/runtime")) {
 		for(i=0; i<files.len; i++) {
 			p = files.p[i];
-			if(!hassuffix(p, ".goc"))
+			if(!hassuffix(p, ".goc")) {
 				continue;
+			}
 			// b = path/zp but with _goos_goarch.c instead of .goc
 			bprintf(&b, "%s%sz%s", bstr(&path), slash, lastelem(p));
 			b.len -= 4;
@@ -937,10 +968,14 @@ install(char *dir)
 		}
 	}
 
+	// 1. 编译(然后才是链接)
 	// Compile the files.
 	for(i=0; i<files.len; i++) {
-		if(!hassuffix(files.p[i], ".c") && !hassuffix(files.p[i], ".s"))
+		if(!hassuffix(files.p[i], ".c") && !hassuffix(files.p[i], ".s")) {
+			// 只编译 .c 和 .s 文件
 			continue;
+		}
+		// name 为待编译的源文件名称
 		name = lastelem(files.p[i]);
 
 		vreset(&compile);
@@ -1025,6 +1060,12 @@ install(char *dir)
 			vadd(&compile, bprintf(&b, "GOOS_GOARCH_%s_%s", goos, goarch));
 		}
 
+		// 运行到此处, compile 中的命令为 
+		// /root/go/pkg/tool/linux_amd64/6c -F -V -w -N 
+		// -I /var/tmp/go-cbuild-juDAqI 
+		// -I /root/go/pkg/linux_amd64 
+		// -D GOOS_linux -D GOARCH_amd64 -D GOOS_GOARCH_linux_amd64
+
 		bpathf(&b, "%s/%s", workdir, lastelem(files.p[i]));
 		doclean = 1;
 		if(!isgo && streq(gohostos, "darwin")) {
@@ -1048,18 +1089,24 @@ install(char *dir)
 			b.p[b.len-1] = 'o';
 		}
 		vadd(&compile, "-o");
-		vadd(&compile, bstr(&b));
+		vadd(&compile, bstr(&b)); // 这里是待输出的 .o 目标文件的路径.
 		vadd(&compile, files.p[i]);
 
+		// 这里根据待编译目录下的不同源文件, 生成不同的 .c 和 .o 文件, 如
+		// -o /var/tmp/go-cbuild-juDAqI/alg.o /root/go/src/pkg/runtime/alg.c
 		bgrunv(bstr(&path), CheckExit, &compile);
 
 		vadd(&link, bstr(&b));
-		if(doclean)
+		if(doclean) {
 			vadd(&clean, bstr(&b));
+		}
 	}
+	// 等待编译过程完成.
 	bgwait();
 
 	if(isgo) {
+		// 重新初始化 compile 列表
+		//
 		// The last loop was compiling individual files.
 		// Hand the Go files to the compiler en masse.
 		vreset(&compile);
@@ -1072,29 +1119,42 @@ install(char *dir)
 		vadd(&link, bstr(&b));
 
 		vadd(&compile, "-p");
-		if(hasprefix(dir, "pkg/"))
+		if(hasprefix(dir, "pkg/")) {
+			// dir+4 指的是 pkg/ 目录后的子目录名称
 			vadd(&compile, dir+4);
-		else
+		}
+		else {
 			vadd(&compile, "main");
+		}
 
-		if(streq(dir, "pkg/runtime"))
+		if(streq(dir, "pkg/runtime")) {
 			vadd(&compile, "-+");
+		}
 
+		// 运行到这里, compile 的值为
+		// /root/go/pkg/tool/linux_amd64/6g -o /var/tmp/go-cbuild-juDAqI/_go_.6 -p runtime -+
+
+		// 这里的语句会向 compile 后继续追加一些参数(这里是一些待编译目录下的 .go 文件)
+		// 如 /root/go/src/pkg/runtime/{compiler.go, debug.go, error.go..}
 		vcopy(&compile, go.p, go.len);
 
+		// 执行 6g 命令, 最终会在 workdir 临时目录, 生成 _go_.6 文件.
 		runv(nil, bstr(&path), CheckExit, &compile);
 	}
 
 	if(!islib && !isgo) {
 		// C binaries need the libraries explicitly, and -lm.
 		vcopy(&link, lib.p, lib.len);
-		if(!streq(gohostos, "plan9"))
+		if(!streq(gohostos, "plan9")) {
 			vadd(&link, "-lm");
+		}
 	}
 
 	// Remove target before writing it.
 	xremove(link.p[targ]);
 
+	// 开始链接过程, 会在 /root/go/pkg/linux_amd64/ 下生成 runtime.a 文件.
+	// /root/go/pkg/tool/linux_amd64/pack grc /root/go/pkg/linux_amd64/runtime.a /var/tmp/go-cbuild-XXXXX/各种 .o 文件 /var/tmp/go-cbuild-juDAqI/_go_.6
 	runv(nil, nil, CheckExit, &link);
 
 nobuild:
@@ -1107,8 +1167,8 @@ nobuild:
 			bpathf(&b1, "%s/src/pkg/runtime/runtime.h", goroot), 0);
 	}
 
-
 out:
+	// 清理编译过程中生成的临时文件.
 	for(i=0; i<clean.len; i++) {
 		xremove(clean.p[i]);
 	}
@@ -1532,6 +1592,10 @@ cmdenv(int argc, char **argv)
 	bfree(&b1);
 }
 
+// 构建 6g, 6l, 6c 等命令.
+// 每调用一次 install() 方法, 就构建1个命令.
+//
+//
 // The bootstrap command runs a build from scratch,
 // stopping at having installed the go_bootstrap command.
 void
@@ -1557,11 +1621,13 @@ cmdbootstrap(int argc, char **argv)
 		usage();
 	}ARGEND
 
-	if(argc > 0)
+	if(argc > 0) {
 		usage();
+	}
 
-	if(rebuildall)
+	if(rebuildall) {
 		clean();
+	}
 	goversion = findgoversion();
 	setup();
 
@@ -1580,6 +1646,8 @@ cmdbootstrap(int argc, char **argv)
 
 	for(i=0; i<nelem(buildorder); i++) {
 		install(bprintf(&b, buildorder[i], gohostchar));
+		// 这里应该与buildorder[]{"cmd/%sl", "cmd/%sc", "cmd/%sg"} 中的成员有关.
+		// xstrstr() 判断目标字符串中是否存在 "%s" 字符.
 		if(!streq(oldgochar, gohostchar) && xstrstr(buildorder[i], "%s")) {
 			install(bprintf(&b, buildorder[i], oldgochar));
 		}
@@ -1592,8 +1660,9 @@ cmdbootstrap(int argc, char **argv)
 	xsetenv("GOOS", goos);
 
 	// Build pkg/runtime for actual goos/goarch too.
-	if(!streq(goos, gohostos) || !streq(goarch, gohostarch))
+	if(!streq(goos, gohostos) || !streq(goarch, gohostarch)) {
 		install("pkg/runtime");
+	}
 
 	bfree(&b);
 }

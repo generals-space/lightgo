@@ -140,27 +140,37 @@ gclean(void)
 	Sym *s;
 
 	reg[D_SP]--;
-	for(i=D_AX; i<=D_R15; i++)
-		if(reg[i])
+	for(i=D_AX; i<=D_R15; i++) {
+		if(reg[i]) {
 			diag(Z, "reg %R left allocated", i);
-	for(i=D_X0; i<=D_X7; i++)
-		if(reg[i])
+		}
+	}
+	for(i=D_X0; i<=D_X7; i++) {
+		if(reg[i]) {
 			diag(Z, "reg %R left allocated", i);
-	while(mnstring)
+		}
+	}
+	while(mnstring) {
 		outstring("", 1L);
+	}
 	symstring->type->width = nstring;
 	symrathole->type->width = nrathole;
-	for(i=0; i<NHASH; i++)
-	for(s = hash[i]; s != S; s = s->link) {
-		if(s->type == T)
-			continue;
-		if(s->type->width == 0)
-			continue;
-		if(s->class != CGLOBL && s->class != CSTATIC)
-			continue;
-		if(s->type == types[TENUM])
-			continue;
-		gpseudo(AGLOBL, s, nodconst(s->type->width));
+	for(i=0; i<NHASH; i++) {
+		for(s = hash[i]; s != S; s = s->link) {
+			if(s->type == T) {
+				continue;
+			}
+			if(s->type->width == 0) {
+				continue;
+			}
+			if(s->class != CGLOBL && s->class != CSTATIC) {
+				continue;
+			}
+			if(s->type == types[TENUM]) {
+				continue;
+			}
+			gpseudo(AGLOBL, s, nodconst(s->type->width));
+		}
 	}
 	nextpc();
 	p->as = AEND;
@@ -1495,6 +1505,8 @@ patch(Prog *op, int32 pc)
 	op->to.type = D_BRANCH;
 }
 
+// caller:
+// 	1. gclean()
 void
 gpseudo(int a, Sym *s, Node *n)
 {
