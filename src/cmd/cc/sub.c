@@ -1855,6 +1855,8 @@ urk(char *name, int max, int i)
 	}
 }
 
+// caller:
+// 	1. src/cmd/cc/lex.c -> main()
 void
 tinit(void)
 {

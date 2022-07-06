@@ -576,14 +576,17 @@ pragtextflag(void)
 		if(s->macro) {
 			macexpand(s, symb);
 		}
-		if(symb[0] < '0' || symb[0] > '9')
+		if(symb[0] < '0' || symb[0] > '9') {
 			yyerror("pragma textflag not an integer");
+		}
 		textflag = atoi(symb);
 	}
-	while(getnsc() != '\n')
+	while(getnsc() != '\n') {
 		;
-	if(debug['f'])
+	}
+	if(debug['f']) {
 		print("%4d: textflag %d\n", lineno, textflag);
+	}
 }
 
 void
@@ -598,14 +601,17 @@ pragdataflag(void)
 		if(s->macro) {
 			macexpand(s, symb);
 		}
-		if(symb[0] < '0' || symb[0] > '9')
+		if(symb[0] < '0' || symb[0] > '9') {
 			yyerror("pragma dataflag not an integer");
+		}
 		dataflag = atoi(symb);
 	}
-	while(getnsc() != '\n')
+	while(getnsc() != '\n') {
 		;
-	if(debug['f'])
+	}
+	if(debug['f']) {
 		print("%4d: dataflag %d\n", lineno, dataflag);
+	}
 }
 
 void

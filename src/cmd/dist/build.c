@@ -1047,6 +1047,8 @@ install(char *dir)
 				vadd(&compile, "-V");
 				vadd(&compile, "-w");
 				vadd(&compile, "-N");
+				// 使用 C语言预处理器(CPP), 不过会报错
+				// vadd(&compile, "-p");
 			}
 			vadd(&compile, "-I");
 			vadd(&compile, workdir);
@@ -1466,20 +1468,23 @@ clean(void)
 	vinit(&dir);
 
 	for(i=0; i<nelem(cleantab); i++) {
-		if((streq(cleantab[i], "cmd/prof")) && !isdir(cleantab[i]))
+		if((streq(cleantab[i], "cmd/prof")) && !isdir(cleantab[i])) {
 			continue;
+		}
 		bpathf(&path, "%s/src/%s", goroot, cleantab[i]);
 		xreaddir(&dir, bstr(&path));
 		// Remove generated files.
 		for(j=0; j<dir.len; j++) {
 			for(k=0; k<nelem(gentab); k++) {
-				if(hasprefix(dir.p[j], gentab[k].nameprefix))
+				if(hasprefix(dir.p[j], gentab[k].nameprefix)) {
 					xremove(bpathf(&b, "%s/%s", bstr(&path), dir.p[j]));
+				}
 			}
 		}
 		// Remove generated binary named for directory.
-		if(hasprefix(cleantab[i], "cmd/"))
+		if(hasprefix(cleantab[i], "cmd/")) {
 			xremove(bpathf(&b, "%s/%s", bstr(&path), cleantab[i]+4));
+		}
 	}
 
 	// remove src/pkg/runtime/z* unconditionally
@@ -1487,8 +1492,9 @@ clean(void)
 	bpathf(&path, "%s/src/pkg/runtime", goroot);
 	xreaddir(&dir, bstr(&path));
 	for(j=0; j<dir.len; j++) {
-		if(hasprefix(dir.p[j], "z"))
+		if(hasprefix(dir.p[j], "z")) {
 			xremove(bpathf(&b, "%s/%s", bstr(&path), dir.p[j]));
+		}
 	}
 
 	if(rebuildall) {
@@ -1581,8 +1587,9 @@ cmdenv(int argc, char **argv)
 
 	if(pflag) {
 		sep = ":";
-		if(streq(gohostos, "windows"))
+		if(streq(gohostos, "windows")) {
 			sep = ";";
+		}
 		xgetenv(&b, "PATH");
 		bprintf(&b1, "%s%s%s", gobin, sep, bstr(&b));
 		xprintf(format, "PATH", bstr(&b1));
@@ -1685,12 +1692,14 @@ defaulttarg(void)
 	p = btake(&pwd);
 	bpathf(&src, "%s/src/", goroot);
 	xrealwd(&real_src, bstr(&src));
-	if(!hasprefix(p, bstr(&real_src)))
+	if(!hasprefix(p, bstr(&real_src))) {
 		fatal("current directory %s is not under %s", p, bstr(&real_src));
+	}
 	p += real_src.len;
 	// guard againt xrealwd return the directory without the trailing /
-	if(*p == slash[0])
+	if(*p == slash[0]) {
 		p++;
+	}
 
 	bfree(&pwd);
 	bfree(&src);
@@ -1716,11 +1725,13 @@ cmdinstall(int argc, char **argv)
 		usage();
 	}ARGEND
 
-	if(argc == 0)
+	if(argc == 0) {
 		install(defaulttarg());
+	}
 
-	for(i=0; i<argc; i++)
+	for(i=0; i<argc; i++) {
 		install(argv[i]);
+	}
 }
 
 // Clean deletes temporary objects.
@@ -1736,8 +1747,9 @@ cmdclean(int argc, char **argv)
 		usage();
 	}ARGEND
 
-	if(argc > 0)
+	if(argc > 0) {
 		usage();
+	}
 
 	clean();
 }
@@ -1757,8 +1769,9 @@ cmdbanner(int argc, char **argv)
 		usage();
 	}ARGEND
 
-	if(argc > 0)
+	if(argc > 0) {
 		usage();
+	}
 
 	binit(&b);
 	binit(&b1);
@@ -1782,25 +1795,29 @@ cmdbanner(int argc, char **argv)
 		ns = btake(&b);
 		readfile(&b, ns);
 		bprintf(&search, "bind -b %s /bin\n", gobin);
-		if(xstrstr(bstr(&b), bstr(&search)) == nil)
+		if(xstrstr(bstr(&b), bstr(&search)) == nil) {
 			xprintf("*** You need to bind %s before /bin.\n", gobin);
+		}
 	} else {
 		// Check that gobin appears in $PATH.
 		xgetenv(&b, "PATH");
 		pathsep = ":";
-		if(streq(gohostos, "windows"))
+		if(streq(gohostos, "windows")) {
 			pathsep = ";";
+		}
 		bprintf(&b1, "%s%s%s", pathsep, bstr(&b), pathsep);
 		bprintf(&search, "%s%s%s", pathsep, gobin, pathsep);
-		if(xstrstr(bstr(&b1), bstr(&search)) == nil)
+		if(xstrstr(bstr(&b1), bstr(&search)) == nil) {
 			xprintf("*** You need to add %s to your PATH.\n", gobin);
+		}
 	}
 
 	if(streq(gohostos, "darwin")) {
-		if(isfile(bpathf(&path, "%s/cov", tooldir)))
+		if(isfile(bpathf(&path, "%s/cov", tooldir))) {
 			xprintf("\n"
 				"On OS X the debuggers must be installed setgid procmod.\n"
 				"Read and run ./sudo.bash to install the debuggers.\n");
+		}
 	}
 
 	if(!xsamefile(goroot_final, goroot)) {
@@ -1827,8 +1844,9 @@ cmdversion(int argc, char **argv)
 		usage();
 	}ARGEND
 
-	if(argc > 0)
+	if(argc > 0) {
 		usage();
+	}
 
 	xprintf("%s\n", goversion);
 }

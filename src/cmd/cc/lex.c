@@ -32,6 +32,7 @@
 #include	"cc.h"
 #include	"y.tab.h"
 
+// CPP = C Pre-Processor(C预处理器)
 #ifndef	CPP
 #define	CPP	"cpp"
 #endif
@@ -127,7 +128,9 @@ main(int argc, char *argv[])
 	memset(debug, 0, sizeof(debug));
 	tinit();
 	cinit();
+	// src/cmd/6c/txt.c -> ginit()
 	ginit();
+	// src/cmd/cc/dpchk.c -> arginit()
 	arginit();
 	
 	fmtstrinit(&pragcgobuf);
@@ -139,17 +142,19 @@ main(int argc, char *argv[])
 	setinclude(".");
 
 	// 这是 6c 命令的可用选项
-	flagcount("+", "pass -+ to preprocessor", &debug['+']);	
-	flagcount(".", "pass -. to preprocessor", &debug['.']);	
+	flagcount("+", "pass -+ to preprocessor", &debug['+']);
+	flagcount(".", "pass -. to preprocessor", &debug['.']);
 	flagcount("<", "debug shift", &debug['<']);
 	flagcount("A", "debug alignment", &debug['A']);
 	flagcount("B", "allow pre-ANSI code", &debug['B']);
-	if(thechar == '5')
+	if(thechar == '5') {
 		flagcount("C", "debug constant propagation", &debug['C']);
+	}
 	flagfn1("D", "name[=value]: add #define", dodef);
 	flagcount("F", "enable print format checks", &debug['F']);
-	if(thechar == '5')
+	if(thechar == '5') {
 		flagcount("H", "debug shift propagation", &debug['H']);
+	}
 	flagfn1("I", "dir: add dir to include path", setinclude);
 	flagcount("L", "debug lexer", &debug['L']);
 	flagcount("M", "debug move generation", &debug['M']);
@@ -171,19 +176,21 @@ main(int argc, char *argv[])
 	flagcount("f", "debug pragmas", &debug['f']);
 	flagcount("g", "debug code generation", &debug['g']);
 	flagcount("i", "debug initialization", &debug['i']);
-	if(thechar == 'v')
+	if(thechar == 'v') {
 		flagfn0("l", "little-endian mips mode", dospim);
+	}
 	flagcount("m", "debug multiplication", &debug['m']);
 	flagcount("n", "print acid/Go to file, not stdout", &debug['n']);
 	flagstr("o", "file: set output file", &outfile);
-	flagcount("p", "invoke C preprocessor", &debug['p']);	
+	flagcount("p", "invoke C preprocessor", &debug['p']);
 	flagcount("q", "print Go definitions", &debug['q']);
 	flagcount("s", "print #define assembly offsets", &debug['s']);
 	flagcount("t", "debug code generation", &debug['t']);
 	flagcount("w", "enable warnings", &debug['w']);
-	flagcount("v", "increase debug verbosity", &debug['v']);	
-	if(thechar == '6')
+	flagcount("v", "increase debug verbosity", &debug['v']);
+	if(thechar == '6') {
 		flagcount("largemodel", "generate code that assumes a large memory model", &flag_largemodel);
+	}
 	
 	// 解析 argv 中的参数列表, argv 指针会后移(argc也会减小), 最终只剩下待编译的目标 .c 文件
 	flagparse(&argc, &argv, usage);
@@ -213,6 +220,11 @@ main(int argc, char *argv[])
 
 //
 // param *file: 6c 指定的待编译的 .c 文件路径
+// param **defs: 字符串数组
+//       1. GOOS_linux
+//       2. GOARCH_amd64
+//       3. GOOS_GOARCH_linux_amd64
+// param ndef: defs数组的长度
 //
 // caller:
 // 	1. main()
@@ -294,6 +306,7 @@ compile(char *file, char **defs, int ndef)
 			diag(Z, "-p option not supported on windows");
 			errorexit();
 		}
+		// access() 判断是否拥有目标文件相应的权限, 如果有则返回0, 否则返回 -1.
 		if(access(file, AREAD) < 0) {
 			diag(Z, "%s does not exist", file);
 			errorexit();
@@ -321,18 +334,23 @@ compile(char *file, char **defs, int ndef)
 				sprint(opt, "-+");
 				av[i++] = strdup(opt);
 			}
-			for(c = 0; c < ndef; c++)
+			for(c = 0; c < ndef; c++) {
 				av[i++] = smprint("-D%s", defs[c]);
-			for(c = 0; c < ninclude; c++)
+			}
+			for(c = 0; c < ninclude; c++) {
 				av[i++] = smprint("-I%s", include[c]);
-			if(strcmp(file, "stdin") != 0)
+			}
+			if(strcmp(file, "stdin") != 0) {
 				av[i++] = file;
+			}
 			av[i] = 0;
 			if(debug['p'] > 1) {
-				for(c = 0; c < i; c++)
+				for(c = 0; c < i; c++) {
 					fprint(2, "%s ", av[c]);
+				}
 				fprint(2, "\n");
 			}
+			// src/lib9/exec.c -> exec()
 			exec(av[0], av);
 			fprint(2, "can't exec C preprocessor %s: %r\n", CPP);
 			errorexit();
@@ -361,8 +379,9 @@ compile(char *file, char **defs, int ndef)
 void
 errorexit(void)
 {
-	if(outfile)
+	if(outfile) {
 		remove(outfile);
+	}
 	exits("error");
 }
 
@@ -394,8 +413,9 @@ newio(void)
 			errorexit();
 		}
 		i = alloc(sizeof(*i));
-	} else
+	} else {
 		iofree = i->link;
+	}
 	i->c = 0;
 	i->f = -1;
 	ionext = i;
@@ -406,15 +426,17 @@ newfile(char *s, int f)
 {
 	Io *i;
 
-	if(debug['e'])
+	if(debug['e']) {
 		print("%L: %s\n", lineno, s);
+	}
 
 	i = ionext;
 	i->link = iostack;
 	iostack = i;
 	i->f = f;
-	if(f < 0)
+	if(f < 0) {
 		i->f = open(s, 0);
+	}
 	if(i->f < 0) {
 		yyerror("%cc: %r: %s", thechar, s);
 		errorexit();
@@ -431,6 +453,13 @@ slookup(char *s)
 	return lookup();
 }
 
+// Unicode 字符转换
+//
+// 将间隔符·转换为点号.
+//
+// caller:
+// 	1. slookup()
+// 	2. yylex()
 Sym*
 lookup(void)
 {
@@ -448,7 +477,7 @@ lookup(void)
 		symb[0] = '"';
 		symb[1] = '"';
 	}
-
+	// r = w = symb, 为 r 与 w 同时赋初值
 	for(r=w=symb; *r; r++) {
 		// turn · (U+00B7) into .
 		// turn ∕ (U+2215) into /
@@ -459,8 +488,9 @@ lookup(void)
 			*w++ = '/';
 			r++;
 			r++;
-		}else
+		}else {
 			*w++ = *r;
+		}
 	}
 	*w = '\0';
 
@@ -474,10 +504,12 @@ lookup(void)
 	h %= NHASH;
 	c = symb[0];
 	for(s = hash[h]; s != S; s = s->link) {
-		if(s->name[0] != c)
+		if(s->name[0] != c) {
 			continue;
-		if(strcmp(s->name, symb) == 0)
+		}
+		if(strcmp(s->name, symb) == 0) {
 			return s;
+		}
 	}
 	s = alloc(sizeof(*s));
 	s->name = alloc(n);
@@ -489,6 +521,10 @@ lookup(void)
 	return s;
 }
 
+// 初始化目标 Sym 对象, 为其中各字段赋上默认值.
+//
+// caller:
+// 	1. lookup()
 void
 syminit(Sym *s)
 {
@@ -543,21 +579,24 @@ l1:
 		goto talph;
 	}
 	if(isspace(c)) {
-		if(c == '\n')
+		if(c == '\n') {
 			lineno++;
+		}
 		goto l0;
 	}
 	if(isalpha(c)) {
 		cp = symb;
-		if(c != 'L')
+		if(c != 'L') {
 			goto talph;
+		}
 		*cp++ = c;
 		c = GETC();
 		if(c == '\'') {
 			/* L'x' */
 			c = escchar('\'', 1, 0);
-			if(c == EOF)
+			if(c == EOF) {
 				c = '\'';
+			}
 			c1 = escchar('\'', 1, 0);
 			if(c1 != EOF) {
 				yyerror("missing '");
@@ -571,8 +610,9 @@ l1:
 		}
 		goto talph;
 	}
-	if(isdigit(c))
+	if(isdigit(c)) {
 		goto tnum;
+	}
 	switch(c)
 	{
 
@@ -607,8 +647,9 @@ l1:
 		/* "..." */
 		for(;;) {
 			c = escchar('"', 0, 1);
-			if(c == EOF)
+			if(c == EOF) {
 				break;
+			}
 			if(c & ESC) {
 				cp = allocn(cp, c1, 1);
 				cp[c1++] = c;
@@ -635,8 +676,9 @@ l1:
 		c1 = 0;
 		for(;;) {
 			c = escchar('"', 1, 0);
-			if(c == EOF)
+			if(c == EOF) {
 				break;
+			}
 			cp = allocn(cp, c1, sizeof(TRune));
 			*(TRune*)(cp + c1) = c;
 			c1 += sizeof(TRune);
@@ -653,8 +695,9 @@ l1:
 	case '\'':
 		/* '.' */
 		c = escchar('\'', 0, 0);
-		if(c == EOF)
+		if(c == EOF) {
 			c = '\'';
+		}
 		c1 = escchar('\'', 0, 0);
 		if(c1 != EOF) {
 			yyerror("missing '");
@@ -662,12 +705,14 @@ l1:
 		}
 		vv = c;
 		yylval.vval = convvtox(vv, TUCHAR);
-		if(yylval.vval != vv)
+		if(yylval.vval != vv) {
 			yyerror("overflow in character constant: 0x%x", c);
-		else
-		if(c & 0x80){
-			nearln = lineno;
-			warn(Z, "sign-extended character constant");
+		}
+		else {
+			if(c & 0x80){
+				nearln = lineno;
+				warn(Z, "sign-extended character constant");
+			}
 		}
 		yylval.vval = convvtox(vv, TCHAR);
 		return LCONST;
@@ -679,8 +724,9 @@ l1:
 				c = getr();
 				while(c == '*') {
 					c = getr();
-					if(c == '/')
+					if(c == '/') {
 						goto l0;
+					}
 				}
 				if(c == EOF) {
 					yyerror("eof in comment");
@@ -691,16 +737,18 @@ l1:
 		if(c1 == '/') {
 			for(;;) {
 				c = getr();
-				if(c == '\n')
+				if(c == '\n') {
 					goto l0;
+				}
 				if(c == EOF) {
 					yyerror("eof in comment");
 					errorexit();
 				}
 			}
 		}
-		if(c1 == '=')
+		if(c1 == '=') {
 			return LDVE;
+		}
 		break;
 
 	case '*':
@@ -1274,6 +1322,8 @@ struct
 	0
 };
 
+// caller:
+// 	1. main()
 void
 cinit(void)
 {
@@ -1306,13 +1356,15 @@ cinit(void)
 	types[TFUNC] = typ(TFUNC, types[TINT]);
 	types[TIND] = typ(TIND, types[TVOID]);
 
-	for(i=0; i<NHASH; i++)
+	for(i=0; i<NHASH; i++) {
 		hash[i] = S;
+	}
 	for(i=0; itab[i].name; i++) {
 		s = slookup(itab[i].name);
 		s->lexical = itab[i].lexical;
-		if(itab[i].type != 0)
+		if(itab[i].type != 0) {
 			s->type = types[itab[i].type];
+		}
 	}
 	blockno = 0;
 	autobn = 0;
@@ -1333,8 +1385,9 @@ cinit(void)
 	pathname = allocn(pathname, 0, 100);
 	if(getwd(pathname, 99) == 0) {
 		pathname = allocn(pathname, 100, 900);
-		if(getwd(pathname, 999) == 0)
+		if(getwd(pathname, 999) == 0) {
 			strcpy(pathname, "/???");
+		}
 	}
 
 	fmtinstall('O', Oconv);
@@ -1578,19 +1631,26 @@ VBconv(Fmt *fp)
 	return fmtstrcpy(fp, str);
 }
 
+// 设置 include 路径数组
+//
+// caller:
+// 	1. main() 此时 include 还是空数组
 void
 setinclude(char *p)
 {
 	int i;
 
 	if(*p != 0) {
-		for(i=1; i < ninclude; i++)
-			if(strcmp(p, include[i]) == 0)
+		for(i=1; i < ninclude; i++) {
+			if(strcmp(p, include[i]) == 0) {
 				return;
+			}
+		}
 
-		if(ninclude%8 == 0)
+		if(ninclude%8 == 0) {
 			include = allocn(include, ninclude*sizeof(char *),
 				8*sizeof(char *));
+		}
 		include[ninclude++] = p;
 	}
 }

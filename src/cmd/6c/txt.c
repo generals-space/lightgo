@@ -30,6 +30,10 @@
 
 #include "gc.h"
 
+// 初始化 thechar = '6', thestring = "amd64"
+//
+// caller:
+// 	1. src/cmd/cc/lex.c -> main()
 void
 ginit(void)
 {
