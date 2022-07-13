@@ -7,6 +7,9 @@
 5. [cmd/ld: older gdb cannot parse dwarf3 output](https://github.com/golang/go/issues/3436)
 6. [实现一个 Golang 调试器（第一部分）](https://studygolang.com/articles/12553)
 7. [Go: A Documentary](https://golang.design/history/#language-design)
+8. [Plan 9 C Compilers](https://9p.io/sys/doc/compiler.html)
+9. [How to Use the Plan 9 C Compiler](http://doc.cat-v.org/plan_9/4th_edition/papers/comp)
+
 
 [说说编译链接系统中的符号(symbol)、重定位(relocation)、字串表(string-table)和节(section)](https://blog.csdn.net/liigo/article/details/4858535)
     - 假如一款新诞生的编程语言（就说易语言吧），不想重复开发专用链接器，可以考虑编译生成C语言格式的目标文件，进而得以使用现有的C语言链接器链接生成可执行文件，如此一来可大幅减少开发工作量，降低研发成本的同时还提高了系统的开放性。
