@@ -11,3 +11,5 @@ runtime·printstring(String v)
 		gwrite(v.str, v.len);
 }
 ```
+
+使用 vscode 全局搜索时, 需要将"包含的文件"显式设置为"*", 否则找不全.

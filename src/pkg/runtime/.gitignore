@@ -1,0 +1,15 @@
+zaexperiment.h
+zasm_linux_amd64.h
+zgoarch_amd64.go
+zgoos_linux.go
+zmalloc_linux_amd64.c
+zmprof_linux_amd64.c
+znetpoll_linux_amd64.c
+zruntime_defs_linux_amd64.go
+zruntime1_linux_amd64.c
+zsema_linux_amd64.c
+zsigqueue_linux_amd64.c
+zstring_linux_amd64.c
+zsys_linux_amd64.s
+ztime_linux_amd64.c
+zversion.go
