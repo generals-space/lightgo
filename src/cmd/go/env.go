@@ -90,10 +90,6 @@ func runEnv(cmd *Command, args []string) {
 		for _, e := range env {
 			fmt.Printf("%s=\"%s\"\n", e.name, e.value)
 		}
-	case "plan9":
-		for _, e := range env {
-			fmt.Printf("%s='%s'\n", e.name, strings.Replace(e.value, "'", "''", -1))
-		}
 	case "windows":
 		for _, e := range env {
 			fmt.Printf("set %s=%s\n", e.name, e.value)
