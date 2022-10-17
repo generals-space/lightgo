@@ -9,6 +9,7 @@ export GO_TOOLLIST=${GO_TOOL}/linux_amd64   ## 6g, 6l 等命令会在此目录
 
 ## 将本地 gopath 目录追加到GOPATH路径列表中
 export LOCAL_GO_PATH=${GOROOT}/gopath
+export LOCAL_GO_TOOL_PATH=${GOROOT}/gotoolpath
 
 export PATH=$PATH:${GO_BIN}:${GO_TOOL}:${GO_TOOLLIST}
-export GOPATH=$GOPATH:${LOCAL_GO_PATH}
+export GOPATH=${LOCAL_GO_PATH}:${LOCAL_GO_TOOL_PATH}
