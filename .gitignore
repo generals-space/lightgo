@@ -1,5 +1,5 @@
-**/bin
-**/pkg
+bin/
+pkg/
 src/cmd/dist/dist
 *.gobin
 6.out

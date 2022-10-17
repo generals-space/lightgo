@@ -12,10 +12,11 @@
             "env": {
                 "PATH": "$PATH:${workspaceFolder}/bin",
                 "GOROOT": "${workspaceFolder}",
-                "GOPATH": "${workspaceFolder}/example",
+                "GOPATH": "${workspaceFolder}/gopath",
             },
-            "program": "${workspaceFolder}/example/src/001main",
-            "args": []
-        },
+            "program": "${workspaceFolder}/gopath/src/001.println",
+            "args": [],
+            "comment": "放弃使用 vscode, 只能使用 gdb 手动调试, 因为在 v1.2 还没有 delve 工具, 现在的 delve 工具也不兼容 v1.2 的 golang"
+        }
     ]
 }

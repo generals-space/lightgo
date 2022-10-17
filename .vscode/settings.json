@@ -1,4 +1,7 @@
 {
+    "go.goroot": "${workspaceFolder}",
+    "go.gopath": "${workspaceFolder}/gopath",
+    "go.toolsGopath": "${workspaceFolder}/gotoolpath",
     "files.associations": {
         "*.goc": "c",
         "*.h": "c",
@@ -32,5 +35,5 @@
         "cinttypes": "c",
         "type_traits": "c",
         "typeinfo": "c"
-    }
+    },
 }
