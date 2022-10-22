@@ -44,9 +44,9 @@ extern volatile intgo runtime·MemProfileRate;
 // 		1. runtime·mallocinit() 初始化内存分配器完成后, 调用此函数看看效果.
 // 			从代码分析来看, 此时内存分配器里所有的区域都还没有实际分配空间.
 // 	2. runtime·new()
+// 	3. runtime·cnew()
 //
-// 此函数的调用者很多, 创建P, G对象, chan, string对象, 还有栈帧对象等, 
-// 都可以调用此函数创建.
+// 此函数的调用者很多, P, G对象, chan, string对象, 还有栈帧对象等, 都可以调用此函数创建.
 //
 // Allocate an object of at least size bytes.
 // Small objects are allocated from the per-thread cache's free lists.
@@ -899,6 +899,10 @@ cnew(Type *typ, intgo n, int32 objtyp)
 }
 
 // 等同于 runtime·new(), 不过主调函数是 C 语言
+//
+// caller:
+// 	1. src/pkg/runtime/hashmap.c -> runtime·makemap_c() 用于初始化 map 对象(如 make(map[*]*))
+//
 // same as runtime·new, but callable from C
 void*
 runtime·cnew(Type *typ)
@@ -906,6 +910,9 @@ runtime·cnew(Type *typ)
 	return cnew(typ, 1, TypeInfo_SingleObject);
 }
 
+// caller: 
+// 	1. src/pkg/runtime/hashmap.c -> hash_insert() 
+// 	向 map 中第1次写入数据时被调用, 用于创建 map 的 buckets 成员对象.
 void*
 runtime·cnewarray(Type *typ, intgo n)
 {

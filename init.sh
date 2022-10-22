@@ -13,3 +13,7 @@ export LOCAL_GO_TOOL_PATH=${GOROOT}/gotoolpath
 
 export PATH=$PATH:${GO_BIN}:${GO_TOOL}:${GO_TOOLLIST}
 export GOPATH=${LOCAL_GO_PATH}:${LOCAL_GO_TOOL_PATH}
+
+function gb() {
+    go build -gcflags='-l -N' -o main.gobin $@
+}

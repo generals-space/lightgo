@@ -67,6 +67,10 @@ typedef	struct	InterfaceType	InterfaceType;
 typedef	struct	Eface		Eface;
 typedef	struct	Type		Type;
 typedef	struct	ChanType		ChanType;
+// MapType 是编译器级别的对象类型, 其中包含开发者通过 make(map[key]elem) 创建的 map
+// key/value 类型信息(类型名称, 占用空间大小等), 以及实际的 Hmap 底层对象.
+//
+// link: src/pkg/runtime/type.h -> MapType{}
 typedef	struct	MapType		MapType;
 typedef	struct	Defer		Defer;
 typedef	struct	DeferChunk	DeferChunk;
@@ -732,6 +736,8 @@ enum
 typedef	struct	Alg		Alg;
 struct	Alg
 {
+	// hash 应该是指向 src/pkg/runtime/asm_amd64.s -> runtime·aeshash() 的汇编指针.
+	// 还记得在 golang runtime 启动过程中, 有一个 runtime·hashinit() 调用吗?
 	void	(*hash)(uintptr*, uintptr, void*);
 	void	(*equal)(bool*, uintptr, void*, void*);
 	void	(*print)(uintptr, void*);
@@ -755,9 +761,13 @@ void	runtime·nohash(uintptr*, uintptr, void*);
 void	runtime·strhash(uintptr*, uintptr, void*);
 void	runtime·interhash(uintptr*, uintptr, void*);
 void	runtime·nilinterhash(uintptr*, uintptr, void*);
+// 指向 src/pkg/runtime/asm_amd64.s 中的同名汇编函数
 void	runtime·aeshash(uintptr*, uintptr, void*);
+// 指向 src/pkg/runtime/asm_amd64.s 中的同名汇编函数
 void	runtime·aeshash32(uintptr*, uintptr, void*);
+// 指向 src/pkg/runtime/asm_amd64.s 中的同名汇编函数
 void	runtime·aeshash64(uintptr*, uintptr, void*);
+// 指向 src/pkg/runtime/asm_amd64.s 中的同名汇编函数
 void	runtime·aeshashstr(uintptr*, uintptr, void*);
 
 void	runtime·memequal(bool*, uintptr, void*, void*);

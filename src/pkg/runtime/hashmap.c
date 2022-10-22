@@ -11,19 +11,18 @@
 
 // This file contains the implementation of Go's map type.
 //
-// The map is just a hash table.  The data is arranged
-// into an array of buckets.  Each bucket contains up to
-// 8 key/value pairs.  The low-order bits of the hash are
-// used to select a bucket.  Each bucket contains a few
+// The map is just a hash table. 
+// The data is arranged into an array of buckets. 
+// Each bucket contains up to 8 key/value pairs. 
+// The low-order bits of the hash are used to select a bucket. 
+// Each bucket contains a few
 // high-order bits of each hash to distinguish the entries
 // within a single bucket.
 //
-// If more than 8 keys hash to a bucket, we chain on
-// extra buckets.
+// If more than 8 keys hash to a bucket, we chain on extra buckets.
 //
-// When the hashtable grows, we allocate a new array
-// of buckets twice as big.  Buckets are incrementally
-// copied from the old bucket array to the new bucket array.
+// When the hashtable grows, we allocate a new array of buckets twice as big. 
+// Buckets are incrementally copied from the old bucket array to the new bucket array.
 //
 // Map iterators walk through the array of buckets and
 // return the keys in walk order (bucket #, then overflow
@@ -94,8 +93,11 @@ struct Bucket
 struct Hmap
 {
 	// Note: the format of the Hmap is encoded in ../../cmd/gc/reflect.c and
-	// ../reflect/type.go.  Don't change this structure without also changing that code!
+	// ../reflect/type.go. 
+	// Don't change this structure without also changing that code!
 	
+	// count map 中的元素数量(内置函数 len() 返回的就是此值)
+	//
 	// # live cells == size of map.  Must be first (used by len() builtin)
 	// 元素数量
 	uintgo  count;
@@ -103,8 +105,14 @@ struct Hmap
 	uint32  flags;
 	uint32  hash0;        // hash seed
 	uint8   B;            // log_2 of # of buckets (can hold up to LOAD * 2^B items)
-	uint8   keysize;      // key size in bytes
-	uint8   valuesize;    // value size in bytes
+	// 当前 map 对象 key 的大小, 一般为 string, int 这样的变量类型大小
+	//
+	// key size in bytes
+	uint8   keysize;
+	// 当前 map 对象 value 的大小, 与 key 相似, 同样是类型大小, 不过 value 还可能是 struct 类型.
+	//
+	// value size in bytes
+	uint8   valuesize;
 	uint16  bucketsize;   // bucket size in bytes
 
 	byte    *buckets;     // array of 2^B Buckets. may be nil if count==0.
@@ -131,6 +139,7 @@ enum
 	debug = 0,    // print every operation
 	checkgc = 0 || docheck,  // check interaction of mallocgc() with the garbage collector
 };
+
 static void
 check(MapType *t, Hmap *h)
 {
@@ -197,6 +206,15 @@ check(MapType *t, Hmap *h)
 	}
 }
 
+// hash_init 初始化 map 对象(主调函数在调用此方法时事先一定通过 malloc 为该 map 申请了空间).
+//
+// 	@param t: src/pkg/runtime/type.h -> MapType{} 类型对象, 其中包含目标 map 对象的 key/value 类型属性.
+// 	@param h: 目标 map 对象的指针(起始地址)
+// 	@param hint: make(map[string]string, hint)的第2个参数, 表示该 map 对象的容量.
+//
+// caller:
+// 	1. runtime·makemap_c() 只有这一处, 在使用 make() 创建 map 对象时被调用.
+//
 static void
 hash_init(MapType *t, Hmap *h, uint32 hint)
 {
@@ -239,12 +257,15 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 
 	// find size parameter which will hold the requested # of elements
 	B = 0;
-	while(hint > BUCKETSIZE && hint > LOAD * ((uintptr)1 << B))
+	while(hint > BUCKETSIZE && hint > LOAD * ((uintptr)1 << B)) {
 		B++;
+	}
 
 	// allocate initial hash table
 	// If hint is large zeroing this memory could take a while.
-	if(checkgc) mstats.next_gc = mstats.heap_alloc;
+	if(checkgc) {
+		mstats.next_gc = mstats.heap_alloc;
+	} 
 	if(B == 0) {
 		// done lazily later.
 		buckets = nil;
@@ -263,13 +284,14 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 	h->buckets = buckets;
 	h->oldbuckets = nil;
 	h->nevacuate = 0;
-	if(docheck)
+	if(docheck) {
 		check(t, h);
+	}
 }
 
 // Moves entries in oldbuckets[i] to buckets[i] and buckets[i+2^k].
-// We leave the original bucket intact, except for the evacuated marks, so that
-// iterators can still iterate through the old buckets.
+// We leave the original bucket intact, except for the evacuated marks,
+// so that iterators can still iterate through the old buckets.
 static void
 evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 {
@@ -579,6 +601,14 @@ static uint8 empty_value[MAXVALUESIZE];
 #define MAYBE_EQ(x,y) (*(CHECKTYPE*)(x).str == *(CHECKTYPE*)(y).str && *(CHECKTYPE*)((x).str + (x).len - sizeof(CHECKTYPE)) == *(CHECKTYPE*)((y).str + (x).len - sizeof(CHECKTYPE)))
 #include "hashmap_fast.c"
 
+// hash_insert 为目标 map 对象设置指定的 key/value 值.
+//
+// 	@param h: 目标 map 的存储地址
+// 	@param key: set map 时, key 的名称(的地址)
+// 	@param value: set map 时, value 的值(的地址)
+//
+// caller:
+// 	1. runtime·mapassign() 只有这一处
 static void
 hash_insert(MapType *t, Hmap *h, void *key, void *value)
 {
@@ -594,21 +624,25 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	byte *k, *v;
 	byte *kmem, *vmem;
 
-	if(docheck)
+	if(docheck) {
 		check(t, h);
+	}
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
-	if(h->buckets == nil)
+	if(h->buckets == nil) {
 		h->buckets = runtime·cnewarray(t->bucket, 1);
+	}
 
- again:
+again:
 	bucket = hash & (((uintptr)1 << h->B) - 1);
-	if(h->oldbuckets != nil)
+	if(h->oldbuckets != nil) {
 		grow_work(t, h, bucket);
+	}
 	b = (Bucket*)(h->buckets + bucket * h->bucketsize);
 	top = hash >> (sizeof(uintptr)*8 - 8);
-	if(top == 0)
+	if(top == 0) {
 		top = 1;
+	}
 	inserti = nil;
 	insertk = nil;
 	insertv = nil;
@@ -623,17 +657,22 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 				continue;
 			}
 			t->key->alg->equal(&eq, t->key->size, key, IK(h, k));
-			if(!eq)
+			if(!eq) {
 				continue;
+			}
 			// already have a mapping for key.  Update it.
-			t->key->alg->copy(t->key->size, IK(h, k), key); // Need to update key for keys which are distinct but equal (e.g. +0.0 and -0.0)
+			// Need to update key for keys which are distinct but equal
+			// (e.g. +0.0 and -0.0)
+			t->key->alg->copy(t->key->size, IK(h, k), key); 
 			t->elem->alg->copy(t->elem->size, IV(h, v), value);
-			if(docheck)
+			if(docheck) {
 				check(t, h);
+			}
 			return;
 		}
-		if(b->overflow == nil)
+		if(b->overflow == nil) {
 			break;
+		}
 		b = b->overflow;
 	}
 
@@ -670,8 +709,9 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	t->elem->alg->copy(t->elem->size, insertv, value);
 	*inserti = top;
 	h->count++;
-	if(docheck)
+	if(docheck) {
 		check(t, h);
+	}
 }
 
 static void
@@ -935,6 +975,9 @@ reflect·ismapkey(Type *typ, bool ret)
 	FLUSH(&ret);
 }
 
+// runtime·makemap_c ...
+//
+// 	@param hint: make(map[string]string, hint)的第2个参数, 表示该 map 对象的容量
 Hmap*
 runtime·makemap_c(MapType *typ, int64 hint)
 {
@@ -942,15 +985,18 @@ runtime·makemap_c(MapType *typ, int64 hint)
 	Type *key;
 
 	key = typ->key;
-	
-	if(sizeof(Hmap) > 48)
+
+	if(sizeof(Hmap) > 48) {
 		runtime·panicstring("hmap too large");
+	}
 
-	if(hint < 0 || (int32)hint != hint)
+	if(hint < 0 || (int32)hint != hint) {
 		runtime·panicstring("makemap: size out of range");
+	}
 
-	if(key->alg->hash == runtime·nohash)
+	if(key->alg->hash == runtime·nohash) {
 		runtime·throw("runtime.makemap: unsupported map key type");
+	}
 
 	h = runtime·cnew(typ->hmap);
 	hash_init(typ, h, hint);
@@ -959,13 +1005,19 @@ runtime·makemap_c(MapType *typ, int64 hint)
 	// figure out offsets of map call arguments.
 
 	if(debug) {
-		runtime·printf("makemap: map=%p; keysize=%p; valsize=%p; keyalg=%p; valalg=%p\n",
-			       h, key->size, typ->elem->size, key->alg, typ->elem->alg);
+		runtime·printf(
+			"makemap: map=%p; keysize=%p; valsize=%p; keyalg=%p; valalg=%p\n",
+			h, key->size, typ->elem->size, key->alg, typ->elem->alg
+		);
 	}
 
 	return h;
 }
 
+// golang原生: make(map[]interface{})
+//
+// 	@param hint: make(map[string]string, hint)的第2个参数, 表示 map 对象的容量
+//
 // makemap(key, val *Type, hint int64) (hmap *map[any]any);
 void
 runtime·makemap(MapType *typ, int64 hint, Hmap *ret)
@@ -1097,13 +1149,20 @@ reflect·mapaccess(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
 	FLUSH(&pres);
 }
 
+// runtime·mapassign 为目标 map 对象设置指定的 key/value 值.
+//
+// 	@param h: 目标 map 的存储地址
+// 	@param ak: arguement key, set map 时, key 的名称(的地址)
+// 	@param av: arguement value, set map 时, value 的值(的地址)
 void
 runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
 {
-	if(h == nil)
+	if(h == nil) {
 		runtime·panicstring("assignment to entry in nil map");
+	}
 
 	if(av == nil) {
+		// av 为 nil, 表示将目标 key 从 map 中移除
 		hash_remove(t, h, ak);
 	} else {
 		hash_insert(t, h, ak, av);
@@ -1115,14 +1174,18 @@ runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
 		runtime·prints("; key=");
 		t->key->alg->print(t->key->size, ak);
 		runtime·prints("; val=");
-		if(av)
+		if(av) {
 			t->elem->alg->print(t->elem->size, av);
-		else
+		}
+		else {
 			runtime·prints("nil");
+		}
 		runtime·prints("\n");
 	}
 }
 
+// golang原生: map["key"] = "value" 在 map 中添加 key/value 对.
+//
 // mapassign1(mapType *type, hmap *map[any]any, key any, val any);
 #pragma textflag NOSPLIT
 void
@@ -1130,12 +1193,17 @@ runtime·mapassign1(MapType *t, Hmap *h, ...)
 {
 	byte *ak, *av;
 
-	if(h == nil)
+	if(h == nil) {
 		runtime·panicstring("assignment to entry in nil map");
+	}
 
-	if(raceenabled)
+	if(raceenabled) {
 		runtime·racewritepc(h, runtime·getcallerpc(&t), runtime·mapassign1);
+	}
+	// todo: 这个计算方式什么意思???
+	// ak: arguement key, set map 时, key 的名称(的地址)
 	ak = (byte*)(&h + 1);
+	// av: arguement value, set map 时, value 的值(的地址)
 	av = ak + ROUND(t->key->size, t->elem->align);
 
 	runtime·mapassign(t, h, ak, av);

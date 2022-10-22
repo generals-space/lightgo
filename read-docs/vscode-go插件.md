@@ -3,6 +3,8 @@
 vscode: 版本: 1.71.2 提交: 74b1f979648cc44d385a2286793c226e611f59e7
 
 vscode-go: [golang.Go-0.14.4.vsix](https://github.com/golang/vscode-go/releases/download/v0.14.4/golang.Go-0.14.4.vsix)
+C/C++: [v1.12.4](https://github.com/microsoft/vscode-cpptools/releases/download/v1.12.4/cpptools-linux.vsix)
+Git-Graph: [v1.30.0]()
 
 本文的目的就是, 就算不能在线调试, 至少写代码的时候能有代码提示.
 

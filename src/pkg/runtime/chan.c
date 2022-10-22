@@ -101,13 +101,6 @@ static	void	enqueue(WaitQ*, SudoG*);
 static	void	destroychan(Hchan*);
 static	void	racesync(Hchan*, SudoG*);
 
-// golang原生: make(chan string, 10) 函数
-//
-// 调用 malloc 创建一个 channel 对象, 并分配内存.
-//
-// param t: channel类型(如 string, int, struct 等)
-// param hint: channel 容量.
-//
 Hchan*
 runtime·makechan_c(ChanType *t, int64 hint)
 {
@@ -153,6 +146,13 @@ reflect·makechan(ChanType *t, uint64 size, Hchan *c)
 	FLUSH(&c);
 }
 
+// golang原生: make(chan string, 10) 函数
+//
+// 调用 malloc 创建一个 channel 对象, 并分配内存.
+//
+// param t: channel类型(如 string, int, struct 等)
+// param hint: channel 容量.
+//
 // makechan(t *ChanType, hint int64) (hchan *chan any);
 void
 runtime·makechan(ChanType *t, int64 hint, Hchan *ret)

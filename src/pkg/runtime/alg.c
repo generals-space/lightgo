@@ -486,8 +486,9 @@ runtime·hashinit(void)
 
 		// Initialize with random data so hash collisions will be hard to engineer.
 		runtime·get_random_data(&rnd, &n);
-		if(n > HashRandomBytes)
+		if(n > HashRandomBytes) {
 			n = HashRandomBytes;
+		}
 		runtime·memmove(runtime·aeskeysched, rnd, n);
 		if(n < HashRandomBytes) {
 			// Not very random, but better than nothing.

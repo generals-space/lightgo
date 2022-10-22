@@ -65,13 +65,20 @@ struct InterfaceType
 	IMethod m[];
 };
 
+// MapType 是编译器级别的对象类型, 其中包含开发者通过 make(map[key]elem) 创建的 map
+// key/value 类型信息(类型名称, 占用空间大小等), 以及实际的 Hmap 底层对象.
 struct MapType
 {
 	Type;
+	// 开发者创建的 map 中, key 的类型信息(如 string, int)
 	Type *key;
+	// 与 key 类型, 是 map 中的 value 类型信息(string, int, 还可能是 struct)
 	Type *elem;
 	Type *bucket; // internal type representing a hash bucket
-	Type *hmap;   // internal type representing a Hmap
+	// hmap 底层实际的 map 对象(实际存储数据的地方)
+	//
+	// internal type representing a Hmap
+	Type *hmap;
 };
 
 struct ChanType

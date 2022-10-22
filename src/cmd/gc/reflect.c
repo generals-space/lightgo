@@ -1181,6 +1181,11 @@ gcinline(Type *t)
 	return 0;
 }
 
+// dgcsym1 ...
+//
+// caller:
+// 	1. dgcsym()
+//
 static int
 dgcsym1(Sym *s, int ot, Type *t, vlong *off, int stack_size)
 {

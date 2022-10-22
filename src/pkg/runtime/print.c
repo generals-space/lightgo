@@ -10,8 +10,7 @@
 
 static void vprintf(int8*, byte*);
 
-// write to goroutine-local buffer if diverting output,
-// or else standard error.
+// write to goroutine-local buffer if diverting output, or else standard error.
 static void
 gwrite(void *v, intgo n)
 {
@@ -348,7 +347,7 @@ runtime·printpointer(void *p)
 	runtime·printhex((uint64)p);
 }
 
-// golang原生: println() 函数
+// golang原生: println() 函数(非 fmt 包的 Println())
 void
 runtime·printstring(String v)
 {
@@ -356,8 +355,9 @@ runtime·printstring(String v)
 		gwrite("[string too long]", 17);
 		return;
 	}
-	if(v.len > 0)
+	if(v.len > 0) {
 		gwrite(v.str, v.len);
+	}
 }
 
 void
