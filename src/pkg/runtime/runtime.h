@@ -741,6 +741,9 @@ struct	Alg
 	void	(*hash)(uintptr*, uintptr, void*);
 	void	(*equal)(bool*, uintptr, void*, void*);
 	void	(*print)(uintptr, void*);
+	// copy 应该是指向 src/pkg/runtime/alg.c -> runtime·strcopy() 函数
+	// 将参数3的 void* 指向的 String 对象的内容, 拷贝到参数2的 void* 指针的 String 对象.
+	// (这里的 String 对象指的是 golang 中的 string 常规对象)
 	void	(*copy)(uintptr, void*, void*);
 };
 

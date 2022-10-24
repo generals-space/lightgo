@@ -358,8 +358,9 @@ runtime·fastrand1(void)
 
 	x = m->fastrand;
 	x += x;
-	if(x & 0x80000000L)
+	if(x & 0x80000000L) {
 		x ^= 0x88888eefUL;
+	}
 	m->fastrand = x;
 	return x;
 }

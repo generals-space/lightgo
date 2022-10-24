@@ -12,6 +12,7 @@
 
 // +build ignore
 
+// golang原生: val := map["key"]
 #pragma textflag NOSPLIT
 void
 HASH_LOOKUP1(MapType *t, Hmap *h, KEYTYPE key, byte *value)
@@ -124,6 +125,7 @@ dohash:
 	FLUSH(&value);
 }
 
+// golang原生: val, ok := map["key"]
 #pragma textflag NOSPLIT
 void
 HASH_LOOKUP2(MapType *t, Hmap *h, KEYTYPE key, byte *value, bool res)

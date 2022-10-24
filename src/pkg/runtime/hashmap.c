@@ -70,18 +70,21 @@
 #define MAXKEYSIZE 128
 #define MAXVALUESIZE 128
 
+// Bucket map 中存放单个 hash 对应的 key 数据的地方.
 typedef struct Bucket Bucket;
 struct Bucket
 {
 	// Note: the format of the Bucket is encoded in ../../cmd/gc/reflect.c and
-	// ../reflect/type.go.  Don't change this structure without also changing that code!
+	// ../reflect/type.go. 
+	// Don't change this structure without also changing that code!
 	uint8  tophash[BUCKETSIZE]; // top 8 bits of hash of each entry (0 = empty)
 	Bucket *overflow;           // overflow bucket, if any
 	byte   data[1];             // BUCKETSIZE keys followed by BUCKETSIZE values
 };
-// NOTE: packing all the keys together and then all the values together makes the
-// code a bit more complicated than alternating key/value/key/value/... but it allows
-// us to eliminate padding which would be needed for, e.g., map[int64]int8.
+// NOTE: packing all the keys together and then all the values together 
+// makes the code a bit more complicated than alternating key/value/key/value/... 
+// but it allows us to eliminate padding which would be needed for,
+// e.g., map[int64]int8.
 
 // Low-order bit of overflow field is used to mark a bucket as already evacuated
 // without destroying the overflow pointer.
@@ -103,7 +106,11 @@ struct Hmap
 	uintgo  count;
 	// 状态标识
 	uint32  flags;
-	uint32  hash0;        // hash seed
+	// 由于计算 hash 值的 seed, 是一个随机整数.
+	// map 中存储的 key 都是以该值计算 hash 值的.
+	//
+	// hash seed
+	uint32  hash0;
 	uint8   B;            // log_2 of # of buckets (can hold up to LOAD * 2^B items)
 	// 当前 map 对象 key 的大小, 一般为 string, int 这样的变量类型大小
 	//
@@ -115,7 +122,20 @@ struct Hmap
 	uint8   valuesize;
 	uint16  bucketsize;   // bucket size in bytes
 
-	byte    *buckets;     // array of 2^B Buckets. may be nil if count==0.
+	// buckets 是一个数组, 是真正存放 key/value 数据的地方.
+	//
+	// 其中每个 bucket 成员都存储着某一 hash 值的 k/v 对,
+	// map 操作中, 会先根据 hash0 成员与目标 key 生成一个 hash 值, 并根据这个 hash 值,
+	// 计算出 buckets 数组中的索引, 确定该 key 存放在哪一个 bucket 成员中.
+	//
+	// 另外, 需要注意, hash 函数根据 key 值得到 hash 值, 并不是完美的. 
+	// 虽然几率很小, 总会出现不同 key 计算出相同 hash 值的情况.
+	// 这些不同的 key, 其实都存放在同一个 bucket 中, 因为 bucket 中也存在一个数组(slots),
+	// 我们可以把每个 bucket 中的 slots 数组看成槽位, 发生重复的 key 会按照先后顺序找到
+	// 自己的槽位.
+	//
+	// array of 2^B Buckets. may be nil if count==0.
+	byte    *buckets;
 	byte    *oldbuckets;  // previous bucket array of half the size, non-nil only when growing
 	uintptr nevacuate;    // progress counter for evacuation (buckets less than this have been evacuated)
 };
@@ -627,18 +647,24 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	if(docheck) {
 		check(t, h);
 	}
+	// 为目标 key 计算 hash 值
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	if(h->buckets == nil) {
+		// 底层调用 cnew() 创建对象, 这里的参数1, 指的是 
+		// src/pkg/runtime/malloc.h -> TypeInfo_Array 变量, 表示创建数组类型.
 		h->buckets = runtime·cnewarray(t->bucket, 1);
 	}
 
 again:
+	// 计算桶的索引 bucket
 	bucket = hash & (((uintptr)1 << h->B) - 1);
 	if(h->oldbuckets != nil) {
 		grow_work(t, h, bucket);
 	}
+	// 根据桶索引, 在 h->buckets 数组中, 找到桶对象 b
 	b = (Bucket*)(h->buckets + bucket * h->bucketsize);
+	// 计算 hash 值的高8位信息 top
 	top = hash >> (sizeof(uintptr)*8 - 8);
 	if(top == 0) {
 		top = 1;
@@ -647,8 +673,17 @@ again:
 	insertk = nil;
 	insertv = nil;
 	while(true) {
+		// 遍历当前 bucket 对象(即变量b)中的所有 slot 槽位, 找到可以插入的位置.
+		//
+		// k 为 bucket 中存放 key 列表的起始位置, v 则为 value 列表的起始位置.
+		// (bucket->data 中, 是以 [key1,key2,..keyN,val1,val2,..valN] 的顺序存放的)
+		// 存放在同一 bucket 中的数据, 都是因为 key 计算出来的 hash 值出现了"哈希冲突"
 		for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
+			// 如果当前槽位的 tophash 值与待插入 key 的 top 计算值不等, 有2种情况
+			// 1. 该槽位为 0, 即为空
+			// 2. 该槽位被其他 hash 值相同的 key 占用
 			if(b->tophash[i] != top) {
+				// tophash[i] == 0 表示该处的槽位为空, 可以写入, 则先记录位置, 并不赋值.
 				if(b->tophash[i] == 0 && inserti == nil) {
 					inserti = &b->tophash[i];
 					insertk = k;
@@ -679,12 +714,15 @@ again:
 	// did not find mapping for key.  Allocate new cell & add entry.
 	if(h->count >= LOAD * ((uintptr)1 << h->B) && h->count >= BUCKETSIZE) {
 		hash_grow(t, h);
-		goto again; // Growing the table invalidates everything, so try again
+		// Growing the table invalidates everything, so try again
+		goto again; 
 	}
 
 	if(inserti == nil) {
 		// all current buckets are full, allocate a new one.
-		if(checkgc) mstats.next_gc = mstats.heap_alloc;
+		if(checkgc) {
+			mstats.next_gc = mstats.heap_alloc;
+		} 
 		newb = runtime·cnew(t->bucket);
 		b->overflow = newb;
 		inserti = newb->tophash;
@@ -694,13 +732,17 @@ again:
 
 	// store new key/value at insert position
 	if((h->flags & IndirectKey) != 0) {
-		if(checkgc) mstats.next_gc = mstats.heap_alloc;
+		if(checkgc) {
+			mstats.next_gc = mstats.heap_alloc;
+		} 
 		kmem = runtime·cnew(t->key);
 		*(byte**)insertk = kmem;
 		insertk = kmem;
 	}
 	if((h->flags & IndirectValue) != 0) {
-		if(checkgc) mstats.next_gc = mstats.heap_alloc;
+		if(checkgc) {
+			mstats.next_gc = mstats.heap_alloc;
+		} 
 		vmem = runtime·cnew(t->elem);
 		*(byte**)insertv = vmem;
 		insertv = vmem;
@@ -1035,6 +1077,8 @@ reflect·makemap(MapType *t, Hmap *ret)
 	FLUSH(&ret);
 }
 
+// 这里不是获取 map 中某个 key 的操作, 真正的 get 函数在
+// src/pkg/runtime/hashmap_fast.c -> HASH_LOOKUP1()
 void
 runtime·mapaccess(MapType *t, Hmap *h, byte *ak, byte *av, bool *pres)
 {
@@ -1067,8 +1111,9 @@ runtime·mapaccess1(MapType *t, Hmap *h, ...)
 	byte *ak, *av;
 	byte *res;
 
-	if(raceenabled && h != nil)
+	if(raceenabled && h != nil) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), runtime·mapaccess1);
+	}
 
 	ak = (byte*)(&h + 1);
 	av = ak + ROUND(t->key->size, Structrnd);
@@ -1216,11 +1261,13 @@ runtime·mapdelete(MapType *t, Hmap *h, ...)
 {
 	byte *ak;
 
-	if(h == nil)
+	if(h == nil) {
 		return;
+	}
 
-	if(raceenabled)
+	if(raceenabled) {
 		runtime·racewritepc(h, runtime·getcallerpc(&t), runtime·mapdelete);
+	}
 	ak = (byte*)(&h + 1);
 	runtime·mapassign(t, h, ak, nil);
 
@@ -1296,8 +1343,9 @@ reflect·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
 void
 runtime·mapiternext(struct hash_iter *it)
 {
-	if(raceenabled)
+	if(raceenabled) {
 		runtime·racereadpc(it->h, runtime·getcallerpc(&it), runtime·mapiternext);
+	}
 
 	hash_next(it);
 	if(debug) {
@@ -1328,8 +1376,9 @@ runtime·mapiter1(struct hash_iter *it, ...)
 	ak = (byte*)(&it + 1);
 
 	res = it->key;
-	if(res == nil)
+	if(res == nil) {
 		runtime·throw("runtime.mapiter1: key:val nil pointer");
+	}
 
 	key = it->t->key;
 	key->alg->copy(key->size, ak, res);

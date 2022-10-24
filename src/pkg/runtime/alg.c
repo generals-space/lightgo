@@ -334,6 +334,8 @@ runtime·strprint(uintptr s, void *a)
 	runtime·printstring(*(String*)a);
 }
 
+// runtime·strcopy 将 b 指针指向的 String 对象的内容, 拷贝到 a 指针的 String 对象.
+// (这里的 String 对象指的是 golang 中的 string 常规对象)
 void
 runtime·strcopy(uintptr s, void *a, void *b)
 {
