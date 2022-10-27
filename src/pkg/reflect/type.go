@@ -22,6 +22,8 @@ import (
 	"unsafe"
 )
 
+// Type 由 rtype{} 结构体实现
+//
 // Type is the representation of a Go type.
 //
 // Not all methods apply to all kinds of types. Restrictions,
@@ -237,6 +239,8 @@ const (
 	UnsafePointer
 )
 
+// rtype 实现了 Type 接口(上面)
+//
 // rtype is the common implementation of most values.
 // It is embedded in other, public struct types, but always
 // with a unique tag like `reflect:"array"` or `reflect:"ptr"`
@@ -247,7 +251,10 @@ type rtype struct {
 	_             uint8          // unused/padding
 	align         uint8          // alignment of variable with this type
 	fieldAlign    uint8          // alignment of struct field with this type
-	kind          uint8          // enumeration for C
+	// 上面的 const() 部分声明了 Kind 类型列表, 如 Int, String, Slice, Struct 等.
+	//
+	// enumeration for C
+	kind          uint8
 	alg           *uintptr       // algorithm table (../runtime/runtime.h:/Alg)
 	gc            unsafe.Pointer // garbage collection data
 	string        *string        // string form; unnecessary but undeniably useful
@@ -395,8 +402,7 @@ type Method struct {
 	Index int   // index for Type.Method
 }
 
-// High bit says whether type has
-// embedded pointers,to help garbage collector.
+// High bit says whether type has embedded pointers, to help garbage collector.
 const (
 	kindMask       = 0x7f
 	kindNoPointers = 0x80
@@ -459,7 +465,9 @@ func (t *uncommonType) Name() string {
 
 func (t *rtype) String() string { return *t.string }
 
-func (t *rtype) Size() uintptr { return t.size }
+func (t *rtype) Size() uintptr { 
+	return t.size
+}
 
 func (t *rtype) Bits() int {
 	if t == nil {
@@ -476,7 +484,10 @@ func (t *rtype) Align() int { return int(t.align) }
 
 func (t *rtype) FieldAlign() int { return int(t.fieldAlign) }
 
-func (t *rtype) Kind() Kind { return Kind(t.kind & kindMask) }
+func (t *rtype) Kind() Kind {
+	// 这里 Kind() 是类型转换, 而非函数调用.
+	return Kind(t.kind & kindMask)
+}
 
 func (t *rtype) common() *rtype { return t }
 
@@ -1000,6 +1011,7 @@ func (t *structType) FieldByName(name string) (f StructField, present bool) {
 // TypeOf returns the reflection Type of the value in the interface{}.
 // TypeOf(nil) returns nil.
 func TypeOf(i interface{}) Type {
+	// 这里的 unsafe.Pointer() 是类型转换, 而非函数调用...
 	eface := *(*emptyInterface)(unsafe.Pointer(&i))
 	return toType(eface.typ)
 }

@@ -1855,7 +1855,8 @@ checkdefergo(Node *n)
 	default:
 	conv:
 		// type is broken or missing, most likely a method call on a broken type
-		// we will warn about the broken type elsewhere. no need to emit a potentially confusing error
+		// we will warn about the broken type elsewhere.
+		// no need to emit a potentially confusing error
 		if(n->left->type == T || n->left->type->broke)
 			break;
 

@@ -1,12 +1,4 @@
+`go`二进制文件编译方法: 
 
-`src/pkg`目录下存在`.go`的标准库源码, 但如果想修改这些源码仍然需要重新编译才能生效. (实验过`sync/mutex.go`).
-
-编译方法
-
-```
-cd src
-./make.bash
-```
-
-> 需要安装`gcc`
-
+1. 在根目录, 执行`make`命令, 会在bin目录生成`go`,`gofmt`可执行文件;
+2. 编译完成后, 执行`make copy`命令, 可以将`go`, `gofmt`拷贝到`/usr/local/bin`目录下;
