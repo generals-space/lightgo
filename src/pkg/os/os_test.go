@@ -28,7 +28,6 @@ var dot = []string{
 	"file.go",
 	"os_test.go",
 	"types.go",
-	"stat_darwin.go",
 	"stat_linux.go",
 }
 
