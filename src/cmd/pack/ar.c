@@ -1600,10 +1600,8 @@ arstrdup(char *s)
  *	to look at but need for arread_cutprefix.
  */
 extern int _read6(Biobuf*, Prog*);
-extern int _read8(Biobuf*, Prog*);
 int (*reader[256])(Biobuf*, Prog*) = {
 	[ObjAmd64] = _read6,
-	[Obj386] = _read8,
 };
 
 #define isdelim(c) ((c) == '/' || (c) == '\\')

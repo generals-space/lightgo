@@ -319,7 +319,7 @@ done:
 static char *oldtool[] = {
 	// "5a", "5c", "5g", "5l",
 	"6a", "6c", "6g", "6l",
-	"8a", "8c", "8g", "8l",
+	// "8a", "8c", "8g", "8l",
 	"6cov",
 	"6nm",
 	"6prof",
@@ -1372,7 +1372,7 @@ static char *buildorder[] = {
 static char *cleantab[] = {
 	// "cmd/5a", "cmd/5c", "cmd/5g", "cmd/5l",
 	"cmd/6a", "cmd/6c", "cmd/6g", "cmd/6l",
-	"cmd/8a", "cmd/8c", "cmd/8g", "cmd/8l",
+	// "cmd/8a", "cmd/8c", "cmd/8g", "cmd/8l",
 	"cmd/addr2line",
 	"cmd/cc",
 	"cmd/gc",
