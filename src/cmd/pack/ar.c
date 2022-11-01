@@ -1599,11 +1599,9 @@ arstrdup(char *s)
  *	Parts of libmach we're not supposed
  *	to look at but need for arread_cutprefix.
  */
-extern int _read5(Biobuf*, Prog*);
 extern int _read6(Biobuf*, Prog*);
 extern int _read8(Biobuf*, Prog*);
 int (*reader[256])(Biobuf*, Prog*) = {
-	[ObjArm] = _read5,
 	[ObjAmd64] = _read6,
 	[Obj386] = _read8,
 };

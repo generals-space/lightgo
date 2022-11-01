@@ -162,5 +162,4 @@ char*	xstrrchr(char*, int);
 char*	xstrstr(char*, char*);
 char*	xworkdir(void);
 int	xsamefile(char*, char*);
-char*	xgetgoarm(void);
 int	xtryexecfunc(void (*)(void));

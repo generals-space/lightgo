@@ -290,7 +290,6 @@ extern	char*	getgoos(void);
 extern	char*	getgoarch(void);
 extern	char*	getgoroot(void);
 extern	char*	getgoversion(void);
-extern	char*	getgoarm(void);
 extern	char*	getgo386(void);
 extern	char*	getgoextlinkenabled(void);
 

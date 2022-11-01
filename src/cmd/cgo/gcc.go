@@ -728,8 +728,6 @@ func (p *Package) gccMachine() []string {
 		return []string{"-m64"}
 	case "386":
 		return []string{"-m32"}
-	case "arm":
-		return []string{"-marm"} // not thumb
 	}
 	return nil
 }

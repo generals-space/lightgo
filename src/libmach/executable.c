@@ -65,7 +65,6 @@ static	int	commonllp64(int, Fhdr*, ExecHdr*);
 static	int	adotout(int, Fhdr*, ExecHdr*);
 static	int	elfdotout(int, Fhdr*, ExecHdr*);
 static	int	machdotout(int, Fhdr*, ExecHdr*);
-static	int	armdotout(int, Fhdr*, ExecHdr*);
 static	int	pedotout(int, Fhdr*, ExecHdr*);
 static	void	setsym(Fhdr*, vlong, int32, vlong, int32, vlong, int32);
 static	void	setdata(Fhdr*, uvlong, int32, vlong, int32);
@@ -97,7 +96,6 @@ extern	Mach	msparc64;
 extern	Mach	m68020;
 extern	Mach	mi386;
 extern	Mach	mamd64;
-extern	Mach	marm;
 extern	Mach	mpower;
 extern	Mach	mpower64;
 extern	Mach	malpha;
@@ -277,24 +275,6 @@ ExecTable exectab[] =
 		sizeof(Machhdr),
 		nil,
 		machdotout },
-	{ E_MAGIC,			/* Arm 5.out and boot image */
-		"arm plan 9 executable",
-		"arm plan 9 dlm",
-		FARM,
-		1,
-		&marm,
-		sizeof(Exec),
-		beswal,
-		common },
-	{ (143<<16)|0413,		/* (Free|Net)BSD Arm */
-		"arm *bsd executable",
-		nil,
-		FARM,
-		0,
-		&marm,
-		sizeof(Exec),
-		leswal,
-		armdotout },
 	{ L_MAGIC,			/* alpha 7.out */
 		"alpha plan 9 executable",
 		"alpha plan 9 dlm",
@@ -899,10 +879,6 @@ elfdotout(int fd, Fhdr *fp, ExecHdr *hp)
 		mach = &mpower;
 		fp->type = FPOWER;
 		break;
-	case ARM:
-		mach = &marm;
-		fp->type = FARM;
-		break;
 	default:
 		return 0;
 	}
@@ -1236,29 +1212,6 @@ bad:
 	free(cmd);
 	free(cmdbuf);
 	return 0;
-}
-
-/*
- * (Free|Net)BSD ARM header.
- */
-static int
-armdotout(int fd, Fhdr *fp, ExecHdr *hp)
-{
-	uvlong kbase;
-
-	USED(fd);
-	settext(fp, hp->e.exechdr.entry, sizeof(Exec), hp->e.exechdr.text, sizeof(Exec));
-	setdata(fp, fp->txtsz, hp->e.exechdr.data, fp->txtsz, hp->e.exechdr.bss);
-	setsym(fp, fp->datoff+fp->datsz, hp->e.exechdr.syms, 0, hp->e.exechdr.spsz, 0, hp->e.exechdr.pcsz);
-
-	kbase = 0xF0000000;
-	if ((fp->entry & kbase) == kbase) {		/* Boot image */
-		fp->txtaddr = kbase+sizeof(Exec);
-		fp->name = "ARM *BSD boot image";
-		fp->hdrsz = 0;		/* header stripped */
-		fp->dataddr = kbase+fp->txtsz;
-	}
-	return 1;
 }
 
 /*

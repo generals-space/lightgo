@@ -10,7 +10,7 @@ import (
 // goarchList if this package is to remain goinstallable.
 
 const goosList = "darwin freebsd linux plan9 windows "
-const goarchList = "386 amd64 arm "
+const goarchList = "386 amd64 "
 
 // goodOSArch returns false if the filename contains a $GOOS or $GOARCH
 // suffix which does not match the current system.

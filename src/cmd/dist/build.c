@@ -16,7 +16,6 @@ char *gohostarch;
 char *gohostchar; // 5, 6, 8等
 char *gohostos;
 char *goos;
-char *goarm;
 char *go386;
 char *goroot = GOROOT_FINAL;
 char *goroot_final = GOROOT_FINAL;
@@ -38,12 +37,11 @@ static void copy(char*, char*, int);
 static char *findgoversion(void);
 
 // The known architecture letters.
-static char *gochars = "568";
+static char *gochars = "68";
 
 // The known architectures.
 static char *okgoarch[] = {
 	// same order as gochars
-	"arm",
 	"amd64",
 	"386",
 };
@@ -103,11 +101,6 @@ init(void)
 	goos = btake(&b);
 	if(find(goos, okgoos, nelem(okgoos)) < 0)
 		fatal("unknown $GOOS %s", goos);
-
-	xgetenv(&b, "GOARM");
-	if(b.len == 0)
-		bwritestr(&b, xgetgoarm());
-	goarm = btake(&b);
 
 	xgetenv(&b, "GO386");
 	if(b.len == 0) {
@@ -178,7 +171,6 @@ init(void)
 	xsetenv("GOROOT", goroot);
 	xsetenv("GOARCH", goarch);
 	xsetenv("GOOS", goos);
-	xsetenv("GOARM", goarm);
 	xsetenv("GO386", go386);
 
 	// Make the environment more predictable.
@@ -322,7 +314,7 @@ done:
 
 // The old tools that no longer live in $GOBIN or $GOROOT/bin.
 static char *oldtool[] = {
-	"5a", "5c", "5g", "5l",
+	// "5a", "5c", "5g", "5l",
 	"6a", "6c", "6g", "6l",
 	"8a", "8c", "8g", "8l",
 	"6cov",
@@ -495,7 +487,6 @@ static struct {
 		"$GOROOT/include/bootexec.h",
 		"$GOROOT/include/mach.h",
 		"$GOROOT/include/ureg_amd64.h",
-		"$GOROOT/include/ureg_arm.h",
 		"$GOROOT/include/ureg_x86.h",
 	}},
 	{"cmd/cc", {
@@ -509,12 +500,6 @@ static struct {
 		"-y1.tab.c",  // makefile dreg
 		"opnames.h",
 	}},
-	{"cmd/5c", {
-		"../cc/pgen.c",
-		"../cc/pswt.c",
-		"../5l/enam.c",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libcc.a",
-	}},
 	{"cmd/6c", {
 		"../cc/pgen.c",
 		"../cc/pswt.c",
@@ -526,14 +511,6 @@ static struct {
 		"../cc/pswt.c",
 		"../8l/enam.c",
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libcc.a",
-	}},
-	{"cmd/5g", {
-		"../gc/cplx.c",
-		"../gc/pgen.c",
-		"../gc/popt.c",
-		"../gc/popt.h",
-		"../5l/enam.c",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
 	}},
 	{"cmd/6g", {
 		"../gc/cplx.c",
@@ -550,10 +527,6 @@ static struct {
 		"../gc/popt.h",
 		"../8l/enam.c",
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
-	}},
-	{"cmd/5l", {
-		"../ld/*",
-		"enam.c",
 	}},
 	{"cmd/6l", {
 		"../ld/*",
@@ -1020,8 +993,6 @@ install(char *dir)
 				vadd(&compile, "-D");
 				vadd(&compile, bprintf(&b, "GOVERSION=\"%s\"", goversion));
 				vadd(&compile, "-D");
-				vadd(&compile, bprintf(&b, "GOARM=\"%s\"", goarm));
-				vadd(&compile, "-D");
 				vadd(&compile, bprintf(&b, "GO386=\"%s\"", go386));
 				vadd(&compile, "-D");
 				vadd(&compile, bprintf(&b, "GO_EXTLINK_ENABLED=\"%s\"", goextlinkenabled));
@@ -1391,18 +1362,9 @@ static char *buildorder[] = {
 // It is bigger than the buildorder because we clean all the
 // compilers but build only the $GOARCH ones.
 static char *cleantab[] = {
-	"cmd/5a",
-	"cmd/5c",
-	"cmd/5g",
-	"cmd/5l",
-	"cmd/6a",
-	"cmd/6c",
-	"cmd/6g",
-	"cmd/6l",
-	"cmd/8a",
-	"cmd/8c",
-	"cmd/8g",
-	"cmd/8l",
+	// "cmd/5a", "cmd/5c", "cmd/5g", "cmd/5l",
+	"cmd/6a", "cmd/6c", "cmd/6g", "cmd/6l",
+	"cmd/8a", "cmd/8c", "cmd/8g", "cmd/8l",
 	"cmd/addr2line",
 	"cmd/cc",
 	"cmd/gc",
@@ -1580,8 +1542,6 @@ cmdenv(int argc, char **argv)
 	xprintf(format, "GOHOSTOS", gohostos);
 	xprintf(format, "GOTOOLDIR", tooldir);
 	xprintf(format, "GOCHAR", gochar);
-	if(streq(goarch, "arm"))
-		xprintf(format, "GOARM", goarm);
 	if(streq(goarch, "386"))
 		xprintf(format, "GO386", go386);
 

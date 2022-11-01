@@ -50,8 +50,8 @@ extern	Mach		mmips, msparc, m68020, mi386, mamd64,
 extern	Machdata	mipsmach, sparcmach, m68020mach, i386mach,
 			armmach, mipsmach2le, powermach, alphamach, sparc64mach;
 */
-extern	Mach		mi386, mamd64, marm;
-extern	Machdata		i386mach, armmach;
+extern	Mach		mi386, mamd64;
+extern	Machdata		i386mach;
 
 /*
  *	machine selection table.  machines with native disassemblers should
@@ -72,12 +72,6 @@ Machtab	machines[] =
 		AAMD64,
 		&mamd64,
 		&i386mach,	},
-	{	"arm",				/*ARM*/
-		FARM,
-		FARMB,
-		AARM,
-		&marm,
-		&armmach,	},
 #ifdef unused
 	{	"68020",			/*68020*/
 		F68020,

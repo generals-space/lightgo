@@ -49,7 +49,6 @@ enum
 };
 
 int	_is2(char*),		/* in [$OS].c */
-	_is5(char*),
 	_is6(char*),
 	_is7(char*),
 	_is8(char*),
@@ -59,7 +58,6 @@ int	_is2(char*),		/* in [$OS].c */
 	_isv(char*),
 	_isu(char*),
 	_read2(Biobuf*, Prog*),
-	_read5(Biobuf*, Prog*),
 	_read6(Biobuf*, Prog*),
 	_read7(Biobuf*, Prog*),
 	_read8(Biobuf*, Prog*),
@@ -83,7 +81,6 @@ static Obj	obj[] =
 {			/* functions to identify and parse each type of obj */
 	[Obj68020]   = { "68020 .2",	_is2, _read2 },
 	[ObjAmd64]   = { "amd64 .6",	_is6 , _read6 },
-	[ObjArm]     = { "arm .5",	_is5, _read5 },
 	[ObjAlpha]   = { "alpha .7",	_is7, _read7 },
 	[Obj386]     = { "386 .8",	_is8, _read8 },
 	[ObjSparc]   = { "sparc .k",	_isk, _readk },

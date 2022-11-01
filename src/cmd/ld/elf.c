@@ -52,13 +52,6 @@ elfinit(void)
 		hdr.phentsize = ELF64PHDRSIZE;	/* Must be ELF64PHDRSIZE */
 		hdr.shentsize = ELF64SHDRSIZE;	/* Must be ELF64SHDRSIZE */
 		break;
-
-	// 32-bit architectures
-	case '5':
-		// we only use EABI on linux/arm
-		if(HEADTYPE == Hlinux)
-			hdr.flags = 0x5000002; // has entry point, Version5 EABI
-		// fallthrough
 	default:
 		hdr.phoff = ELF32HDRSIZE;	/* Must be be ELF32HDRSIZE: first PHdr must follow ELF header */
 		hdr.shoff = ELF32HDRSIZE;	/* Will move as we add PHeaders */

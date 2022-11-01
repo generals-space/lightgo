@@ -90,7 +90,6 @@ struct	Sym
  *		sparc,
  *		sparc64,
  *		mips2 (R4000)
- *		arm
  *		powerpc,
  *		powerpc64
  *		alpha

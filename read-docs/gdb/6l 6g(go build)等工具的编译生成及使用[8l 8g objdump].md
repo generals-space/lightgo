@@ -5,7 +5,7 @@
 1. [开始学Go](https://tonybai.com/2012/08/14/getting-going-with-go/)
     - 标准Go语言编译器被称为gc，与其相关的工具链包括用于编译的`5g`、`6g`和`8g`；用于链接的`5l`、`6l`和`8l`以及用于查看Go语言文档的`godoc`
     - 这些奇怪的名字遵循了Plan 9操作系统编译器的命名方式，即用数字表示处理器体系.
-        - "5"代表ARM
+        - "5"代表ARM(`GOARCH=arm go build -o main.gobin main.go`, 就是调用 5x 工具进行编译的(注意, go1.2 只有 arm, 没有 arm64))
         - "6"代表AMD64(包括Intel 64位处理器)
         - "8"代表Intel 386
 2. [A TRIP DOWN THE (SPLIT) RABBITHOLE](http://blog.nella.org/?p=849)
