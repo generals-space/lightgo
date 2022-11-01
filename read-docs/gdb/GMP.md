@@ -19,7 +19,3 @@ b runtime.gc
 
 GODEBUG=gctrace=1
 
-
-```
-
-```

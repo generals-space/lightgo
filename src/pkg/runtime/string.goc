@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 package runtime
+
 #include "runtime.h"
 #include "arch_amd64.h"
 #include "malloc.h"
@@ -242,6 +243,8 @@ runtime·strstr(byte *s1, byte *s2)
 	return nil;
 }
 
+// golang原生: string(v) 类型转换(将目标整型转换成字符串)
+// 不过要注意, 这并不是常规意义上 48->"48" 的转换, 而是 48->"0"("0" 的 ASCII 码为 48)
 func intstring(v int64) (s String) {
 	s = gostringsize(8);
 	s.len = runtime·runetochar(s.str, v);
@@ -259,6 +262,7 @@ func slicebytetostring(b Slice) (s String) {
 	runtime·memmove(s.str, b.array, s.len);
 }
 
+// golang原生: []byte(s) 类型转换(将目标 string 转换成 []byte 数组)
 func stringtoslicebyte(s String) (b Slice) {
 	b.array = runtime·mallocgc(s.len, 0, FlagNoScan|FlagNoZero);
 	b.len = s.len;

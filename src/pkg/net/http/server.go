@@ -55,8 +55,9 @@ type ResponseWriter interface {
 
 	// Write writes the data to the connection as part of an HTTP reply.
 	// If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
-	// before writing the data.  If the Header does not contain a
-	// Content-Type line, Write adds a Content-Type set to the result of passing
+	// before writing the data. 
+	// If the Header does not contain a Content-Type line, 
+	// Write adds a Content-Type set to the result of passing
 	// the initial 512 bytes of written data to DetectContentType.
 	Write([]byte) (int, error)
 
@@ -68,6 +69,8 @@ type ResponseWriter interface {
 	WriteHeader(int)
 }
 
+// Flusher 由 response{} 结构体实现
+//
 // The Flusher interface is implemented by ResponseWriters that allow
 // an HTTP handler to flush buffered data to the client.
 //
@@ -924,9 +927,9 @@ func (w *response) bodyAllowed() bool {
 
 // The Life Of A Write is like this:
 //
-// Handler starts. No header has been sent. The handler can either
-// write a header, or just start writing.  Writing before sending a header
-// sends an implicitly empty 200 OK header.
+// Handler starts. No header has been sent.
+// The handler can either write a header, or just start writing. 
+// Writing before sending a header sends an implicitly empty 200 OK header.
 //
 // If the handler didn't declare a Content-Length up front, we either
 // go into chunking mode or, if the handler finishes running before
@@ -962,6 +965,11 @@ func (w *response) WriteString(data string) (n int, err error) {
 	return w.write(len(data), nil, data)
 }
 
+// write ...
+//
+// caller:
+// 	1. response.Write() 向响应体写入数据
+//
 // either dataB or dataS is non-zero.
 func (w *response) write(lenData int, dataB []byte, dataS string) (n int, err error) {
 	if w.conn.hijacked() {

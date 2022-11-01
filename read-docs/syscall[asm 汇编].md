@@ -30,4 +30,4 @@ $8 表示传入参数长度为8 bytes(并且exit函数没有返回值)
 
 `MOVL	8(SP), DI` 将从SP开始的8 bytes的内容, 赋值到 DI 寄存器
 
-如果没有为TEXT指定NOSPLIT标志, 必须提供参数大小.
+如果没有为`TEXT`指定`NOSPLIT`标志, 必须提供参数大小.

@@ -129,8 +129,8 @@ func (b *Buffer) Write(p []byte) (n int, err error) {
 }
 
 // WriteString appends the contents of s to the buffer, growing the buffer as
-// needed. The return value n is the length of s; err is always nil. If the
-// buffer becomes too large, WriteString will panic with ErrTooLarge.
+// needed. The return value n is the length of s; err is always nil.
+// If the buffer becomes too large, WriteString will panic with ErrTooLarge.
 func (b *Buffer) WriteString(s string) (n int, err error) {
 	b.lastRead = opInvalid
 	m := b.grow(len(s))

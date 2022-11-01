@@ -478,6 +478,11 @@ func (b *Writer) Reset(w io.Writer) {
 	b.wr = w
 }
 
+// Flush ...
+//
+// caller:
+// 	1. src/pkg/net/http/server.go -> response.Flush()
+//
 // Flush writes any buffered data to the underlying io.Writer.
 func (b *Writer) Flush() error {
 	err := b.flush()
@@ -513,6 +518,11 @@ func (b *Writer) Available() int { return len(b.buf) - b.n }
 // Buffered returns the number of bytes that have been written into the current buffer.
 func (b *Writer) Buffered() int { return b.n }
 
+// Write ...
+//
+// caller:
+// 	1. src/pkg/net/http/server.go -> response.write() http server 向响应体写入数据时调用
+//
 // Write writes the contents of p into the buffer.
 // It returns the number of bytes written.
 // If nn < len(p), it also returns an error explaining
