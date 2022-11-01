@@ -4,11 +4,4 @@
 
 #include "_cgo_export.h"
 
-#ifdef WIN32
-extern void setCallback(void *);
-void init() {
-	setCallback(goCallback);
-}
-#else
 void init() {}
-#endif

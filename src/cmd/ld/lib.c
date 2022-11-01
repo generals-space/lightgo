@@ -709,9 +709,6 @@ hostlink(void)
 	case '6':
 		argv[argc++] = "-m64";
 		break;
-	case '5':
-		argv[argc++] = "-marm";
-		break;
 	}
 	if(!debug['s'] && !debug_s) {
 		argv[argc++] = "-gdwarf-2"; 
@@ -829,14 +826,6 @@ ldobj(Biobuf *f, char *pkg, int64 len, char *pn, char *file, int whence)
 	magic = c1<<24 | c2<<16 | c3<<8 | c4;
 	if(magic == 0x7f454c46) {	// \x7F E L F
 		ldhostobj(ldelf, f, pkg, len, pn, file);
-		return;
-	}
-	if((magic&~1) == 0xfeedface || (magic&~0x01000000) == 0xcefaedfe) {
-		ldhostobj(ldmacho, f, pkg, len, pn, file);
-		return;
-	}
-	if(c1 == 0x4c && c2 == 0x01 || c1 == 0x64 && c2 == 0x86) {
-		ldhostobj(ldpe, f, pkg, len, pn, file);
 		return;
 	}
 

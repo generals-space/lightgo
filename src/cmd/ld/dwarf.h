@@ -26,5 +26,3 @@ void dwarfaddshstrings(Sym *shstrtab);
  * dwarfemitdebugsections.
  */
 void dwarfaddelfheaders(void);
-void dwarfaddmachoheaders(void);
-void dwarfaddpeheaders(void);

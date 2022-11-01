@@ -33,8 +33,6 @@
 #include	"l.h"
 #include	"../ld/lib.h"
 #include	"../ld/elf.h"
-#include	"../ld/macho.h"
-#include	"../ld/pe.h"
 #include	"../../pkg/runtime/mgc0.h"
 
 void	dynreloc(void);
@@ -1079,8 +1077,6 @@ dodata(void)
 	 *
 	 * on darwin, we need the symbol table numbers for dynreloc.
 	 */
-	if(HEADTYPE == Hdarwin)
-		machosymorder();
 	dynreloc();
 
 	/* some symbols may no longer belong in datap (Mach-O) */
@@ -1449,8 +1445,6 @@ address(void)
 	segdata.vaddr = va;
 	segdata.fileoff = va - segtext.vaddr + segtext.fileoff;
 	segdata.filelen = 0;
-	if(HEADTYPE == Hwindows)
-		segdata.fileoff = segtext.fileoff + rnd(segtext.len, PEFILEALIGN);
 	if(HEADTYPE == Hplan9x64 || HEADTYPE == Hplan9x32)
 		segdata.fileoff = segtext.fileoff + segtext.filelen;
 	data = nil;

@@ -27,32 +27,12 @@ THE SOFTWARE.
 #define NOPLAN9DEFINES
 #include <libc.h>
 
-#ifdef WIN32
-#include <windows.h>
-
-static void
-crashhandler(int sig)
-{
-	USED(sig);
-	fprint(2, "%s: internal fatal error.\n", argv0);
-	exit(1);
-}
-#endif
-
 extern void p9main(int, char**);
 
-// 6c 命令的入口函数
+// 6c/6l 命令的入口函数
 int
 main(int argc, char **argv)
 {
-#ifdef WIN32
-	signal(SIGSEGV, crashhandler);
-	signal(SIGBUS, crashhandler);
-	// don't display the crash dialog
-	DWORD mode = SetErrorMode(SEM_NOGPFAULTERRORBOX);
-	SetErrorMode(mode | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-	argv0 = argv[0];
-#endif
 	p9main(argc, argv);
 	exits("main");
 	return 99;

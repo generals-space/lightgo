@@ -34,9 +34,7 @@
 #include	"l.h"
 #include	"../ld/lib.h"
 #include	"../ld/elf.h"
-#include	"../ld/macho.h"
 #include	"../ld/dwarf.h"
-#include	"../ld/pe.h"
 #include	<ar.h>
 
 char	*noname		= "<none>";
@@ -44,17 +42,8 @@ char*	thestring 	= "amd64";
 char*	paramspace	= "FP";
 
 Header headers[] = {
-	"plan9x32", Hplan9x32,
-	"plan9", Hplan9x64,
 	"elf", Helf,
-	"darwin", Hdarwin,
-	"dragonfly", Hdragonfly,
 	"linux", Hlinux,
-	"freebsd", Hfreebsd,
-	"netbsd", Hnetbsd,
-	"openbsd", Hopenbsd,
-	"windows", Hwindows,
-	"windowsgui", Hwindows,
 	0, 0
 };
 
@@ -174,24 +163,6 @@ main(int argc, char *argv[])
 	default:
 		diag("unknown -H option");
 		errorexit();
-	case Hplan9x32:		/* plan 9 */
-		HEADR = 32L;
-		if(INITTEXT == -1)
-			INITTEXT = 4096+HEADR;
-		if(INITDAT == -1)
-			INITDAT = 0;
-		if(INITRND == -1)
-			INITRND = 4096;
-		break;
-	case Hplan9x64:		/* plan 9 */
-		HEADR = 32L + 8L;
-		if(INITTEXT == -1)
-			INITTEXT = 0x200000+HEADR;
-		if(INITDAT == -1)
-			INITDAT = 0;
-		if(INITRND == -1)
-			INITRND = 0x200000;
-		break;
 	case Helf:		/* elf32 executable */
 		HEADR = rnd(52L+3*32L, 16);
 		if(INITTEXT == -1)
@@ -201,26 +172,7 @@ main(int argc, char *argv[])
 		if(INITRND == -1)
 			INITRND = 4096;
 		break;
-	case Hdarwin:		/* apple MACH */
-		/*
-		 * OS X system constant - offset from 0(GS) to our TLS.
-		 * Explained in ../../pkg/runtime/cgo/gcc_darwin_amd64.c.
-		 */
-		tlsoffset = 0x8a0;
-		machoinit();
-		HEADR = INITIAL_MACHO_HEADR;
-		if(INITRND == -1)
-			INITRND = 4096;
-		if(INITTEXT == -1)
-			INITTEXT = 4096+HEADR;
-		if(INITDAT == -1)
-			INITDAT = 0;
-		break;
 	case Hlinux:		/* elf64 executable */
-	case Hfreebsd:		/* freebsd */
-	case Hnetbsd:		/* netbsd */
-	case Hopenbsd:		/* openbsd */
-	case Hdragonfly:	/* dragonfly */
 		/*
 		 * ELF uses TLS offset negative from FS.
 		 * Translate 0(FS) and 8(FS) into -16(FS) and -8(FS).
@@ -236,16 +188,6 @@ main(int argc, char *argv[])
 			INITDAT = 0;
 		if(INITRND == -1)
 			INITRND = 4096;
-		break;
-	case Hwindows:		/* PE executable */
-		peinit();
-		HEADR = PEFILEHEADR;
-		if(INITTEXT == -1)
-			INITTEXT = PEBASE+PESECTHEADR;
-		if(INITDAT == -1)
-			INITDAT = 0;
-		if(INITRND == -1)
-			INITRND = PESECTALIGN;
 		break;
 	}
 	if(INITDAT != 0 && INITRND != 0)
@@ -281,8 +223,6 @@ main(int argc, char *argv[])
 	patch();
 	follow();
 	doelf();
-	if(HEADTYPE == Hdarwin)
-		domacho();
 	dostkoff();
 	dostkcheck();
 	paramspace = "SP";	/* (FP) now (SP) on output */
@@ -292,8 +232,6 @@ main(int argc, char *argv[])
 		else
 			doprof2();
 	span();
-	if(HEADTYPE == Hwindows)
-		dope();
 	addexport();
 	textaddress();
 	pclntab();

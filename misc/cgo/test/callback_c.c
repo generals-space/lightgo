@@ -30,15 +30,6 @@ IntoC(void)
 	BackIntoGo();
 }
 
-#ifdef WIN32
-#include <windows.h>
-long long
-mysleep(int seconds) {
-	long long st = GetTickCount();
-	sleep(seconds);
-	return st;
-}
-#else
 #include <sys/time.h>
 long long
 mysleep(int seconds) {
@@ -49,7 +40,6 @@ mysleep(int seconds) {
 	sleep(seconds);
 	return st;
 }
-#endif
 
 long long
 twoSleep(int n)

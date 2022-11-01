@@ -10,25 +10,28 @@
  */
 
 // The usual variables.
-char *goarch;
-char *gobin;
-char *gohostarch;
-char *gohostchar; // 5, 6, 8等
-char *gohostos;
-char *goos;
-char *go386;
+// 一个临时编译目录, 在这里存在编译过程中生成的 .o 文件. 如 /var/tmp/go-cbuild-XXXXXX
+char *workdir;
 char *goroot = GOROOT_FINAL;
 char *goroot_final = GOROOT_FINAL;
+
+char *gobin; 		// 一般为 ${GOROOT}/bin
+char *tooldir; 		// 一般为 ${GOROOT}/pkg/tool/linux_amd64
+
+char *goarch;		// 目标二进制的CPU架构, 如 amd64, arm 等
+char *goos;			// 目标二进制的OS类型, 如 linux, windows 等
+char *gochar; 		// 5l, 6l, 8l 中的前缀数字, 表示目标二进制的平台类型
+
+char *gohostarch;	// 当前宿主机的CPU架构, 如 amd64, arm 等
+char *gohostos;		// 当前宿主机的OS类型, 如 linux, windows 等
+char *gohostchar; 	// 5l, 6l, 8l 中的前缀数字, 表示当前宿主机的平台类型
+
+char *go386;
 char *goextlinkenabled = "";
-// 一个临时编译目录, 在这里存在编译过程中生成的 .o 文件.
-// /var/tmp/go-cbuild-XXXXXX
-char *workdir;
-char *tooldir;
-char *gochar;
 char *goversion;
-char *slash;	// / for unix, \ for windows
-char *defaultcc;
-char *defaultcxx;
+char *slash;		// / for unix, \ for windows
+char *defaultcc; 	// gcc
+char *defaultcxx; 	// g++
 bool	rebuildall;
 bool defaultclang;
 
@@ -717,15 +720,18 @@ install(char *dir)
 			vadd(&link, bpathf(&b, "%s/%s", tooldir, name));
 		} else {
 			vcopy(&link, gccargs.p, gccargs.len);
-			if(sflag)
+			if(sflag) {
 				vadd(&link, "-static");
+			}
 			vadd(&link, "-o");
 			targ = link.len;
 			vadd(&link, bpathf(&b, "%s/%s%s", tooldir, name, exe));
-			if(streq(gohostarch, "amd64"))
-				vadd(&link, "-m64");
-			else if(streq(gohostarch, "386"))
-				vadd(&link, "-m32");
+			if(streq(gohostarch, "amd64")) {
+				vadd(&link, "-m64"); // 64位
+			}
+			else if(streq(gohostarch, "386")) {
+				vadd(&link, "-m32"); // 32位
+			}
 		}
 	}
 	ttarg = mtime(link.p[targ]);
@@ -957,8 +963,9 @@ install(char *dir)
 			if(streq(gohostos, "plan9")) {
 				vadd(&compile, bprintf(&b, "%sc", gohostchar));
 				vadd(&compile, "-FTVw");
-				if(usecpp)
+				if(usecpp) {
 					vadd(&compile, "-Bp+");
+				}
 				vadd(&compile, bpathf(&b, "-I%s/include/plan9", goroot));
 				vadd(&compile, bpathf(&b, "-I%s/include/plan9/%s", goroot, gohostarch));
 				// Work around Plan 9 C compiler's handling of #include with .. path.
@@ -1167,8 +1174,9 @@ matchfield(char *f)
 	bool res;
 
 	p = xstrrchr(f, ',');
-	if(p == nil)
+	if(p == nil) {
 		return streq(f, goos) || streq(f, goarch) || streq(f, "cmd_go_bootstrap") || streq(f, "go1.1");
+	}
 	*p = 0;
 	res = matchfield(f) && matchfield(p+1);
 	*p = ',';
