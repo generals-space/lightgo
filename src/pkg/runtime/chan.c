@@ -76,6 +76,8 @@ runtime·makechan(ChanType *t, int64 hint, Hchan *ret)
 // 在同一个函数中同时实现了"同步"与"异步"
 //
 // 	@param pres: 是否"接收"成功, 指针类型, 此值被修改后, 主调函数可以得知结果.
+// 	一般来说, 向 chan 中写入数据, 是没有 ok 变量的.
+// 	只有在 select {case: chan <- var} 这种场景时, pres 才不为 nil.
 //
 // generic single channel send/recv if the bool pointer is nil,
 // then the full exchange will occur.
@@ -94,10 +96,11 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	G* gp;
 	int64 t0;
 
-	// 如果 channel 对象为 nil
+	// 如果 channel 对象为 nil(比如只声明变量, 未使用 make() 进行初始)
 	if(c == nil) {
 		USED(t);
 		if(pres != nil) {
+			// [anchor] 运行到该 if 块内的示例, 请见 010.channel 中的 chan01() 函数.
 			*pres = false;
 			return;
 		}
@@ -144,6 +147,11 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 		gp = sg->g;
 		gp->param = sg;
 		if(sg->elem != nil) {
+			// 将参数3对象的内容, 拷贝到参数2对象.
+			// 这里是将待写入的数据直接放到 receiver 对象中, 不在 channel 中存储一遍了.
+			//
+			// 注意: receiver 中也有这个过程, 看当前的逻辑, sender 与 receiver 必定
+			// 一前一后地订阅一个 channel, 而且总是后来者完成 copy 的工作.
 			c->elemalg->copy(c->elemsize, sg->elem, ep);
 		} 
 		if(sg->releasetime) {
@@ -163,11 +171,17 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 		return;
 	}
 
+	// 运行到这里, 说明 channel 是无缓冲的, 而且没有 receiver, 那么写入行为会被阻塞.
+	// 在将自身 g 对象注册到 channel 对象的 sendq 队列后, 当前 g 就要挂起了(执行其他任务).
 	mysg.elem = ep;
 	mysg.g = g;
 	mysg.selgen = NOSELGEN;
 	g->param = nil;
 	enqueue(&c->sendq, &mysg);
+	// 这里当前 sender 会被挂起, 直到有新的协程成为该 channel 的 receiver, 
+	// receiver 会调用 runtime·unlock(), 于是当前 sender 就会被被唤醒.
+	//
+	// [anchor] 运行到此处的示例, 请见 010.channel 中的 chan03() 函数.
 	runtime·park(runtime·unlock, c, "chan send");
 
 	if(g->param == nil) {
@@ -182,8 +196,10 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 		runtime·blockevent(mysg.releasetime - t0, 2);
 	} 
 
+	// 无缓冲 channel 的数据发送处理结束
 	return;
 
+// 有缓冲 channel 的数据发送处理方案
 asynch:
 	if(c->closed) {
 		goto closed;
@@ -238,11 +254,16 @@ asynch:
 	}
 	return;
 
+// channel 的异常操作, 引发 panic
 closed:
 	runtime·unlock(c);
 	runtime·panicstring("send on closed channel");
 }
 
+// golang原生: var <- channel, 从 channel 对象中接收数据.
+//
+// 	@param ep: 接收结果的变量地址
+// 	@param received: 应该是 var, ok := <- channel 场景中的 "ok" 值.
 void
 runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *received)
 {
@@ -251,7 +272,9 @@ runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *receive
 	G *gp;
 	int64 t0;
 
-	if(debug) runtime·printf("chanrecv: chan=%p\n", c);
+	if(debug) {
+		runtime·printf("chanrecv: chan=%p\n", c);
+	} 
 
 	if(c == nil) {
 		USED(t);
@@ -271,30 +294,46 @@ runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *receive
 	}
 
 	runtime·lock(c);
-	if(c->dataqsiz > 0)
+	if(c->dataqsiz > 0) {
 		goto asynch;
+	}
 
-	if(c->closed)
+	if(c->closed) {
 		goto closed;
+	}
 
 	sg = dequeue(&c->sendq);
 	if(sg != nil) {
-		if(raceenabled)
+		if(raceenabled) {
 			racesync(c, sg);
+		}
+		// 运行到这里, 说明是无缓冲 channel, 并非已经有一个准备写入的 goroutine 了.
+		// 由于没有 receiver, 写入的那个 goroutine 一定会因为调用了 runtime·lock(),
+		//
+		// [anchor] 可见 010.channel 中的 chan03() 函数, 对 sender 的影响.
 		runtime·unlock(c);
 
-		if(ep != nil)
+		if(ep != nil) {
+			// 将参数3对象的内容, 拷贝到参数2对象.
+			// 这里是从 sender 的 elem 中直接获取数据, 不在 channel 中存储一遍了.
+			//
+			// 注意: sender 中也有这个过程, 看当前的逻辑, sender 与 receiver 必定
+			// 一前一后地订阅一个 channel, 而且总是后来者完成 copy 的工作.
 			c->elemalg->copy(c->elemsize, ep, sg->elem);
+		}
 		gp = sg->g;
 		gp->param = sg;
-		if(sg->releasetime)
+		if(sg->releasetime) {
 			sg->releasetime = runtime·cputicks();
+		}
 		runtime·ready(gp);
 
-		if(selected != nil)
+		if(selected != nil) {
 			*selected = true;
-		if(received != nil)
+		}
+		if(received != nil) {
 			*received = true;
+		}
 		return;
 	}
 
@@ -313,27 +352,32 @@ runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *receive
 
 	if(g->param == nil) {
 		runtime·lock(c);
-		if(!c->closed)
+		if(!c->closed) {
 			runtime·throw("chanrecv: spurious wakeup");
+		}
 		goto closed;
 	}
 
-	if(received != nil)
+	if(received != nil) {
 		*received = true;
-	if(mysg.releasetime > 0)
+	}
+	if(mysg.releasetime > 0) {
 		runtime·blockevent(mysg.releasetime - t0, 2);
+	}
 	return;
 
 asynch:
 	if(c->qcount <= 0) {
-		if(c->closed)
+		if(c->closed) {
 			goto closed;
+		}
 
 		if(selected != nil) {
 			runtime·unlock(c);
 			*selected = false;
-			if(received != nil)
+			if(received != nil) {
 				*received = false;
+			}
 			return;
 		}
 		mysg.g = g;
@@ -346,46 +390,59 @@ asynch:
 		goto asynch;
 	}
 
-	if(raceenabled)
+	if(raceenabled) {
 		runtime·raceacquire(chanbuf(c, c->recvx));
+	}
 
-	if(ep != nil)
+	if(ep != nil) {
 		c->elemalg->copy(c->elemsize, ep, chanbuf(c, c->recvx));
+	}
 	c->elemalg->copy(c->elemsize, chanbuf(c, c->recvx), nil);
-	if(++c->recvx == c->dataqsiz)
+	if(++c->recvx == c->dataqsiz) {
 		c->recvx = 0;
+	}
 	c->qcount--;
 
 	sg = dequeue(&c->sendq);
 	if(sg != nil) {
 		gp = sg->g;
 		runtime·unlock(c);
-		if(sg->releasetime)
+		if(sg->releasetime) {
 			sg->releasetime = runtime·cputicks();
+		}
 		runtime·ready(gp);
-	} else
+	} else {
 		runtime·unlock(c);
+	}
 
-	if(selected != nil)
+	if(selected != nil) {
 		*selected = true;
-	if(received != nil)
+	}
+	if(received != nil) {
 		*received = true;
-	if(mysg.releasetime > 0)
+	}
+	if(mysg.releasetime > 0) {
 		runtime·blockevent(mysg.releasetime - t0, 2);
+	}
 	return;
 
 closed:
-	if(ep != nil)
+	if(ep != nil) {
 		c->elemalg->copy(c->elemsize, ep, nil);
-	if(selected != nil)
+	}
+	if(selected != nil) {
 		*selected = true;
-	if(received != nil)
+	}
+	if(received != nil) {
 		*received = false;
-	if(raceenabled)
+	}
+	if(raceenabled) {
 		runtime·raceacquire(c);
+	}
 	runtime·unlock(c);
-	if(mysg.releasetime > 0)
+	if(mysg.releasetime > 0) {
 		runtime·blockevent(mysg.releasetime - t0, 2);
+	}
 }
 
 // chansend1(hchan *chan any, elem any);
@@ -520,10 +577,12 @@ reflect·chansend(ChanType *t, Hchan *c, uintptr val, bool nb, uintptr selected)
 		FLUSH(&selected);
 		sp = nil;
 	}
-	if(t->elem->size <= sizeof(val))
+	if(t->elem->size <= sizeof(val)) {
 		vp = (byte*)&val;
-	else
+	}
+	else {
 		vp = (byte*)val;
+	}
 	runtime·chansend(t, c, vp, sp, runtime·getcallerpc(&t));
 }
 
@@ -583,7 +642,9 @@ closechan(Hchan *c, void *pc)
 	SudoG *sg;
 	G* gp;
 
-	if(c == nil) runtime·panicstring("close of nil channel");
+	if(c == nil) {
+		runtime·panicstring("close of nil channel");
+	} 
 
 	runtime·lock(c);
 	if(c->closed) {
@@ -601,22 +662,28 @@ closechan(Hchan *c, void *pc)
 	// release all readers
 	for(;;) {
 		sg = dequeue(&c->recvq);
-		if(sg == nil) break;
+		if(sg == nil) {
+			break;
+		} 
 		gp = sg->g;
 		gp->param = nil;
-		if(sg->releasetime)
+		if(sg->releasetime) {
 			sg->releasetime = runtime·cputicks();
+		}
 		runtime·ready(gp);
 	}
 
 	// release all writers
 	for(;;) {
 		sg = dequeue(&c->sendq);
-		if(sg == nil) break;
+		if(sg == nil) {
+			break;
+		}
 		gp = sg->g;
 		gp->param = nil;
-		if(sg->releasetime)
+		if(sg->releasetime) {
 			sg->releasetime = runtime·cputicks();
+		}
 		runtime·ready(gp);
 	}
 
@@ -628,10 +695,12 @@ closechan(Hchan *c, void *pc)
 void
 reflect·chanlen(Hchan *c, intgo len)
 {
-	if(c == nil)
+	if(c == nil) {
 		len = 0;
-	else
+	}
+	else {
 		len = c->qcount;
+	}
 	FLUSH(&len);
 }
 
@@ -640,10 +709,12 @@ reflect·chanlen(Hchan *c, intgo len)
 void
 reflect·chancap(Hchan *c, intgo cap)
 {
-	if(c == nil)
+	if(c == nil) {
 		cap = 0;
-	else
+	}
+	else {
 		cap = c->dataqsiz;
+	}
 	FLUSH(&cap);
 }
 
@@ -653,7 +724,7 @@ reflect·chancap(Hchan *c, intgo cap)
 // 这是C语言的特性规定, 以后可以考虑将这3个函数修改为非静态函数.
 // 相关资料见: https://stackoverflow.com/questions/42056160/static-functions-declared-in-c-header-files
 
-// 从 recvq/sendq 队列中, 随便取一个 goroutine 返回.
+// 从 channel 自身的 recvq/sendq 队列中, 随便取一个 goroutine 返回.
 static SudoG*
 dequeue(WaitQ *q)
 {

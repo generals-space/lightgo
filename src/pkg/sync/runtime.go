@@ -7,6 +7,7 @@ package sync
 import "unsafe"
 
 // defined in package runtime
+// 下面的几个函数声明, 定义部署请见 src/pkg/runtime/sema.goc 的同名函数.
 
 // Semacquire waits until *s > 0 and then atomically decrements it.
 // It is intended as a simple sleep primitive for use by the synchronization

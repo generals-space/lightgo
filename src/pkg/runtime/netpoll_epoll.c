@@ -17,15 +17,16 @@ void	runtime·closeonexec(int32 fd);
 // nginx中也是这么用的么???
 static int32 epfd = -1;  // epoll descriptor
 
-// caller: netpoll.goc -> runtime_pollServerInit()
+// caller: 
+// 	1. netpoll.goc -> runtime_pollServerInit()
 // runtime_pollServerInit() 由 net/fd_poll_runtime.go -> Init() 调用
-// ...不过, 看起来 fd_poll_runtime.go 是标准库, 
-// 能直接调用 runtime 的内置函数吗?
 void
 runtime·netpollinit(void)
 {
 	epfd = runtime·epollcreate1(EPOLL_CLOEXEC);
-	if(epfd >= 0) return;
+	if(epfd >= 0) {
+		return;
+	} 
 	epfd = runtime·epollcreate(1024);
 	if(epfd >= 0) {
 		runtime·closeonexec(epfd);
@@ -57,10 +58,10 @@ runtime·netpollclose(uintptr fd)
 	return -res;
 }
 
+// 轮询查找已经准备好的网络连接, 返回状态变为 runnable 的 goroutine 列表.
+//
 // polls for ready network connections
 // returns list of goroutines that become runnable
-// 轮询查找已经准备好的网络连接
-// 返回状态变为 runnable 的 goroutine 列表
 G*
 runtime·netpoll(bool block)
 {
@@ -69,9 +70,13 @@ runtime·netpoll(bool block)
 	int32 n, i, waitms, mode;
 	G *gp;
 
-	if(epfd == -1) return nil;
+	if(epfd == -1) {
+		return nil;
+	} 
 	waitms = -1;
-	if(!block) waitms = 0;
+	if(!block) {
+		waitms = 0;
+	}
 
 retry:
 	n = runtime·epollwait(epfd, events, nelem(events), waitms);
@@ -85,16 +90,24 @@ retry:
 	gp = nil;
 	for(i = 0; i < n; i++) {
 		ev = &events[i];
-		if(ev->events == 0) continue;
+		if(ev->events == 0) {
+			continue;
+		} 
 
 		mode = 0;
-		if(ev->events & (EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR))
+		if(ev->events & (EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR)) {
 			mode += 'r';
-		if(ev->events & (EPOLLOUT|EPOLLHUP|EPOLLERR))
+		}
+		if(ev->events & (EPOLLOUT|EPOLLHUP|EPOLLERR)) {
 			mode += 'w';
+		}
 
-		if(mode) runtime·netpollready(&gp, (void*)ev->data, mode);
+		if(mode) {
+			runtime·netpollready(&gp, (void*)ev->data, mode);
+		} 
 	}
-	if(block && gp == nil) goto retry;
+	if(block && gp == nil){
+		goto retry;
+	} 
 	return gp;
 }

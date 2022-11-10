@@ -28,70 +28,101 @@ enum
 
 	ACTIVE_SPIN = 4,
 	ACTIVE_SPIN_CNT = 30,
-	PASSIVE_SPIN = 1,
+	PASSIVE_SPIN = 1, // passive 悲观的, 被动的
 };
 
+// runtime·lock Mutex 互斥锁实现(将 Lock 对象中的 key 值标记为 "Locked").
+// futex 为 linux 的实现(sema 为 windows/macos 实现, 暂时可以不用关注)
+//
+// 可能的 mutex 状态有: unlocked, locked, sleeping.
+// sleeping 表示很可能有至少一个线程在当前 mutex 上休眠.
+// 注意在任何一种状态中都有可能存在自旋状态的线程, 线程自旋并不会影响 mutex 的状态.
+//
+// define: src/pkg/runtime/runtime.h
+//
+// 参考文章
+// 1. [各种锁及其Java实现！](https://zhuanlan.zhihu.com/p/71156910)
+//    - 偏向锁 → 轻量级锁 → 重量级锁
+//
 // Possible lock states are MUTEX_UNLOCKED, MUTEX_LOCKED and MUTEX_SLEEPING.
 // MUTEX_SLEEPING means that there is presumably at least one sleeping thread.
 // Note that there can be spinning threads during all states - they do not
 // affect mutex's state.
-// 可能的 mutex 状态有: unlocked, locked, sleeping.
-// sleeping 表示很可能有至少一个线程在当前 mutex 上休眠.
-// 注意在任何一种状态中都有可能存在自旋状态的线程, 线程自旋并不会影响 mutex 的状态.
 void
 runtime·lock(Lock *l)
 {
 	uint32 i, v, wait, spin;
 
-	if(m->locks++ < 0) runtime·throw("runtime·lock: lock count");
+	if(m->locks++ < 0) {
+		runtime·throw("runtime·lock: lock count");
+	} 
 
-	// Speculative grab for lock.
+	// 1. 偏向锁(只有一个线程, 未发生锁竞争时, 性能极高(基本不需要额外开销))
+	//
 	// 尝试争用锁
 	// xchg 是交换操作, 返回的v是 key 原来的值.
+	// 如果 if 条件成立, 说明抢占成功, 直接返回, 主调函数的 g 对象可以继续执行.
+	//
+	// Speculative grab for lock.
 	v = runtime·xchg((uint32*)&l->key, MUTEX_LOCKED);
-	if(v == MUTEX_UNLOCKED) return;
+	if(v == MUTEX_UNLOCKED) {
+		return;
+	} 
 
+	// 运行到这里, 说明没抢占成功.
+	// 那肯定就要么是 locked, 要么是 sleeping了, 区别在于是不是有协程在此 mutex 上休眠.
+	// 如果
 	// wait is either MUTEX_LOCKED or MUTEX_SLEEPING
 	// depending on whether there is a thread sleeping on this mutex. 
 	// If we ever change l->key from MUTEX_SLEEPING to some other value, 
 	// we must be careful to change it back to MUTEX_SLEEPING before returning, 
 	// to ensure that the sleeping thread gets its wakeup call.
-	// 运行到这里, 说明 key 原本不为 unlockded,
-	// 那肯定就要么是 locked, 要么是 sleeping了, 区别在于是不是有协程在此 mutex 上休眠.
-	// 如果
 	wait = v;
 
-	// On uniprocessor's, no point spinning.
-	// On multiprocessors, spin for ACTIVE_SPIN attempts.
 	// 单核平台下没必要开启 spin, 多核平台时, 进行 ACTIVE_SPIN 次自旋尝试.
 	// 而且是软自旋...完全是c写的, 而不是汇编层面.
+	//
+	// On uniprocessor's, no point spinning.
+	// On multiprocessors, spin for ACTIVE_SPIN attempts.
 	spin = 0;
-	if(runtime·ncpu > 1) spin = ACTIVE_SPIN;
+	if(runtime·ncpu > 1) {
+		spin = ACTIVE_SPIN;
+	} 
 
 	// 这里的循环方式与 lock_sema.c 中的有所区别, 可以对比分析.
 	for(;;) {
+		// 2. 轻量级锁(自旋锁)(多个线程用一个锁，但没有发生锁竞争，或发生了很轻微的锁竞争)
+		//
 		// Try for lock, spinning.
 		for(i = 0; i < spin; i++) {
 			// 不断尝试将状态为 unlocked 的 l->key 修改成 wait 所表示的状态,
 			// 一旦CAS成功, while循环就会被打破.
-			while(l->key == MUTEX_UNLOCKED)
-				if(runtime·cas((uint32*)&l->key, MUTEX_UNLOCKED, wait))
+			while(l->key == MUTEX_UNLOCKED) {
+				if(runtime·cas((uint32*)&l->key, MUTEX_UNLOCKED, wait)) {
 					return;
+				}
+			}
 			// cpu空循环 ACTIVE_SPIN_CNT 次
 			runtime·procyield(ACTIVE_SPIN_CNT);
 		}
 
+		// 3. 重量级锁(将自己挂起(而不是忙等), 等待将来被唤醒)
+		//
 		// Try for lock, rescheduling.
 		for(i = 0; i < PASSIVE_SPIN; i++) {
-			while(l->key == MUTEX_UNLOCKED)
-				if(runtime·cas((uint32*)&l->key, MUTEX_UNLOCKED, wait))
+			while(l->key == MUTEX_UNLOCKED) {
+				if(runtime·cas((uint32*)&l->key, MUTEX_UNLOCKED, wait)) {
 					return;
+				}
+			}
 			runtime·osyield();
 		}
 
 		// Sleep.
 		v = runtime·xchg((uint32*)&l->key, MUTEX_SLEEPING);
-		if(v == MUTEX_UNLOCKED) return;
+		if(v == MUTEX_UNLOCKED) {
+			return;
+		} 
 		// 运行到这里说明原本 l->key 要么为 locked, 要么为 sleeping
 		wait = MUTEX_SLEEPING;
 		runtime·futexsleep((uint32*)&l->key, MUTEX_SLEEPING, -1);
@@ -112,17 +143,25 @@ runtime·unlock(Lock *l)
 	// 呵呵, 这个函数里不管三七二十一, 先 xchg 了再说, 
 	// 也不管如果原本就是 unlocked 状态时怎么办, 这一点 lock_sema.c 做的就比较好,
 	// 人家在修改 l->key 的值之前还先判断了一下初始值呢...
-	if(v == MUTEX_UNLOCKED) runtime·throw("unlock of unlocked lock");
+	if(v == MUTEX_UNLOCKED) {
+		runtime·throw("unlock of unlocked lock");
+	} 
 
 	// 如果 l->key 原本是 sleeping 状态, 除了修改 key 的值, 
 	// 还要唤醒在 l->key 所表示的地址处休睡眠的协程.
 	// 第2个参数1表示只唤醒1个, 因为可能有很多协程在争用.
-	if(v == MUTEX_SLEEPING) runtime·futexwakeup((uint32*)&l->key, 1);
+	if(v == MUTEX_SLEEPING) {
+		runtime·futexwakeup((uint32*)&l->key, 1);
+	} 
 
 	// 不管是 futex 还是 sema 实现, 下面的操作都是不可省略的.
-	if(--m->locks < 0) runtime·throw("runtime·unlock: lock count");
+	if(--m->locks < 0) {
+		runtime·throw("runtime·unlock: lock count");
+	} 
 	// restore the preemption request in case we've cleared it in newstack
-	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
+	if(m->locks == 0 && g->preempt) {
+		g->stackguard0 = StackPreempt;
+	} 
 }
 
 // One-time notifications.

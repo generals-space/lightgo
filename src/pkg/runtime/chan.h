@@ -43,6 +43,7 @@ struct	SudoG
 {
 	G*	g;		// g and selgen constitute
 	uint32	selgen;		// a weak pointer to g
+	// link 表示队列中的下一个 g 对象
 	SudoG*	link;
 	int64	releasetime;
 	byte*	elem;		// data element

@@ -49,12 +49,13 @@ const (
 	mutexWaiterShift = iota // 值为 2
 )
 
-// Lock locks m.
-// If the lock is already in use, the calling goroutine
-// blocks until the mutex is available.
 // 锁定当前 mutex 对象
 // 如果某个协程调用此函数时, mutex 已经被其他协程占用了,
 // 调用方将一直阻塞直到其他协程将 mutex 释放
+//
+// Lock locks m.
+// If the lock is already in use, the calling goroutine
+// blocks until the mutex is available.
 func (m *Mutex) Lock() {
 	// Fast path: grab unlocked mutex.
 	// 原子操作, 将锁的状态修改为 Locked.
@@ -131,14 +132,14 @@ func (m *Mutex) Lock() {
 	}
 }
 
+// 一个已锁定的 mutex 不会与特定的 goroutine 关联(即你无法得知当前 mutex 属于哪一个协程)
+//
 // Unlock unlocks m.
 // It is a run-time error if m is not locked on entry to Unlock.
 //
 // A locked Mutex is not associated with a particular goroutine.
 // It is allowed for one goroutine to lock a Mutex and then
 // arrange for another goroutine to unlock it.
-// 一个已锁定的 mutex 不会与特定的 goroutine 关联(即你无法得知当前 mutex 属于哪一个协程)
-//
 func (m *Mutex) Unlock() {
 	if raceenabled {
 		_ = m.state

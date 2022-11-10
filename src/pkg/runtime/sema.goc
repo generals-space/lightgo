@@ -127,9 +127,12 @@ cansemacquire(uint32 *addr)
 {
 	uint32 v;
 	// runtime·atomicload() 在 runtime/atomic_amd64.c 中定义
-	while((v = runtime·atomicload(addr)) > 0)
+	while((v = runtime·atomicload(addr)) > 0) {
 		// cas 函数在 runtime/asm_amd64.s
-		if(runtime·cas(addr, v, v-1)) return 1;
+		if(runtime·cas(addr, v, v-1)) {
+			return 1;
+		} 
+	}
 	return 0;
 }
 
@@ -148,7 +151,9 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 	int64 t0;
 
 	// Easy case.
-	if(cansemacquire(addr)) return;
+	if(cansemacquire(addr)) {
+		return;
+	} 
 
 	// Harder case:
 	//	increment waiter count
@@ -194,7 +199,9 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 		runtime·park(runtime·unlock, root, "semacquire");
 		if(cansemacquire(addr)) {
 			// 当被唤醒后, 记录阻塞的时间, 用于prof
-			if(t0) runtime·blockevent(s.releasetime - t0, 3);
+			if(t0) {
+				runtime·blockevent(s.releasetime - t0, 3);
+			} 
 			return;
 		}
 	}
@@ -214,7 +221,9 @@ runtime·semrelease(uint32 volatile *addr)
 	// (see loop in semacquire).
 	// 简单情况: 没有休眠等待的协程.
 	// 为什么要在 xadd 后再检查???
-	if(runtime·atomicload(&root->nwait) == 0) return;
+	if(runtime·atomicload(&root->nwait) == 0) {
+		return;
+	} 
 
 	// Harder case: search for a waiter and wake it.
 	// 复杂情况: 先再次检查 nwait 的值, 如果仍不为0,
@@ -242,7 +251,9 @@ runtime·semrelease(uint32 volatile *addr)
 	if(s) {
 		// releasetime 在 runtime·semacquire()函数中, 
 		// 在开启 profile 记录时会被赋值为 -1
-		if(s->releasetime) s->releasetime = runtime·cputicks();
+		if(s->releasetime) {
+			s->releasetime = runtime·cputicks();
+		} 
 		// 唤醒s所表示的 sema 所属的 goroutine 协程对象
 		// 其实只是把其状态修改为 grunable, 重新参与调度.
 		runtime·ready(s->g);

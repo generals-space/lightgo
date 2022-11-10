@@ -33,6 +33,7 @@ enum
 	PASSIVE_SPIN = 1,
 };
 
+// runtime·lock sema 是 windows/macos 的实现, linux 实现为 futex.
 void
 runtime·lock(Lock *l)
 {

@@ -1767,18 +1767,16 @@ top:
 	execute(gp);
 }
 
-// 将当前 m 的 g 对象状态修改为 waiting, 并解绑 m 和 g,
-// 让该 g 开始休眠(阻塞), 直到由 runtime·ready() 唤醒
-// (唤醒后也是放到全局队列里, 哪个 m 抢到就哪个 m 执行).
+// 将当前 m 的 g 对象状态修改为 waiting, 并解绑 m 和 g, 让该 g 开始休眠(阻塞), 
+// 直到由 runtime·ready() 唤醒(唤醒后也是放到全局队列里, 哪个 m 抢到就哪个 m 执行).
 // 用于 channel 的实现.
 //
 // 与 runtime·gosched() 很像, 不过后者是将 g 放回到全局队列, 让其他 m 有机会执行ta.
 //
-// param unlockf: 是一个函数, 用于解锁;
-// param lock: 则是 unlockf 的参数, 表示当前协程是在哪个锁对象上休眠的,
-//       以便之后再在 lock 对象上将其唤醒.
-// 比如在 sema.goc -> runtime·semacquire() 中是 runtime·unlock, 
-// lock 为 root, reason 为
+// 	param unlockf: 是一个函数, 用于解锁. 一般为 runtime·unlock() 或是 nil.
+// 	param lock: unlockf 的参数, 表示当前协程是在哪个锁对象上休眠的, 以便之后再在该对象上将其唤醒.
+//
+// 比如在 chan.c -> runtime·chansend() 中, 参数列表为 (runtime·unlock, chan 对象, "chan send")
 //
 // caller:
 // 	1. src/pkg/runtime/chan.c -> 很多
@@ -3142,17 +3140,24 @@ incidlelocked(int32 v)
 {
 	runtime·lock(&runtime·sched);
 	runtime·sched.nmidlelocked += v;
-	if(v > 0) checkdead();
+	if(v > 0) {
+		checkdead();
+	}
 	runtime·unlock(&runtime·sched);
 }
 
-// Check for deadlock situation.
-// The check is based on number of running M's, if 0 -> deadlock.
 // 检测死锁. 注意最后一句的报错信息, 写代码的时候经常看到, 
 // 所以 run 的值很大可能是0.
 // 需要了解ta的检测机制.
 // 1. 某些m状态同时处于 idle, locked 两种状态
 // 2. 更普遍的情况是, 
+//
+// caller:
+// 	1. incidlelocked()
+// 	2. mput()
+//
+// Check for deadlock situation.
+// The check is based on number of running M's, if 0 -> deadlock.
 // incidlelocked(-1) 和 incidlelocked(1) 
 static void
 checkdead(void)
@@ -3160,17 +3165,22 @@ checkdead(void)
 	G *gp;
 	int32 run, grunning, s;
 
-	// -1 for sysmon
 	// run 是有任务正在执行的数量, 有一个m用于执行 sysmon, 需要额外减去.
+	//
+	// -1 for sysmon
 	run = runtime·sched.mcount - runtime·sched.nmidle - runtime·sched.nmidlelocked - 1;
 	// 注释掉
 	// runtime·printf("checkdead(): mcount=%d nmidle=%d nmidlelocked=%d\n",
 	// runtime·sched.mcount, runtime·sched.nmidle, runtime·sched.nmidlelocked);
-	if(run > 0) return;
+	if(run > 0) {
+		return;
+	} 
 	// ...这是存在m同时处于 idle 和 locked 两种状态吧, 否则不可能小于0
 	if(run < 0) {
-		runtime·printf("checkdead: nmidle=%d nmidlelocked=%d mcount=%d\n",
-			runtime·sched.nmidle, runtime·sched.nmidlelocked, runtime·sched.mcount);
+		runtime·printf(
+			"checkdead: nmidle=%d nmidlelocked=%d mcount=%d\n",
+			runtime·sched.nmidle, runtime·sched.nmidlelocked, runtime·sched.mcount
+		);
 		runtime·throw("checkdead: inconsistent counts");
 	}
 	// ...运行到这里说明 run 是0了吧
@@ -3200,7 +3210,10 @@ checkdead(void)
 	}
 	// 记得这个报错一般出现在锁没有被释放, 或是通道一直被阻塞的时候.
 	// 所以 run 的值很大可能是0.
-	m->throwing = -1; // do not dump full stacks
+	//
+	// do not dump full stacks
+	m->throwing = -1;
+	// [anchor] 运行到此处的示例, 请见 010.channel 中的 chan02() 函数.
 	runtime·throw("all goroutines are asleep - deadlock!");
 }
 
@@ -3298,8 +3311,7 @@ sysmon(void)
 				// injectglist 将gp任务链表放入全局调度器的任务队列(标记ta们为 runnable ),
 				// 在末尾会启动额外的m来运行这些任务(如果存在 idle 的p).
 				// 但在启动新m之前, 对全局调度器解锁的瞬间, 有可能一些m对象从 syscall 中返回,
-				// 或是已经运行完了ta的g任务, 
-				// 发现已经没有其他任务了, 也没有其他正在 running 的m, 
+				// 或是已经运行完了ta的g任务, 发现已经没有其他任务了, 也没有其他正在 running 的m, 
 				// 就会报 deadlock.
 				incidlelocked(-1);
 				injectglist(gp);
@@ -3335,7 +3347,7 @@ static Pdesc pdesc[MaxGomaxprocs];
 // retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的g任务.
 // (防止某一个任务占用CPU太久影响其他任务的执行)
 //
-// param now: 为绝对时间 nanotime
+// 	param now: 为绝对时间 nanotime
 //
 // 返回值 n 为
 // 注意对 running 状态的 p 的 g 任务的抢占并不计在 n 中, 因为抢占操作只是一个通知,

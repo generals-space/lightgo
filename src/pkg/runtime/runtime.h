@@ -162,14 +162,16 @@ enum
  */
 struct	Lock
 {
-	// Futex-based impl treats it as uint32 key,
-	// while sema-based impl as M* waitm.
-	// Used to be a union, but unions break precise GC.
 	// 基于futex的实现将key看作uint32的key, 
 	// 而基于信号量的实现会将其看作M* waitm (...这tm什么玩意?)
 	// 之前是union联合对象, 但是unions会打断精准GC (性能问题吧?)
+	//
+	// Futex-based impl treats it as uint32 key,
+	// while sema-based impl as M* waitm.
+	// Used to be a union, but unions break precise GC.
 	uintptr	key;
 };
+
 struct	Note
 {
 	// Futex-based impl treats it as uint32 key,
@@ -989,6 +991,8 @@ void	runtime·runpanic(Panic*);
 uintptr	runtime·getcallersp(void*);
 int32	runtime·mcount(void);
 int32	runtime·gcount(void);
+// 切换到 m->g0 的上下文, 执行目标函数, 同时会把主调函数所在的 g 协程对象, 当作参数传给ta.
+// (毕竟, m->g0 全局对象很容易获取)
 void	runtime·mcall(void(*)(G*));
 uint32	runtime·fastrand1(void);
 void	runtime·rewindmorestack(Gobuf*);
@@ -1020,6 +1024,7 @@ void	runtime·unwindstack(G*, byte*);
 void	runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp);
 void	runtime·resetcpuprofiler(int32);
 void	runtime·setcpuprofilerate(void(*)(uintptr*, int32), int32);
+// runtime·usleep 是汇编代码, 实际是 select 的系统调用. 
 void	runtime·usleep(uint32);
 int64	runtime·cputicks(void);
 int64	runtime·tickspersecond(void);
@@ -1059,22 +1064,30 @@ void	runtime·starttheworld(void);
 extern uint32 runtime·worldsema;
 
 /*
- * mutual exclusion locks. 
- * in the uncontended case,
- * as fast as spin locks (just a few user-level instructions),
- * but on the contention path they sleep in the kernel.
- * a zeroed Lock is unlocked (no need to initialize each lock).
- * 互斥锁Mutex实现
- * 在没有竞争的情况下, 与自旋锁一样快(只有一些用户层的操作),
- * 但存在竞争时, ta会在内核层休眠.
+ * 互斥锁Mutex实现(将 Lock 对象中的 key 值标记为 "Locked")
+ * 在没有竞争的情况下, 与自旋锁一样快(只有一些用户层的操作), 但存在竞争时, ta会在内核层休眠.
  * 0值的Lock实例对象是没有加锁的(不需要对Lock实例对象进行初始化)
+ * 
  * 目前看到两处runtime·lock的实现: lock_futex.c, lock_sema.c
  * 编译时, 不同的系统平台会选择不同的方式, 
  * linux, freebsd, dragonfly选择futex实现
  * darwin netbsd openbsd plan9 windows选择信号量实现.
  *
+ * 注意, 直接调用 runtime·lock() 并不会造成协程阻塞, 
+ * 调用 runtime·unlock() 也没办法唤醒一个阻塞的协程.
+ * 具体示例可见 chan.c 中, 无缓冲 channel 的 sender/receiver 的实现代码.
+ * 
  * 不过很奇怪, lock/unlock函数的参数是什么?
  * 在主调函数里参数类型都是一个地址, 难道能和Lock*类型相互转换?
+ * 
+ * 参考文章
+ * 1. [各种锁及其Java实现！](https://zhuanlan.zhihu.com/p/71156910)
+ *    - 偏向锁 → 轻量级锁 → 重量级锁
+ * 
+ * mutual exclusion locks. 
+ * in the uncontended case, as fast as spin locks (just a few user-level instructions),
+ * but on the contention path they sleep in the kernel.
+ * a zeroed Lock is unlocked (no need to initialize each lock).
  */
 void	runtime·lock(Lock*);
 void	runtime·unlock(Lock*);
