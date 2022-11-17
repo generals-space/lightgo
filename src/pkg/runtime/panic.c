@@ -132,10 +132,7 @@ runtime·deferproc(int32 siz, FuncVal *fn, ...)
 	d = newdefer(siz);
 	d->fn = fn;
 	d->pc = runtime·getcallerpc(&siz);
-	if(thechar == '5')
-		d->argp = (byte*)(&fn+2);  // skip caller's saved link register
-	else
-		d->argp = (byte*)(&fn+1);
+	d->argp = (byte*)(&fn+1);
 	runtime·memmove(d->args, d->argp, d->siz);
 
 	// deferproc returns 0 normally.
@@ -291,10 +288,7 @@ recovery(G *gp)
 	// (The pc we're returning to does pop pop
 	// before it tests the return value.)
 	// On the arm there are 2 saved LRs mixed in too.
-	if(thechar == '5')
-		gp->sched.sp = (uintptr)argp - 4*sizeof(uintptr);
-	else
-		gp->sched.sp = (uintptr)argp - 2*sizeof(uintptr);
+	gp->sched.sp = (uintptr)argp - 2*sizeof(uintptr);
 	gp->sched.pc = pc;
 	gp->sched.lr = 0;
 	gp->sched.ret = 1;

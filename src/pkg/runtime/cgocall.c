@@ -318,9 +318,6 @@ unwindm(void)
 	case '6':
 		m->g0->sched.sp = *(uintptr*)m->g0->sched.sp;
 		break;
-	case '5':
-		m->g0->sched.sp = *(uintptr*)((byte*)m->g0->sched.sp + 4);
-		break;
 	}
 }
 

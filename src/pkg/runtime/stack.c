@@ -452,11 +452,6 @@ runtime·newstack(void)
 		src = (uintptr*)top->argp;
 		while(dst < dstend) *dst++ = *src++;
 	}
-	if(thechar == '5') {
-		// caller would have saved its LR below args.
-		sp -= sizeof(void*);
-		*(void**)sp = nil;
-	}
 
 	// Continue as if lessstack had just called m->morepc
 	// (the PC that decided to grow the stack).

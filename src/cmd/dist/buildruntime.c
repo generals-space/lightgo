@@ -284,8 +284,6 @@ ok:
 				aggr = "p";
 			else if(streq(fields.p[1], "Gobuf"))
 				aggr = "gobuf";
-			else if(streq(fields.p[1], "WinCall"))
-				aggr = "wincall";
 			else if(streq(fields.p[1], "WinCallbackContext"))
 				aggr = "cbctxt";
 			else if(streq(fields.p[1], "SEH"))

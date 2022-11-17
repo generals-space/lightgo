@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// typedef 原名称 目标名称
 /*
  * basic types
  */
@@ -79,7 +80,6 @@ typedef	struct	Hmap		Hmap;
 typedef	struct	Hchan		Hchan;
 typedef	struct	Complex64	Complex64;
 typedef	struct	Complex128	Complex128;
-typedef	struct	WinCall		WinCall;
 typedef	struct	SEH		SEH;
 typedef	struct	WinCallbackContext	WinCallbackContext;
 typedef	struct	Timers		Timers;
@@ -242,15 +242,6 @@ struct	GCStats
 	uint64	nsleep;
 };
 
-struct	WinCall
-{
-	void	(*fn)(void*);
-	uintptr	n;	// number of parameters
-	void*	args;	// parameters
-	uintptr	r1;	// return values
-	uintptr	r2;
-	uintptr	err;	// error number
-};
 struct	SEH
 {
 	void*	prev;
@@ -471,14 +462,6 @@ struct	M
 	uintptr	settype_buf[1024];
 	uintptr	settype_bufsize;
 
-#ifdef GOOS_windows
-	void*	thread;		// thread handle
-	WinCall	wincall;
-#endif
-#ifdef GOOS_plan9
-	int8*	notesig;
-	byte*	errstr;
-#endif
 	SEH*	seh;
 	uintptr	end[];
 };
