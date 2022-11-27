@@ -37,26 +37,6 @@ if($ARGV[0] eq "-b32") {
 	$_32bit = "little-endian";
 	shift;
 }
-if($ARGV[0] eq "-plan9") {
-	$plan9 = 1;
-	shift;
-}
-if($ARGV[0] eq "-openbsd") {
-	$openbsd = 1;
-	shift;
-}
-if($ARGV[0] eq "-netbsd") {
-	$netbsd = 1;
-	shift;
-}
-if($ARGV[0] eq "-dragonfly") {
-	$dragonfly = 1;
-	shift;
-}
-if($ARGV[0] eq "-arm") {
-	$arm = 1;
-	shift;
-}
 
 if($ARGV[0] =~ /^-/) {
 	print STDERR "usage: mksyscall.pl [-b32 | -l32] [file ...]\n";

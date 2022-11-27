@@ -280,7 +280,8 @@ runtime·check(void)
 	TestAtomic64();
 }
 
-// 无人调用, 应该是标准库 runtime.Caller() 直接指向这里
+// golang原生: runtime.Caller() 直接指向这里.
+//
 // 但是其原型本来为 func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 // 与这里的在参数和返回值上有出入, retXXX应该作为返回值出现, 但全出现在参数列表中.
 // 注意一下函数末尾的4处`FLUSH()`, 值得正视其作用. 
@@ -402,6 +403,12 @@ runtime∕pprof·runtime_cyclesPerSecond(int64 res)
 	FLUSH(&res);
 }
 
+// golang原生: GODEBUG 环境变量
+//
+// 通过 GODEBUG=schedtrace=1000,scheddetail=1,gctrace=1 设置的环境变量, 会被赋值到该类型的实例对象中.
+//
+// 全局只有一个实例 src/pkg/runtime/runtime.c -> runtime·debug
+// 在 src/pkg/runtime/runtime.c -> runtime·parsedebugvars() 函数中被初始化.
 DebugVars	runtime·debug;
 
 static struct {
@@ -413,6 +420,11 @@ static struct {
 	{"scheddetail", &runtime·debug.scheddetail},
 };
 
+// runtime·parsedebugvars ...
+//
+// caller: 
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 在初始化调度器时被调用.
+//
 void
 runtime·parsedebugvars(void)
 {
@@ -424,8 +436,9 @@ runtime·parsedebugvars(void)
 	for(;;) {
 		for(i=0; i<nelem(dbgvar); i++) {
 			n = runtime·findnull((byte*)dbgvar[i].name);
-			if(runtime·mcmp(p, (byte*)dbgvar[i].name, n) == 0 && p[n] == '=')
+			if(runtime·mcmp(p, (byte*)dbgvar[i].name, n) == 0 && p[n] == '=') {
 				*dbgvar[i].value = runtime·atoi(p+n+1);
+			}
 		}
 		p = runtime·strstr(p, (byte*)",");
 		if(p == nil) break;

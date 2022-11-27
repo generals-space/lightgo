@@ -164,10 +164,12 @@ runtime·unlock(Lock *l)
 	} 
 }
 
-// One-time notifications.
-// n->key = 0表示可以在此休眠,
-// 在sleep函数中会判断n->key的值, 
+// 重置 Note 对象(将其 key 值改为 0), 其他函数可以继续通过此对象进行休眠.
+//
+// n->key = 0表示可以在此休眠, 在 sleep 函数中会判断n->key的值, 
 // 如果不为0, 则表示被唤醒, 可以返回了.
+//
+// One-time notifications.
 void
 runtime·noteclear(Note *n)
 {
@@ -189,15 +191,22 @@ runtime·notewakeup(Note *n)
 	runtime·futexwakeup((uint32*)&n->key, 1);
 }
 
-// 休眠直到某个协程调用了wakeup将其唤醒.
-// 唤醒的标识就是n->key不等于0...???
+// 主调函数将会休眠(阻塞)直到某个协程调用了 wakeup 将其唤醒.
+// 其实就是 while 循环判断目标 Note 对象的 key 值是否变为 0.
+//
+// caller:
+// 	1. src/pkg/runtime/proc.c -> sysmon() 
+// 	在发现处于 gc 过程中, 或是所有 p 都已空闲时, sysmon 线程会调用此函数将自己挂起.
 void
 runtime·notesleep(Note *n)
 {
 	// 只能在g0上调用.
-	if(g != m->g0) runtime·throw("notesleep not on g0");
-	while(runtime·atomicload((uint32*)&n->key) == 0)
+	if(g != m->g0) {
+		runtime·throw("notesleep not on g0");
+	}
+	while(runtime·atomicload((uint32*)&n->key) == 0) {
 		runtime·futexsleep((uint32*)&n->key, 0, -1);
+	}
 }
 
 #pragma textflag NOSPLIT
@@ -209,9 +218,10 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 	// does not count against our nosplit stack sequence.
 
 	if(ns < 0) {
-		while(runtime·atomicload((uint32*)&n->key) == 0)
+		while(runtime·atomicload((uint32*)&n->key) == 0) {
 			// -1表示不设超时, 只能由wakeup唤醒
 			runtime·futexsleep((uint32*)&n->key, 0, -1);
+		}
 		// 被唤醒, 返回true
 		return true;
 	}

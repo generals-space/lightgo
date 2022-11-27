@@ -117,6 +117,7 @@ extern	register	M*	m;
 /*
  * defined constants
  */
+
 enum
 {
 	// G status
@@ -137,8 +138,10 @@ enum
 	// P status
 	Pidle,
 	Prunning,
+	// 表示当前 p 陷入了系统调用
 	Psyscall,
-	Pgcstop, // runtime·stoptheworld()的时候会将正在运行p设置为这个状态.
+	// runtime·stoptheworld()的时候会将正在运行p设置为这个状态.
+	Pgcstop,
 	Pdead,
 };
 enum
@@ -157,9 +160,17 @@ enum
 	// Global <-> per-M stack segment cache transfer batch size.
 	StackCacheBatch = 16,
 };
+
 /*
  * structures
  */
+
+// src/pkg/runtime/lock_futex.c -> runtime·lock() 中定义的上锁行为, 都是对 key 的值进行修改,
+// 抢占锁的过程中, key 值将经历 偏向锁 → 轻量级锁 → 重量级锁 的状态递增.
+//
+// 所有可以上锁的对象, 其实都包含了 Lock{} 作结构体成员, 如
+// 1. src/pkg/runtime/chan.h -> Hchan{}
+// 2. src/pkg/runtime/runtime.h -> P{}
 struct	Lock
 {
 	// 基于futex的实现将key看作uint32的key, 
@@ -301,6 +312,7 @@ struct	G
 	G*	alllink;
 	void*	param;		// passed parameter on wakeup
 	int16	status;
+	// go id(为啥不直接叫 id...)
 	int64	goid;
 	// Gwaiting 状态下被设置, 表示原因, 目前看到的可能值有
 	// 1. garbage collection
@@ -350,10 +362,13 @@ struct	M
 	//
 	// goroutine with scheduling stack
 	G*	g0;
-	// ~~发生栈分割~~新建栈空间时, 将要申请的大小, 
-	void*	moreargp;	// argument pointer for more stack
-	// gobuf arg to morestack
+	// argument pointer for more stack
+	//
+	// ~~发生栈分割~~新建栈空间时, 将要申请的大小.
+	void*	moreargp;
 	// morebuf 应该等于 curg->sched, 表示当前运行的g对象的 Gobuf
+	//
+	// gobuf arg to morestack
 	Gobuf	morebuf;	
 
 	// Fields not known to debuggers.
@@ -368,8 +383,8 @@ struct	M
 	uint64	procid;		// for debuggers, but offset not hard-coded
 	G*	gsignal;	// signal-handling G
 	uintptr	tls[4];		// thread-local storage (for x86 extern register)
-	// 如果一个 m 在被创建时(newm()函数)指定了要执行的函数, 就会在这里赋值目标函数地址.
-	// 
+	// 如果一个 m 在被创建时指定了要执行的函数, 就会在这里赋值目标函数地址.
+	// 在 newm() 函数中被赋值.
 	void	(*mstartfn)(void);
 	// 当前正在运行的 g 对象
 	//
@@ -421,7 +436,9 @@ struct	M
 	// 在 stoplockedm(), stopm() 两处被调用 notesleep().
 	Note	park;
 	// 指向全局调度器的 m 列表
-	M*	alllink;	// on allm
+	//
+	// on allm
+	M*	alllink;
 	M*	schedlink;
 	uint32	machport;	// Return address for Mach IPC (OS X)
 	MCache*	mcache;
@@ -486,7 +503,7 @@ struct P
 	// incremented on every system call
 	uint32	syscalltick;
 	// back-link to associated M (nil if idle)
-	// 反向引用绑定的m对象, 如果p处于 idle状态则为nil
+	// 反向引用绑定的 m 对象, 如果 p 处于 idle状态则为 nil
 	M*	m;
 	MCache*	mcache;
 
@@ -496,8 +513,9 @@ struct P
 	int32	runqtail;
 	int32	runqsize;
 
-	// Available G's (status == Gdead)
 	// p 队列本地空闲 g 队列的链表头.
+	//
+	// Available G's (status == Gdead)
 	G*	gfree;
 	int32	gfreecnt;
 
@@ -586,15 +604,9 @@ struct	Itab
 	void	(*fun[])(void);
 };
 
-#ifdef GOOS_windows
-enum {
-   Windows = 1
-};
-#else
 enum {
    Windows = 0
 };
-#endif
 
 struct	Timers
 {
@@ -675,12 +687,28 @@ extern bool runtime·precisestack;
  *    you need super-gopher-guru privilege
  *    to add this list.
  */
-// nelem 这个应该是 len() 的变体吧, 用来求目标数组长度的.
+// nelem 算是 len() 的变体, 用来求目标数组长度的(总数量而非实际赋值的数量).
 // 用整个数组所占用的空间(sizeof(x)), 除以每个元素占用的空间(sizeof((x)[0])).
+//
+// [anchor] 该函数的使用示例, 请见 011.define 中的 len() 函数.
+// 
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define	nil		((void*)0)
+// offsetof 用于计算目标成员 m 在 s 结构体中的偏移量, 也就是 m 成员前面的成员占用的空间数量.
+// 结果值单位为字节.
+// 	@param s: 为一个 struct 类对象(非实例对象, 直接传入类型名即可);
+// 	@param m: 为其中的一个成员的名称(直接写名称, 不需要通过 a_struct_obj.xxx 或 a_struct_obj->xxx 指定)
+//
+// [anchor] 该函数的使用示例, 请见 011.define 中的 offset() 函数.
+// 
 #define	offsetof(s,m)	(uint32)(&(((s*)0)->m))
-#define	ROUND(x, n)	(((x)+(n)-1)&~((n)-1)) /* all-caps to mark as macro: it evaluates n twice */
+// 获取能够整除 n 的最接近 x 的值, 类似于 ceil(x/n) * n, 即向上取整
+// 假设 x = 5, n = 4, 那 ROUND(x, n) = 8
+//
+// [anchor] 该函数的使用示例, 请见 011.define 中的 round1() 函数.
+//
+// all-caps to mark as macro: it evaluates n twice
+#define	ROUND(x, n)	(((x)+(n)-1)&~((n)-1))
 
 /*
  * known to compiler
@@ -859,6 +887,8 @@ extern	M*	runtime·allm;
 
 // P 指针链表, 在 runtime·schedinit() 中按(MaxGomaxprocs+1)申请的空间
 // 就是说这个链表可容纳 MaxGomaxprocs+1 个P对象.
+//
+// 但实际上, p 数量为 runtime·gomaxprocs(数组中会有空位), 这个值可以在程序运行过程中调整.
 extern	P**	runtime·allp; 
 extern	int32	runtime·gomaxprocs;
 extern	uint32	runtime·needextram;
@@ -1015,6 +1045,7 @@ void	runtime·blockevent(int64, int32);
 extern int64 runtime·blockprofilerate;
 void	runtime·addtimer(Timer*);
 bool	runtime·deltimer(Timer*);
+// 轮询查找已经准备好的网络连接, 返回状态变为 runnable 的 goroutine 列表.
 G*	runtime·netpoll(bool);
 void	runtime·netpollinit(void);
 int32	runtime·netpollopen(uintptr, PollDesc*);

@@ -36,9 +36,12 @@ struct Sched {
 	// 只有在 incidlelocked(v) 函数中才会在对这个字段进行加减操作
 	// m 有 idle 的状态, 也有 locked 的状态, 不冲突, 可共存
 	int32	nmidlelocked; 
-	int32	mcount;	 // number of m's that have been created
+	// number of m's that have been created
+	int32	mcount;
+	// 可创建的 m 的最大数量(也就是底层的系统线程数), 在 runtime·schedinit()中声明, 
+	// 默认值为1w, 开发者可通过 runtime∕debug·setMaxThreads() 动态设置.
+	//
 	// maximum number of m's allowed (or die)
-	// 可创建的m的最大数量, 在 runtime·schedinit()中声明, 值为1w
 	int32	maxmcount;
 
 	P*	pidle;  // idle P's
@@ -62,11 +65,11 @@ struct Sched {
 	// 全局空闲g队列的链表头
 	G*	gfree;
 
-    // 取值0或1, 在gc操作前后的 runtime·stoptheworld(),
-    // 及 runtime·starttheworld()
+	// gcwaiting 表示是否处于 GC 过程中.
+	//
+    // 取值0或1, 在gc操作前后的 runtime·stoptheworld(), 及 runtime·starttheworld()
     // 还有一个 runtime·freezetheworld() 函数会设置这个值.
-    // 一般在 stoptheworld/freezetheworld 时会将其设置为1,
-    // starttheworld 则会设置为0.
+    // 一般在 stoptheworld/freezetheworld 时会将其设置为1, starttheworld 则会设置为0.
 	uint32	gcwaiting;
 	// 关于 stopwait 的解释见下面的 stopnote.
 	int32	stopwait;
@@ -80,6 +83,9 @@ struct Sched {
 	// 每将一个p对象设置为 gcstop, 就将 stopwait 减1, 
 	// 会有一个for无限循环, 判断 stopwait 是否等于0
 	Note	stopnote;
+	// sysmonwait 用于表示 sysmon 线程是否处于休眠状态.
+	// sysmon() 函数在监测到处于 gc 过程中, 或是所有 p 都空闲时, 会将自己挂起, 主动休眠.
+	// 直到有新的任务执行时, 才被唤醒.
 	uint32	sysmonwait;
 	Note	sysmonnote;
 	uint64	lastpoll; // 这个值是一个时间值, 纳秒nanotime()
@@ -89,18 +95,27 @@ struct Sched {
 	int32	profilehz;
 };
 
-// 通过GOMAXPROCS可设置的P的最大值, 超过这个值不会报错, 而是降低到这个值.
+// 固定值. 开发者通过 GOMAXPROCS 可设置的 P 的最大值, 超过该值不会报错, 而是降低到这个值.
 //
 // The max value of GOMAXPROCS.
 // There are no fundamental restrictions on the value.
 enum { MaxGomaxprocs = 1<<8 };
 
 Sched	runtime·sched;
-// 这个值并不是golang限制的最大P数量(见上面的 MaxGomaxprocs)
-// 而是golang经过将用户通过 GOMAXPROCS 设置的值与runtime预设的 
-// MaxGomaxprocs值, 及物理CPU数量衡量后得到的最大值.
-// 但由于golang提供了runtime接口, 所以这个值仍然可以在运行过程中被修改.
-// 在 procresize(n) 函数中, 会动态地调整p的数量, 同时修改这个值为n.
+// 表示 runtime 中 p 的实际数量, 取值范围在 [1, MaxGomaxprocs(256, 固定值)]
+//
+// 所有的 p 都存在于 runtime·allp 数组中. 该数组长度为 MaxGomaxprocs, 但实际可能不会占满.
+//
+// 在 runtime 中, 经常有如下方式遍历 p 列表.
+//
+// for(i = 0; i < runtime·gomaxprocs; i++) {
+//     p = runtime·allp[i];
+//     ...省略
+// }
+//
+// 在 runtime·schedinit() 初始化时, 就通过 procresize() 函数设置了该值.
+//
+// 另外, 由于 golang 提供了 runtime 接口, 所以这个值也可以在程序运行过程中被动态地修改.
 int32	runtime·gomaxprocs;
 uint32	runtime·needextram;
 bool	runtime·iscgo;
@@ -111,6 +126,9 @@ G*	runtime·lastg;
 M*	runtime·allm;
 M*	runtime·extram; // 这个m链表貌似和 cgo 调用相关.
 int8*	runtime·goos;
+// runtime·ncpu 表示当前物理机实际的 cpu 核数.
+//
+// 在 src/pkg/runtime/os_linux.c -> runtime·osinit() 函数中被赋值.
 int32	runtime·ncpu;
 // 在 runtime·gomaxprocsfunc(n)中设置为n
 // 一般用来全局存储 procresize(n) 中设置的n值.
@@ -207,11 +225,13 @@ runtime·schedinit(void)
 	procs = 1;
 	p = runtime·getenv("GOMAXPROCS");
 	if(p != nil && (n = runtime·atoi(p)) > 0) {
-		if(n > MaxGomaxprocs) n = MaxGomaxprocs;
+		if(n > MaxGomaxprocs) {
+			n = MaxGomaxprocs;
+		}
 		procs = n;
 	}
-	// 为 P 对象申请空间...不过这是按照最大值申请的啊...
-	// 然后调用 procresize() 创建指定数量的 p, 并为各p对象的本地任务队列申请空间.
+	// 为 P 对象申请空间, 不过这是按照最大值申请的(开发者可以在程序运行期间在代码中动态调整).
+	// 然后调用 procresize() 创建指定数量的 p, 并为各 p 对象的本地任务队列申请空间.
 	runtime·allp = runtime·malloc((MaxGomaxprocs+1)*sizeof(runtime·allp[0]));
 	// 调整 P 数量, 为新建的 p 对象分配 mcache(缓存) 与 gfree(任务队列), 
 	// 并置为 idle 状态, 之后可以开始干活了.
@@ -221,7 +241,9 @@ runtime·schedinit(void)
 	// 在 runtime·gc() 中会判断此值, 如果不为1, 就结束操作.
 	mstats.enablegc = 1;
 
-	if(raceenabled) g->racectx = runtime·raceinit();
+	if(raceenabled) {
+		g->racectx = runtime·raceinit();
+	}
 }
 
 extern void main·init(void);
@@ -232,9 +254,7 @@ static FuncVal scavenger = {runtime·MHeap_Scavenger};
 // 设置initDone为runtime·unlockOSThread()
 static FuncVal initDone = { runtime·unlockOSThread };
 
-// 主协程(g0)启动.
-// 
-// 从这里开始进入开发者声明的 func main()
+// 主协程(g0)启动(从这里开始进入开发者声明的 func main())
 //
 // caller:
 // 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 程序启动时的初始化汇总函数.
@@ -301,19 +321,25 @@ runtime·main(void)
 	runtime·unlockOSThread();
 	// 这里是用户编写的main()函数, 由编译器指向.
 	main·main();
-	if(raceenabled) runtime·racefini();
+	if(raceenabled) {
+		runtime·racefini();
+	} 
 
 	// Make racy client program work: if panicking on
 	// another goroutine at the same time as main returns,
 	// let the other goroutine finish printing the panic trace.
 	// Once it does, it will exit. See issue 3934.
-	if(runtime·panicking) runtime·park(nil, nil, "panicwait");
+	if(runtime·panicking) {
+		runtime·park(nil, nil, "panicwait");
+	} 
 
 	// runtime·exit() 为汇编代码, 针对不同系统平台各自编写.
 	runtime·exit(0);
 
 	// ...这里是清理runtime·main吧? 可是都exit了, 这里为什么还能运行???
-	for(;;) *(int32*)runtime·main = 0;
+	for(;;) {
+		*(int32*)runtime·main = 0;
+	} 
 }
 
 void
@@ -363,23 +389,28 @@ runtime·tracebackothers(G *me)
 	}
 
 	for(gp = runtime·allg; gp != nil; gp = gp->alllink) {
-		if(gp == me || gp == m->curg || gp->status == Gdead)
+		if(gp == me || gp == m->curg || gp->status == Gdead) {
 			continue;
-		if(gp->issystem && traceback < 2)
+		}
+		if(gp->issystem && traceback < 2) {
 			continue;
+		}
 		runtime·printf("\n");
 		runtime·goroutineheader(gp);
 		if(gp->status == Grunning) {
 			runtime·printf("\tgoroutine running on other thread; stack unavailable\n");
 			runtime·printcreatedby(gp);
-		} else
+		} else {
 			runtime·traceback(gp->sched.pc, gp->sched.sp, gp->sched.lr, gp);
+		}
 	}
 }
 
 // 检查 m 总数量(默认10000), 超出会引发进程崩溃.
+//
 // caller:
 // 	1. mcommoninit()
+// 	2. runtime∕debug·setMaxThreads()
 static void
 checkmcount(void)
 {
@@ -447,7 +478,9 @@ runtime·ready(G *gp)
 	}
 	m->locks--;
 	// restore the preemption request in case we've cleared it in newstack
-	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
+	if(m->locks == 0 && g->preempt) {
+		g->stackguard0 = StackPreempt;
+	} 
 }
 
 // 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, ncpu, MaxGcproc)
@@ -459,30 +492,38 @@ runtime·gcprocs(void)
 {
 	int32 n;
 
+	// 确定可用于GC操作的CPU数量, 三者中取最小值.
+	//
 	// Figure out how many CPUs to use during GC.
 	// Limited by gomaxprocs, number of actual CPUs, and MaxGcproc.
-	// 确定可用于GC操作的CPU数量, 三者中取最小值.
 	runtime·lock(&runtime·sched);
 
 	n = runtime·gomaxprocs;
-	if(n > runtime·ncpu) n = runtime·ncpu;
-	if(n > MaxGcproc) n = MaxGcproc;
+	if(n > runtime·ncpu) {
+		n = runtime·ncpu;
+	} 
+	if(n > MaxGcproc) {
+		n = MaxGcproc;
+	} 
 
 	// one M is currently running
 	// 在被调用时, 只有1个m处于运行状态, 其他都是 midle
 	// 如果 n > nmidle+1, 其实是超出了当前创建了的m的总量.
 	// 最多是让所有m都去执行gc嘛.
-	if(n > runtime·sched.nmidle+1) n = runtime·sched.nmidle+1;
+	if(n > runtime·sched.nmidle+1) {
+		n = runtime·sched.nmidle+1;
+	} 
 	runtime·unlock(&runtime·sched);
 	return n;
 }
 
-// 是否需要增加新的 proc 以执行gc
+// 是否需要增加新的 proc 以执行gc.
 // 标准就是判断当前处于 midle 的m是否大于0
 // 因为只要大于0
-// 由于只有一处调用, 可以认为被调用时只有一个m在运行,
-// 其他都在休眠.
-// caller: runtime·starttheworld() 只有这一处
+// 由于只有一处调用, 可以认为被调用时只有一个m在运行, 其他都在休眠.
+//
+// caller: 
+// 	1. runtime·starttheworld() 只有这一处
 static bool
 needaddgcproc(void)
 {
@@ -491,8 +532,12 @@ needaddgcproc(void)
 	runtime·lock(&runtime·sched);
 	
 	n = runtime·gomaxprocs;
-	if(n > runtime·ncpu) n = runtime·ncpu;
-	if(n > MaxGcproc) n = MaxGcproc;
+	if(n > runtime·ncpu) {
+		n = runtime·ncpu;
+	} 
+	if(n > MaxGcproc) {
+		n = MaxGcproc;
+	} 
 	
 	// one M is currently running
 	// 在被调用时, 只有1个m处于运行状态, 其他都是 midle
@@ -529,7 +574,7 @@ runtime·helpgc(int32 nproc)
 		mp = mget();
 		// 这里报的错是什么意思?
 		// 由于 nproc = min(GOMAXPROCS, ncpu, MaxGcproc), 
-		// 而m的数量一定是比p多的, 所以???
+		// 而 m 的数量一定是比 p 多的, 所以???
 		if(mp == nil) {
 			runtime·throw("runtime·gcprocs inconsistency");
 		}
@@ -680,8 +725,9 @@ runtime·starttheworld(void)
 	if(newprocs) {
 		procresize(newprocs);
 		newprocs = 0;
-	} else
+	} else {
 		procresize(runtime·gomaxprocs);
+	}
 	runtime·sched.gcwaiting = 0;
 
 	p1 = nil;
@@ -730,7 +776,9 @@ runtime·starttheworld(void)
 			// 实际的目的是设置 mp->nextp, 即在该m在完成当前p任务后, 
 			// 下一个执行的才是我们现在指定的p.
 			p->m = nil;
-			if(mp->nextp) runtime·throw("starttheworld: inconsistent mp->nextp");
+			if(mp->nextp) {
+				runtime·throw("starttheworld: inconsistent mp->nextp");
+			} 
 			mp->nextp = p;
 			// 在 stoplockedm(), stopm() 两处被调用 notesleep().
 			// 在这里唤醒这个 m.
@@ -764,7 +812,9 @@ runtime·starttheworld(void)
 	}
 	m->locks--;
 	// restore the preemption request in case we've cleared it in newstack
-	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
+	if(m->locks == 0 && g->preempt) {
+		g->stackguard0 = StackPreempt;
+	} 
 }
 
 //
@@ -778,16 +828,9 @@ runtime·starttheworld(void)
 void
 runtime·mstart(void)
 {
-#ifdef GOOS_windows
-#ifdef GOARCH_386
-	// It is used by windows-386 only. 
-	// Unfortunately, seh needs to be located on os stack, 
-	// and mstart runs on os stack for both m0 and m.
-	SEH seh;
-#endif
-#endif
-
-	if(g != m->g0) runtime·throw("bad runtime·mstart");
+	if(g != m->g0) {
+		runtime·throw("bad runtime·mstart");
+	} 
 
 	// Record top of stack for use by mcall.
 	// Once we call schedule we're never coming back,
@@ -798,27 +841,28 @@ runtime·mstart(void)
 	// cgo sets only stackguard0, copy it to stackguard
 	m->g0->stackguard = m->g0->stackguard0; 
 
-#ifdef GOOS_windows
-#ifdef GOARCH_386
-	m->seh = &seh;
-#endif
-#endif
-
 	runtime·asminit();
 	runtime·minit();
 
 	// Install signal handlers; after minit so that minit can
 	// prepare the thread to be able to handle the signals.
 	// 装载信号处理函数
-	if(m == &runtime·m0) runtime·initsig();
+	if(m == &runtime·m0) {
+		runtime·initsig();
+	} 
 	// mstart 被 newm 调用时可能会提供 mstartfn 函数
 	// 执行完成目标 fn 后, 该 m 会加入到 g 的抢夺队列(schedule).
-	if(m->mstartfn) m->mstartfn();
+	if(m->mstartfn) {
+		m->mstartfn();
+	} 
 
 	if(m->helpgc) {
 		m->helpgc = 0;
 		stopm();
 	} else if(m != &runtime·m0) {
+		// 这里的 nextp 是在调用 newm() 创建一个 m 对象时(还未创建系统线程)传入的.
+		// 如果 m 对象是用来运行 sysmon(), 或 mhelpgc() 函数的, 其实不需要绑定 p 对象.
+		// 否则, 为了执行开发者级别的协程任务, 那么创建 m 时, 必然要求能够拿到 p 对象.
 		acquirep(m->nextp);
 		m->nextp = nil;
 	}
@@ -861,7 +905,9 @@ runtime·allocm(P *p)
 	// disable GC because it can be called from sysmon
 	m->locks++; 
 	// temporarily borrow p for mallocs in this function
-	if(m->p == nil) acquirep(p); 
+	if(m->p == nil) {
+		acquirep(p); 
+	}
 
 	if(mtype == nil) {
 		Eface e;
@@ -891,7 +937,9 @@ runtime·allocm(P *p)
 	m->locks--;
 	// restore the preemption request 
 	// in case we've cleared it in newstack
-	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
+	if(m->locks == 0 && g->preempt) {
+		g->stackguard0 = StackPreempt;
+	}
 
 	return mp;
 }
@@ -1069,12 +1117,6 @@ runtime·dropm(void)
 	// Undo whatever initialization minit did during needm.
 	runtime·unminit();
 
-#ifdef GOOS_windows
-#ifdef GOARCH_386
-	m->seh = nil;  // reset dangling typed pointer
-#endif
-#endif
-
 	// Clear m and g, and return m to the extra list.
 	// After the call to setmg we can only call nosplit functions.
 	mp = m;
@@ -1131,10 +1173,19 @@ unlockextra(M *mp)
 
 // 创建一个 m 对象, 绑定目标 p 对象, 并执行 fn.
 //
+// 	@param fn: 目标 m 在启动时要执行的函数. 可为 sysmon(), mhelpgc(), 也可以为 nil.
+// 	@param p: 新 m 需要绑定的 p 对象.
+//
+// 当 fn 是 sysmon(), mhelpgc() 函数时, p 为 nil, 这两个函数不需要绑定 p 就可以执行.
+// 只有 fn = nil 时, 新 m 才是为了运行开发者级别的协程任务的. 而在这种场景下, 
+// 必然是因为 m 不够了, p 存在空闲了, 才需要新增一个 m 出来, 
+//
 // caller:
 // 	1. runtime·main() runtime 初始化完成后, 启动主协程 g0, 
 //     并由 g0 调用此函数创建监控线程, 运⾏调度器监控.
-// 	2. startm()
+// 	2. runtime·starttheworld()
+// 	3. startm()
+//
 // Create a new m. 
 // It will start off with a call to fn, or else the scheduler.
 // 
@@ -1150,7 +1201,9 @@ newm(void(*fn)(void), P *p)
 	if(runtime·iscgo) {
 		CgoThreadStart ts;
 
-		if(_cgo_thread_start == nil) runtime·throw("_cgo_thread_start missing");
+		if(_cgo_thread_start == nil) {
+			runtime·throw("_cgo_thread_start missing");
+		} 
 		ts.m = mp;
 		ts.g = mp->g0;
 		ts.fn = runtime·mstart;
@@ -1209,8 +1262,10 @@ retry:
 	m->nextp = nil;
 }
 
+// mspinning 
+//
 // caller: 
-// 	1. startm()
+// 	1. startm() 只有这一处
 static void
 mspinning(void)
 {
@@ -1218,14 +1273,15 @@ mspinning(void)
 }
 
 // 调度一些 m 对象以运行目标 p, 如果 m 不足则创建.
-// 如果 p == nil, 尝试获取一个空闲的 p 对象,
-// 如果获取不到, 则返回 false...这个函数好像没有返回值吧
+// 如果 p == nil, 尝试获取一个空闲的 p 对象.
 //
 // caller:
 // 	1. wakep()
 //
 // Schedules some M to run the p (creates an M if necessary).
 // If p==nil, tries to get an idle P, if no idle P's returns false.
+//
+// 如果获取不到, 则返回 false...这个函数好像没有返回值吧???
 static void
 startm(P *p, bool spinning)
 {
@@ -1240,7 +1296,9 @@ startm(P *p, bool spinning)
 			// 这里是没获取到空闲状态的 p
 			runtime·unlock(&runtime·sched);
 			// ...但是这句是啥意思, 明明没有绑定 m 和 p, 而且还是减1操作???
-			if(spinning) runtime·xadd(&runtime·sched.nmspinning, -1);
+			if(spinning) {
+				runtime·xadd(&runtime·sched.nmspinning, -1);
+			} 
 			return;
 		}
 	}
@@ -1251,16 +1309,19 @@ startm(P *p, bool spinning)
 	// 如果没能获取到 m, 则创建新的 m 以运行目标 p
 	if(mp == nil) {
 		fn = nil;
-		// mspinning() 的定义就在上面
-		// 只是简单地把 m->spinning 的值赋为 true
-		// 不过...m是哪个m? 是怎么确定的?
-		if(spinning) fn = mspinning;
+		if(spinning) {
+			fn = mspinning;
+		}
 		newm(fn, p);
 		return;
 	}
 	// 从全局调度器中获取到了一个 m
-	if(mp->spinning) runtime·throw("startm: m is spinning");
-	if(mp->nextp) runtime·throw("startm: m has p");
+	if(mp->spinning) {
+		runtime·throw("startm: m is spinning");
+	} 
+	if(mp->nextp) {
+		runtime·throw("startm: m has p");
+	} 
 	mp->spinning = spinning;
 	mp->nextp = p;
 	runtime·notewakeup(&mp->park);
@@ -1271,7 +1332,7 @@ startm(P *p, bool spinning)
 //
 // caller: 
 // 	1. stoplockedm()
-// 	2. ·entersyscallblock()
+// 	2. ·entersyscallblock() 某个 g 任务陷入系统调用时触发
 // 	3. retake()
 //
 // Hands off P from syscall or locked M.
@@ -1296,7 +1357,7 @@ handoffp(P *p)
 	// 不过 spinning 为true? 是有什么目的吗???
 	//
 	// TODO: fast atomic
-	if(runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) == 0 &&  
+	if(runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) == 0 && 
 		runtime·cas(&runtime·sched.nmspinning, 0, 1)) {
 
 		startm(p, true);
@@ -1358,7 +1419,9 @@ wakep(void)
 	// 如果存在 spin 状态的 m, 直接返回; 否则就创建一个新的 m.
 	//
 	// be conservative about spinning threads
-	if(!runtime·cas(&runtime·sched.nmspinning, 0, 1)) return;
+	if(!runtime·cas(&runtime·sched.nmspinning, 0, 1)) {
+		return;
+	} 
 	// ...不是说添加 p 对象吗, 怎么 startm 了
 	startm(nil, true);
 }
@@ -1431,10 +1494,14 @@ startlockedm(G *gp)
 	stopm();
 }
 
+// STW期间, 停止当前m, 直到starttheworld时再返回.
+//
+// caller: 
+// 	1. findrunnable()
+// 	2. schedule()
+//
 // Stops the current m for stoptheworld.
 // Returns when the world is restarted.
-// STW期间, 停止当前m, 直到starttheworld时再返回.
-// caller: findrunnable(), schedule()
 static void
 gcstopm(void)
 {
@@ -1499,8 +1566,8 @@ execute(G *gp)
 // 尝试获取一个待执行的 g 任务(分别从本地队列, 全局队列, 以及其他 p 的本地队列里寻找).
 //
 // caller: 
-// 	1. schedule() 只有这一个调用者, m 线程不断寻找待执行任务.
-//     但是全局队列, 还和 m->p 中的本地队列, 都没有可执行任务时, 调用此函数从其他 p 对象中获取.
+// 	1. schedule() 只有这一个调用者, m 线程不断寻找待执行任务, 但是全局队列, 还和 m->p 中的本地队列,
+// 		都没有可执行任务时, 调用此函数从其他 p 对象, 全局队列, epoll 中获取.
 //
 // Finds a runnable goroutine to execute.
 // Tries to steal from other P's, get g from global queue, poll network.
@@ -1519,7 +1586,9 @@ top:
 	// 1. 尝试从当前 m->p 本地队列中获取一个 g 任务
 	// local runq
 	gp = runqget(m->p);
-	if(gp) return gp;
+	if(gp) {
+		return gp;
+	} 
 
 	// 2. 尝试从全局任务队列中获取一"批" g, 默认数量 sched.runqsize/gomaxprocs+1
 	// global runq
@@ -1527,10 +1596,12 @@ top:
 		runtime·lock(&runtime·sched);
 		gp = globrunqget(m->p, 0);
 		runtime·unlock(&runtime·sched);
-		if(gp) return gp;
+		if(gp) {
+			return gp;
+		} 
 	}
-	// poll network
-	gp = runtime·netpoll(false);  // non-blocking
+	// poll network(non-blocking)
+	gp = runtime·netpoll(false);
 	if(gp) {
 		injectglist(gp->schedlink);
 		gp->status = Grunnable;
@@ -1548,8 +1619,9 @@ top:
 	// 3. 随机从其他 P ⾥获取一个 g 任务
 	// random steal from other P's
 	for(i = 0; i < 2*runtime·gomaxprocs; i++) {
-		if(runtime·sched.gcwaiting)
+		if(runtime·sched.gcwaiting) {
 			goto top;
+		}
 		p = runtime·allp[runtime·fastrand1()%runtime·gomaxprocs];
 		if(p == m->p){
 			// 偷到自己了, 返回的 gp 就还是 nil, 继续循环.
@@ -1558,7 +1630,9 @@ top:
 			// 偷⼀半到⾃⼰的 p 队列，并返回⼀个
 			gp = runqsteal(m->p, p);
 		}
-		if(gp) return gp;
+		if(gp) {
+			return gp;
+		} 
 	}
 stop:
 	// return P and block
@@ -1598,10 +1672,12 @@ stop:
 	}
 	// poll network
 	if(runtime·xchg64(&runtime·sched.lastpoll, 0) != 0) {
-		if(m->p)
+		if(m->p) {
 			runtime·throw("findrunnable: netpoll with p");
-		if(m->spinning)
+		}
+		if(m->spinning) {
 			runtime·throw("findrunnable: netpoll with spinning");
+		}
 		// block until new work is available
 		gp = runtime·netpoll(true); 
 		runtime·atomicstore64(&runtime·sched.lastpoll, runtime·nanotime());
@@ -1633,9 +1709,12 @@ resetspinning(void)
 		m->spinning = false;
 		nmspinning = runtime·xadd(&runtime·sched.nmspinning, -1);
 
-		if(nmspinning < 0) runtime·throw("findrunnable: negative nmspinning");
-	} else
+		if(nmspinning < 0) {
+			runtime·throw("findrunnable: negative nmspinning");
+		} 
+	} else {
 		nmspinning = runtime·atomicload(&runtime·sched.nmspinning);
+	}
 
 	// M wakeup policy is deliberately somewhat conservative 
 	// (see nmspinning handling),
@@ -1643,23 +1722,26 @@ resetspinning(void)
 	// m对象的wakeup策略是有意保守一些的,
 	// 所以这里需要确认是否有必要唤醒另一个p.
 	// ...啥意思???
-	if (nmspinning == 0 && runtime·atomicload(&runtime·sched.npidle) > 0)
+	if (nmspinning == 0 && runtime·atomicload(&runtime·sched.npidle) > 0) {
 		wakep();
+	}
 }
 
+// 将 glist 任务列表放回全局调度器的任务队列, 并将其全部标记为 runnable.
+// 同时如果全局调度器中还有处于 idle 状态的 p, 就创建更多的 m 来运行这些任务吧.
+// ...可以与GC并行运行??? 怎么可能???
+//
 // Injects the list of runnable G's into the scheduler.
 // Can run concurrently with GC.
-// 将 glist 任务列表放入全局调度器的任务队列, 将其全部标记为 runnable,
-// 同时如果全局调度器中还有处于 idle 状态的p, 就创建更多的m来运行这些任务吧.
-// 最后部分, 如果存在空闲的p, 就多创建一些m来运行这些任务.
-// ...可以与GC并行运行??? 怎么可能???
 static void
 injectglist(G *glist)
 {
 	int32 n;
 	G *gp;
 
-	if(glist == nil) return;
+	if(glist == nil) {
+		return;
+	} 
 
 	runtime·lock(&runtime·sched);
 	for(n = 0; glist; n++) {
@@ -1675,7 +1757,7 @@ injectglist(G *glist)
 	}
 }
 
-// 找到一个待执行的 g 并运行ta
+// 找到一个待执行的 g 并运行 ta
 //
 // caller: 
 // 	1. runtime·mstart() 新建的 m 对象完成并启动后, 调用此函数参与调度循环.
@@ -1692,7 +1774,9 @@ schedule(void)
 	G *gp;
 	uint32 tick;
 
-	if(m->locks) runtime·throw("schedule: holding locks");
+	if(m->locks) {
+		runtime·throw("schedule: holding locks");
+	}
 
 top:
 	// 如果当前 m 处于 gc 等待过程中, 就不要继续向下执行了.
@@ -1972,18 +2056,9 @@ save(void *pc, uintptr sp)
 	g->sched.g = g;
 }
 
-// The goroutine g is about to enter a system call.
-// Record that it's not using the cpu anymore.
-// This is called only from the go syscall library and cgocall,
-// not from the low-level system calls used by the runtime.
-//
-// 协程对象 g 将要陷入系统调用, 这里记录ta将不再占用cpu.
-// 此函数只由 golang 的 syscall 库和 cgocall 函数调用.
+// 协程对象 g 将要陷入系统调用, 这里记录 ta 将不再占用 cpu.
+// 此函数只由 golang 的 syscall 库和 cgocall 函数调用, 而不是 runtime 的其他底层系统调用.
 // 
-// Entersyscall cannot split the stack: the runtime·gosave must
-// make g->sched refer to the caller's stack segment, 
-// because entersyscall is going to return immediately after.
-//
 // entersyscall 不能被分割栈, runtime·gosave() 必定会将
 // g->sched 赋值为调用方的栈段, 因为 entersyscall 将会马上返回.
 //
@@ -1991,23 +2066,34 @@ save(void *pc, uintptr sp)
 // 主要就设置了一个 p 的状态为 Psyscall, 解绑 m与p, 然后标记为当前 g 对象被抢占, 好像就没了?
 //
 // caller: 
-// 	1. runtime·cgocall()
-// 	2. runtime·cgocallbackg()
-// 	3. 还有其他的一些调用方, 大都是汇编的调用, 主要是各平台的 Syscall(SB) 函数.
+// 	1. 大都是汇编的调用, 即各平台的 Syscall(SB) 函数.
+// 	2. runtime·cgocall()
+// 	3. runtime·cgocallbackg()
+//
+// The goroutine g is about to enter a system call.
+// Record that it's not using the cpu anymore.
+// This is called only from the go syscall library and cgocall,
+// not from the low-level system calls used by the runtime.
+//
+// Entersyscall cannot split the stack: the runtime·gosave must
+// make g->sched refer to the caller's stack segment, 
+// because entersyscall is going to return immediately after.
+//
 #pragma textflag NOSPLIT
 void
 ·entersyscall(int32 dummy)
 {
-	// Disable preemption because during this function 
-	// g is in Gsyscall status,
-	// but can have inconsistent g->sched, 
-	// do not let GC observe it.
 	// 禁止抢占. 因为在此函数中 g 将处于(或者说被修改为) Gsyscall 状态,
 	// 但可能会出现 g->sched 不一致的情况, 别让gc线程发现这里.
+	//
+	// Disable preemption because during this function 
+	// g is in Gsyscall status,
+	// but can have inconsistent g->sched, do not let GC observe it.
 	m->locks++;
 
-	// Leave SP around for GC and traceback.
 	// 保留SP用于GC和回溯
+	//
+	// Leave SP around for GC and traceback.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 
 	g->syscallsp = g->sched.sp;
@@ -2019,8 +2105,7 @@ void
 	// 这里 if 语句的第一个条件是判断栈溢出的, 可参考 stack.c -> runtime·newstack() 
 	// 中的 overflow 检查.
 	// 至于第二个条件, 由于 g->stackbase 本来就表示
-	if(g->syscallsp < g->syscallguard-StackGuard || 
-		g->syscallstack < g->syscallsp) {
+	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
 		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscall");
@@ -2055,10 +2140,10 @@ void
 	// 看样子经过下面这句就只能等下一次调度了.
 	if(runtime·sched.gcwaiting) {
 		runtime·lock(&runtime·sched);
-		if (runtime·sched.stopwait > 0 && 
-			runtime·cas(&m->p->status, Psyscall, Pgcstop)) {
-			if(--runtime·sched.stopwait == 0)
+		if (runtime·sched.stopwait > 0 && runtime·cas(&m->p->status, Psyscall, Pgcstop)) {
+			if(--runtime·sched.stopwait == 0) {
 				runtime·notewakeup(&runtime·sched.stopnote);
+			}
 		}
 		runtime·unlock(&runtime·sched);
 		// ...这又是啥意思???
@@ -2109,8 +2194,7 @@ void
 	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
 
-	if(g->syscallsp < g->syscallguard-StackGuard || 
-		g->syscallstack < g->syscallsp) {
+	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
 		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscallblock");
@@ -2121,7 +2205,9 @@ void
 	// 把 p 移交到新的 m
 	handoffp(p);
 	// do not consider blocked scavenger for deadlock detection
-	if(g->isbackground) incidlelocked(1);
+	if(g->isbackground) {
+		incidlelocked(1);
+	} 
 
 	// Resave for traceback during blocked call.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
@@ -2150,7 +2236,9 @@ runtime·exitsyscall(void)
 	m->locks++;  // see comment in entersyscall
 
 	// do not consider blocked scavenger for deadlock detection
-	if(g->isbackground) incidlelocked(-1);
+	if(g->isbackground) {
+		incidlelocked(-1);
+	} 
 
 	// exitsyscallfast 为 m 重新绑定 p 对象, 绑定成功则为true.
 	// 注意, 进入此if块后必定会 return
@@ -2219,10 +2307,11 @@ exitsyscallfast(void)
 		return false;
 	}
 
-	// Try to re-acquire the last P.
 	// 1. 尝试绑定上一个p(即 m->p)
 	// 在 m 处于系统调用期间, m->p 可能会被 sysmon 线程拿走, 
 	// 此时 status 状态会从 Psyscall 变成其他的.
+	//
+	// Try to re-acquire the last P.
 	if(m->p && m->p->status == Psyscall && 
 		runtime·cas(&m->p->status, Psyscall, Prunning)) {
 		// There's a cpu for us, so we can run.
@@ -2232,13 +2321,14 @@ exitsyscallfast(void)
 		return true;
 	}
 
-	// Try to get any other idle P.
 	// 2. m->p 被 sysmon 线程拿走了, 则尝试重新获取一个空闲的 p.
+	//
+	// Try to get any other idle P.
 	m->p = nil;
 	if(runtime·sched.pidle) {
 		runtime·lock(&runtime·sched);
 		p = pidleget();
-		// sysmonwait 只有sysmon()这一个地方被设置为1, 然后陷入休眠.
+		// sysmonwait 只有在sysmon()这一个函数中, 被设置为1, 然后陷入休眠.
 		// 既然p有任务来了, sysmon 也没必要再休眠了.
 		if(p && runtime·atomicload(&runtime·sched.sysmonwait)) {
 			runtime·atomicstore(&runtime·sched.sysmonwait, 0);
@@ -2246,7 +2336,7 @@ exitsyscallfast(void)
 		}
 		runtime·unlock(&runtime·sched);
 		if(p) {
-			// 把p与当前的m绑定
+			// 把 p 与当前的 m 绑定
 			acquirep(p);
 			return true;
 		}
@@ -2318,7 +2408,9 @@ syscall·runtime_BeforeFork(void)
 	// Fork can hang if preempted with signals frequently enough (see issue 5517).
 	// Ensure that we stay on the same M where we disable profiling.
 	m->locks++;
-	if(m->profilehz != 0) runtime·resetcpuprofiler(0);
+	if(m->profilehz != 0) {
+		runtime·resetcpuprofiler(0);
+	} 
 }
 
 // Called from syscall package after fork in parent.
@@ -2328,7 +2420,9 @@ syscall·runtime_AfterFork(void)
 	int32 hz;
 
 	hz = runtime·sched.profilehz;
-	if(hz != 0) runtime·resetcpuprofiler(hz);
+	if(hz != 0) {
+		runtime·resetcpuprofiler(hz);
+	}
 	m->locks--;
 }
 
@@ -2422,11 +2516,7 @@ runtime·newproc(int32 siz, FuncVal* fn, ...)
 {
 	byte *argp;
 
-	if(thechar == '5'){
-		argp = (byte*)(&fn+2);  // skip caller's saved LR
-	} else {
-		argp = (byte*)(&fn+1);
-	}
+	argp = (byte*)(&fn+1);
 	runtime·newproc1(fn, argp, siz, 0, runtime·getcallerpc(&siz));
 }
 
@@ -2499,11 +2589,6 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	sp -= siz;
 	// 将从 argp 处, narg 大小的空间, 复制到 sp 处.
 	runtime·memmove(sp, argp, narg);
-	if(thechar == '5') {
-		// caller's LR
-		sp -= sizeof(void*);
-		*(void**)sp = nil;
-	}
 
 	// 初始化 G.sched, 该结构⽤于保存执⾏现场数据
 	runtime·memclr((byte*)&newg->sched, sizeof newg->sched);
@@ -2539,8 +2624,9 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 static void
 gfput(P *p, G *gp)
 {
-	if(gp->stackguard - StackGuard != gp->stack0)
+	if(gp->stackguard - StackGuard != gp->stack0) {
 		runtime·throw("invalid stack in gfput");
+	}
 	gp->schedlink = p->gfree;
 	p->gfree = gp;
 	p->gfreecnt++;
@@ -2643,7 +2729,9 @@ runtime·gomaxprocsfunc(int32 n)
 {
 	int32 ret;
 
-	if(n > MaxGomaxprocs) n = MaxGomaxprocs;
+	if(n > MaxGomaxprocs) {
+		n = MaxGomaxprocs;
+	} 
 	runtime·lock(&runtime·sched);
 	ret = runtime·gomaxprocs;
 	if(n <= 0 || n == ret) {
@@ -2667,14 +2755,18 @@ runtime·gomaxprocsfunc(int32 n)
 	return ret;
 }
 
+// 调用此函数时需要禁止抢占, 否则这里的m对象与调用者的m就不相同了.
+// 所以禁用抢占是为了防止m切换???
+// 这个函数看起来就是将m和g绑定啊...
+//
+// caller: 
+// 	1. runtime·LockOSThread() 就在下面
+// 	2. runtime·lockOSThread() 就在下面
+//
 // lockOSThread is called by runtime.LockOSThread 
 // and runtime.lockOSThread below after they modify m->locked. 
 // Do not allow preemption during this call,
 // or else the m might be different in this function than in the caller.
-// caller: runtime·LockOSThread(), runtime·lockOSThread() 就在下面
-// 调用此函数时需要禁止抢占, 否则这里的m对象与调用者的m就不相同了.
-// 所以禁用抢占是为了防止m切换???
-// 这个函数看起来就是将m和g绑定啊...
 #pragma textflag NOSPLIT
 static void
 lockOSThread(void)
@@ -2697,7 +2789,6 @@ runtime·lockOSThread(void)
 	lockOSThread();
 }
 
-
 // unlockOSThread is called by runtime.UnlockOSThread
 // and runtime.unlockOSThread below after they update m->locked. 
 // Do not allow preemption during this call,
@@ -2708,7 +2799,9 @@ runtime·lockOSThread(void)
 static void
 unlockOSThread(void)
 {
-	if(m->locked != 0) return;
+	if(m->locked != 0) {
+		return;
+	}
 	m->lockedg = nil;
 	g->lockedm = nil;
 }
@@ -2723,8 +2816,9 @@ runtime·UnlockOSThread(void)
 void
 runtime·unlockOSThread(void)
 {
-	if(m->locked < LockInternal)
+	if(m->locked < LockInternal) {
 		runtime·throw("runtime: internal error: misuse of lockOSThread/unlockOSThread");
+	}
 	m->locked -= LockInternal;
 	unlockOSThread();
 }
@@ -2764,8 +2858,9 @@ runtime·gcount(void)
 	// Compromise solution is to introduce per-P counters of active goroutines.
 	for(gp = runtime·allg; gp; gp = gp->alllink) {
 		s = gp->status;
-		if(s == Grunnable || s == Grunning || s == Gsyscall || s == Gwaiting)
+		if(s == Grunnable || s == Grunning || s == Gsyscall || s == Gwaiting) {
 			n++;
+		}
 	}
 	runtime·unlock(&runtime·sched);
 	return n;
@@ -2816,14 +2911,16 @@ runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp)
 	int32 n;
 	bool traceback;
 
-	if(prof.fn == nil || prof.hz == 0) return;
+	if(prof.fn == nil || prof.hz == 0) {
+		return;
+	}
 	traceback = true;
 
 	// Windows does profiling in a dedicated thread w/o m.
 	if(!Windows && (m == nil || m->mcache == nil)) {
 		traceback = false;
 	}
-	
+
 	// Define that a "user g" is a user-created goroutine, and a "system g"
 	// is one that is m->g0 or m->gsignal. We've only made sure that we
 	// can unwind user g's, so exclude the system g's.
@@ -2903,12 +3000,15 @@ runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp)
 	if(gp == nil ||
 	   (!Windows && gp != m->curg) ||
 	   (uintptr)sp < gp->stackguard - StackGuard || gp->stackbase < (uintptr)sp ||
-	   ((uint8*)runtime·gogo <= pc && pc < (uint8*)runtime·gogo + RuntimeGogoBytes))
+	   ((uint8*)runtime·gogo <= pc && pc < (uint8*)runtime·gogo + RuntimeGogoBytes)) {
 		traceback = false;
+	}
 
 	// Race detector calls asmcgocall w/o entersyscall/exitsyscall,
 	// we can not currently unwind through asmcgocall.
-	if(m != nil && m->racecall) traceback = false;
+	if(m != nil && m->racecall) {
+		traceback = false;
+	} 
 
 	runtime·lock(&prof);
 	if(prof.fn == nil) {
@@ -2957,15 +3057,19 @@ runtime·setcpuprofilerate(void (*fn)(uintptr*, int32), int32 hz)
 	runtime·sched.profilehz = hz;
 	runtime·unlock(&runtime·sched);
 
-	if(hz != 0) runtime·resetcpuprofiler(hz);
+	if(hz != 0) {
+		runtime·resetcpuprofiler(hz);
+	} 
 
 	m->locks--;
 }
 
 // 修改 p 对象的数量为 new, 不足的补上, 多余的丢掉(主要是修改 runtime·gomaxprocs 的值).
 //
+// 	@param new: [1, MaxGomaxprocs]
+//
 // caller: 
-// 	1. runtime·schedinit() 为 P 链表申请完空间后, 调用此函数将 P 数量调整到合适值.
+// 	1. runtime·schedinit() 为 runtime·allp 数组申请完空间后, 调用此函数将 P 数量调整到合适值.
 // 	2. runtime·starttheworld()
 //
 // 话说, 按照这两个调用函数的时机, 似乎不会存在动态调整p数量的情况?
@@ -2981,7 +3085,7 @@ procresize(int32 new)
 	P *p;
 	// 获取此次调用之前的 runtime·gomaxprocs 的值
 	old = runtime·gomaxprocs;
-	if(old < 0 || old > MaxGomaxprocs || new <= 0 || new >MaxGomaxprocs) {
+	if(old < 0 || old > MaxGomaxprocs || new <= 0 || new > MaxGomaxprocs) {
 		runtime·throw("procresize: invalid arg");
 	}
 
@@ -3023,7 +3127,9 @@ procresize(int32 new)
 	// redistribute runnable G's evenly
 	for(i = 0; i < old; i++) {
 		p = runtime·allp[i];
-		while(gp = runqget(p)) globrunqput(gp);
+		while(gp = runqget(p)) {
+			globrunqput(gp);
+		} 
 	}
 
 	// 将 G 从全局队列重新分配到 P.
@@ -3062,7 +3168,9 @@ procresize(int32 new)
 		// can't free P itself because it can be referenced by an M in syscall
 	}
 
-	if(m->p) m->p->m = nil;
+	if(m->p) {
+		m->p->m = nil;
+	} 
 
 	m->p = nil;
 	m->mcache = nil;
@@ -3085,16 +3193,20 @@ procresize(int32 new)
 	runtime·atomicstore((uint32*)&runtime·gomaxprocs, new);
 }
 
-// 将目标 p 对象与当前 m 关联(只是修改了一下m->p的指向), p 的状态需要是 idle
+// 将目标 p 对象与当前 m 关联(只是修改了一下m->p的指向), 要求 p 的状态为 idle
 //
 // caller:
 // 	1. procresize()
+// 	2. runtime·mstart() 一个新创建出来的 m 对象, 调用该方法先绑定一个 p 对象, 
+// 	之后会再调用 schedule() 方法去寻找可执行的任务.
 //
 // Associate p and the current m.
 static void
 acquirep(P *p)
 {
-	if(m->p || m->mcache) runtime·throw("acquirep: already in go");
+	if(m->p || m->mcache) {
+		runtime·throw("acquirep: already in go");
+	}
 	if(p->m || p->status != Pidle) {
 		runtime·printf(
 			"acquirep: p->m=%p(%d) p->status=%d\n", 
@@ -3119,12 +3231,15 @@ releasep(void)
 {
 	P *p;
 
-	if(m->p == nil || m->mcache == nil)
+	if(m->p == nil || m->mcache == nil) {
 		runtime·throw("releasep: invalid arg");
+	}
 	p = m->p;
 	if(p->m != m || p->mcache != m->mcache || p->status != Prunning) {
-		runtime·printf("releasep: m=%p m->p=%p p->m=%p m->mcache=%p p->mcache=%p p->status=%d\n",
-			m, m->p, p->m, m->mcache, p->mcache, p->status);
+		runtime·printf(
+			"releasep: m=%p m->p=%p p->m=%p m->mcache=%p p->mcache=%p p->status=%d\n",
+			m, m->p, p->m, m->mcache, p->mcache, p->status
+		);
 		runtime·throw("releasep: invalid p state");
 	}
 	m->p = nil;
@@ -3219,7 +3334,7 @@ checkdead(void)
 
 // 监控线程.
 //
-// 1. 将 netpoll 结果放到全局队列
+// 1. 通过 netpoll 不断监测是否有 ready 的 g 对象, 如果有, 则将ta们放回到全局队列, 等待执行;
 // 2. 收回长时间处于 Psyscall 状态的 P
 // 3. 向长时间运行的 g 发出抢占通知(其实除了 sysmon, 调度器在很多地方都会设置抢占标志)
 //
@@ -3261,26 +3376,30 @@ sysmon(void)
 		// runtime·usleep 是汇编代码, 实际是 select 的系统调用. 
 		runtime·usleep(delay);
 
-		// 1. schedtrace <= 0, 不过目前并没有看见哪里有设置这个值
-		// 2. 当前进程处于gc流程, 或是所有的p都处于 idle 状态
-		// 这种情况下, 也没有必要监控了, 反正大家都没在干活...
-		// 于是会陷入休眠, 直接其他地方获取了一个空闲的p, 重新开始参与任务的执行.
+		// 当进程处于 gc 流程中, 或是所有的 p 都处于 idle 状态时, 也没有必要监控了
+		// (反正大家都没在干活...)
+		// sysmon 就会自行休眠, 直到其他地方获取了一个空闲的 p, 重新开始参与任务的执行时再被唤醒.
+		//
+		// schedtrace <= 0, 即开发者并未通过 GODEBUG 变量开启调试日志.
+		// 否则, 就算满足了上面的条件, 也不能休眠...
 		if(runtime·debug.schedtrace <= 0 &&
 			(runtime·sched.gcwaiting || 
 				runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs)) { 
 			// TODO: fast atomic
 			runtime·lock(&runtime·sched);
 			// ...再次检查, 而且这次还是原子地获取 gcwaiting 的值
+			// 注意此处的 if 条件与上面的完全一样.
 			if(runtime·atomicload(&runtime·sched.gcwaiting) || 
 				runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {
-				// 只有这一个地方将 sysmonwait 设置为 1
+				// 只有这一个地方将 sysmonwait 设置为 1(true)
 				runtime·atomicstore(&runtime·sched.sysmonwait, 1);
 				runtime·unlock(&runtime·sched);
 				// 陷入休眠, 等待被唤醒, 因为目前没有监控的必要.
-				// 在 starttheworld, exitsyscallfast 中会为空闲的p
-				// 赋予新的任务, 于是被唤醒, 重新开始监控流程.
+				// 在 starttheworld, exitsyscallfast 中会为空闲的 p 赋予新的任务, 
+				// 于是被唤醒, 重新开始监控流程.
 				// 当然, 每一次重开监控, idle 和 delay 的值都会归零重新计算.
 				runtime·notesleep(&runtime·sched.sysmonnote);
+				// 从休眠中醒来, 重置锁对象(这样下次还可以在该对象上加锁)
 				runtime·noteclear(&runtime·sched.sysmonnote);
 				// 一次休眠然后被唤醒后, 重置 idle 和 delay
 				idle = 0;
@@ -3294,6 +3413,7 @@ sysmon(void)
 		// 如果距上次循环超过了 10ms
 		lastpoll = runtime·atomicload64(&runtime·sched.lastpoll);
 		now = runtime·nanotime();
+		// if 条件成立, 则表示到了下一次循环的时间了.
 		if(lastpoll != 0 && lastpoll + 10*1000*1000 < now) {
 			runtime·cas64(&runtime·sched.lastpoll, lastpoll, now);
 			// non-blocking
@@ -3306,7 +3426,7 @@ sysmon(void)
 				// another M returns from syscall, finishes running its G,
 				// observes that there is no work to do and no other running M's
 				// and reports deadlock.
-				// 先将处于 locked 状态的m的数量减1(假设m的数量大于1)
+				// 先将处于 locked 状态的 m 的数量减1(假设 m 的数量大于1)
 				// 否则可能会出现这样的情况: 
 				// injectglist 将gp任务链表放入全局调度器的任务队列(标记ta们为 runnable ),
 				// 在末尾会启动额外的m来运行这些任务(如果存在 idle 的p).
@@ -3318,19 +3438,20 @@ sysmon(void)
 				incidlelocked(1);
 			}
 		}
+		// retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的 g 任务.
+		//
 		// retake P's blocked in syscalls and preempt long running G's
-		// retake 回收陷入系统调用的p对象, 同时也抢占运行时间比较长的g任务.
 		if(retake(now)){
 			idle = 0;
 		} else {
 			idle++;
 		}
-
+		// 这一段与 GODEBUG 调试有关, 并不是调度逻辑
 		if(runtime·debug.schedtrace > 0 && lasttrace + runtime·debug.schedtrace*1000000ll <= now) {
 			lasttrace = now;
 			runtime·schedtrace(runtime·debug.scheddetail);
 		}
-	}
+	} // for {} 循环结束
 }
 
 typedef struct Pdesc Pdesc;
@@ -3344,7 +3465,7 @@ struct Pdesc
 // pdesc 没有地方初始化, 所以第一次使用时需要判断各字段的空值情况
 static Pdesc pdesc[MaxGomaxprocs];
 
-// retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的g任务.
+// retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的 g 任务.
 // (防止某一个任务占用CPU太久影响其他任务的执行)
 //
 // 	param now: 为绝对时间 nanotime
@@ -3364,23 +3485,26 @@ retake(int64 now)
 	Pdesc *pd;
 
 	n = 0;
+	// 遍历调度器中的所有 p 对象
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p==nil) continue;
+		if(p == nil) {
+			continue;
+		}
 		pd = &pdesc[i];
 		s = p->status;
 		if(s == Psyscall) {
 			// Retake P from syscall if it's there for more than 1 sysmon tick (20us).
 			// But only if there is other work to do.
 			t = p->syscalltick;
-			// if 条件为真, 说明是这个p对应的 pd 第一次被调用, 就当作初始化了
+			// if 条件为真, 说明是这个 p 对应的 pd 第一次被调用, 就当作初始化了
 			if(pd->syscalltick != t) {
 				pd->syscalltick = t;
 				pd->syscallwhen = now;
 				continue;
 			}
-			// 如果该p的本地任务队列只有一个成员,
-			// 且有m对象处于 spinning (没活干) 或是p对象处于 idle 状态
+			// 如果该 p 的本地任务队列只有一个成员,
+			// 且有m对象处于 spinning (没活干) 或是 p 对象处于 idle 状态
 			// 总之, 没必要抢占当前的p, 把任务分配给那些空闲的worker更好.
 			if(p->runqhead == p->runqtail &&
 				runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0) {
@@ -3399,11 +3523,10 @@ retake(int64 now)
 			incidlelocked(1);
 		} else if(s == Prunning) {
 			// Preempt G if it's running for more than 10ms.
-			// 如果该p被调度处于 running 状态超过了 10ms
-			// 就抢占ta的g对象, 以免对单个任务陷入长时间运行,
-			// 而造成其他任务没有机会执行的问题.
+			// 如果该 p 被调度处于 running 状态超过了 10ms, 就抢占ta的 g 对象, 
+			// 以免对单个任务陷入长时间运行, 而造成其他任务没有机会执行的问题.
 
-			// 注意: 对 running 状态的p的抢占并不会影响本次 retake() 执行的结果
+			// 注意: 对 running 状态的 p 的抢占并不会影响本次 retake() 执行的结果
 			// 因为此函数的返回值为 n, 这一部分的代码并不会对 n 有修改.
 			t = p->schedtick;
 			// if 条件为真, 说明是这个p对应的 pd 第一次被调用, 就当作初始化了
@@ -3421,7 +3544,7 @@ retake(int64 now)
 	return n;
 }
 
-// 告诉所有的正在运行的goroutines(其实遍历的是p对象链表), ta们被抢占了, 需要停止.
+// 告诉所有的正在运行的goroutines(其实遍历的是 p 对象链表), ta们被抢占了, 需要停止.
 // 只在 gc STW 时会用到.
 //
 // ta只是用for循环对每个处于running状态的p对象调用 preemptone(p),
@@ -3509,7 +3632,7 @@ preemptone(P *p)
 	return true;
 }
 
-// GODEBUG=schedtrace=1000 时生效的方法, 打印出当前GMP调度信息.
+// 开发者通过 GODEBUG=schedtrace=1000 执行程序时生效的方法, 打印出当前GMP调度信息.
 //
 // param detailed: 添加有 GODEBUG=scheddetail=1 参数时为 true, 否则默认为 false.
 //
@@ -3548,12 +3671,17 @@ runtime·schedtrace(bool detailed)
 			runtime·sched.stopwait, runtime·sched.sysmonwait
 		);
 	}
+	
+	// 以下分别对 P M G 列表进行遍历.
+	
 	// We must be careful while reading data from P's, M's and G's.
 	// Even if we hold schedlock, most data can be changed concurrently.
 	// E.g. (p->m ? p->m->id : -1) can crash if p->m changes from non-nil to nil.
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
-		if(p == nil) continue;
+		if(p == nil) {
+			continue;
+		} 
 		mp = p->m;
 		t = p->runqtail;
 		h = p->runqhead;
@@ -3588,6 +3716,7 @@ runtime·schedtrace(bool detailed)
 		runtime·unlock(&runtime·sched);
 		return;
 	}
+
 	for(mp = runtime·allm; mp; mp = mp->alllink) {
 		p = mp->p;
 		gp = mp->curg;
@@ -3664,10 +3793,12 @@ static void
 globrunqput(G *gp)
 {
 	gp->schedlink = nil;
-	if(runtime·sched.runqtail)
+	if(runtime·sched.runqtail) {
 		runtime·sched.runqtail->schedlink = gp;
-	else
+	}
+	else {
 		runtime·sched.runqhead = gp;
+	}
 	runtime·sched.runqtail = gp;
 	runtime·sched.runqsize++;
 }
@@ -3687,16 +3818,24 @@ globrunqget(P *p, int32 max)
 	int32 n;
 
 	// ...全局待运行队列为0
-	if(runtime·sched.runqsize == 0) return nil;
+	if(runtime·sched.runqsize == 0) {
+		return nil;
+	} 
 	// ...要把runq中的任务平均分给每个p吗
 	n = runtime·sched.runqsize/runtime·gomaxprocs+1;
 	// 下面这种情况应该是gomaxprocs = 1时吧
-	if(n > runtime·sched.runqsize) n = runtime·sched.runqsize;
+	if(n > runtime·sched.runqsize) {
+		n = runtime·sched.runqsize;
+	} 
 
-	if(max > 0 && n > max) n = max;
+	if(max > 0 && n > max) {
+		n = max;
+	} 
 	runtime·sched.runqsize -= n;
 
-	if(runtime·sched.runqsize == 0) runtime·sched.runqtail = nil;
+	if(runtime·sched.runqsize == 0) {
+		runtime·sched.runqtail = nil;
+	} 
 	// 要返回的p链表, 从sched的runqhead开始.
 	// 同时将这个链表中的g成员通过qunqput添加到p的本地待执行队列中.
 	gp = runtime·sched.runqhead;
@@ -3785,7 +3924,9 @@ runqget(P *p)
 	G *gp;
 	int32 t, h, s;
 	// 本地待执行队列为空, 返回nil
-	if(p->runqhead == p->runqtail) return nil;
+	if(p->runqhead == p->runqtail) {
+		return nil;
+	} 
 
 	runtime·lock(p);
 	h = p->runqhead;
@@ -3800,7 +3941,9 @@ runqget(P *p)
 	}
 	gp = p->runq[h++]; // 指针++操作, 就是指针后移吧?
 	// 这里是什么意思? h指针怎么可以与s相比了???
-	if(h == s) h = 0;
+	if(h == s) {
+		h = 0;
+	} 
 
 	p->runqhead = h;
 	runtime·unlock(p);
@@ -3848,20 +3991,24 @@ runqsteal(P *p, P *p2)
 	G *gp, *gp1;
 	int32 t, h, s, t2, h2, s2, c, i;
 
-	if(p2->runqhead == p2->runqtail)
+	if(p2->runqhead == p2->runqtail) {
 		return nil;
+	}
 	// sort locks to prevent deadlocks
-	if(p < p2)
+	if(p < p2) {
 		runtime·lock(p);
+	}
 	runtime·lock(p2);
 	if(p2->runqhead == p2->runqtail) {
 		runtime·unlock(p2);
-		if(p < p2)
+		if(p < p2) {
 			runtime·unlock(p);
+		}
 		return nil;
 	}
-	if(p >= p2)
+	if(p >= p2) {
 		runtime·lock(p);
+	}
 	// now we've locked both queues and know the victim is not empty
 	h = p->runqhead;
 	t = p->runqtail;
@@ -3870,27 +4017,34 @@ runqsteal(P *p, P *p2)
 	t2 = p2->runqtail;
 	s2 = p2->runqsize;
 	gp = p2->runq[h2++];  // return value
-	if(h2 == s2)
+	if(h2 == s2) {
 		h2 = 0;
+	}
 	// steal roughly half
-	if(t2 > h2)
+	if(t2 > h2) {
 		c = (t2 - h2) / 2;
-	else
+	}
+	else {
 		c = (s2 - h2 + t2) / 2;
+	}
 	// copy
 	for(i = 0; i != c; i++) {
 		// the target queue is full?
-		if(t == h-1 || (h == 0 && t == s-1))
+		if(t == h-1 || (h == 0 && t == s-1)) {
 			break;
+		}
 		// the victim queue is empty?
-		if(t2 == h2)
+		if(t2 == h2) {
 			break;
+		}
 		gp1 = p2->runq[h2++];
-		if(h2 == s2)
+		if(h2 == s2) {
 			h2 = 0;
+		}
 		p->runq[t++] = gp1;
-		if(t == s)
+		if(t == s) {
 			t = 0;
+		}
 	}
 	p->runqtail = t;
 	p2->runqhead = h2;
@@ -3913,18 +4067,21 @@ runtime·testSchedLocalQueue(void)
 	p.runq = runtime·malloc(p.runqsize*sizeof(*p.runq));
 
 	for(i = 0; i < nelem(gs); i++) {
-		if(runqget(&p) != nil)
+		if(runqget(&p) != nil) {
 			runtime·throw("runq is not empty initially");
-		for(j = 0; j < i; j++)
+		}
+		for(j = 0; j < i; j++) {
 			runqput(&p, &gs[i]);
+		}
 		for(j = 0; j < i; j++) {
 			if(runqget(&p) != &gs[i]) {
 				runtime·printf("bad element at iter %d/%d\n", i, j);
 				runtime·throw("bad element");
 			}
 		}
-		if(runqget(&p) != nil)
+		if(runqget(&p) != nil) {
 			runtime·throw("runq is not empty afterwards");
+		}
 	}
 }
 
@@ -3962,8 +4119,9 @@ runtime·testSchedLocalQueueSteal(void)
 			s++;
 			gp->sig++;
 		}
-		while(gp = runqget(&p1))
+		while(gp = runqget(&p1)) {
 			gp->sig++;
+		}
 		for(j = 0; j < i; j++) {
 			if(gs[j].sig != 1) {
 				runtime·printf("bad element %d(%d) at iter %d\n", j, gs[j].sig, i);
@@ -3998,6 +4156,9 @@ runtime·topofstack(Func *f)
 		f->entry == (uintptr)_rt0_go;
 }
 
+// golang原生: runtime/debug.SetMaxThreads()
+//
+// 设置 golang runtime 底层可使用的系统线程(thread)数, maxmcount 默认值为 10000.
 void
 runtime∕debug·setMaxThreads(intgo in, intgo out)
 {
@@ -4018,11 +4179,15 @@ haveexperiment(int8 *name)
 	
 	for(i=0; i<sizeof(experiment); i++) {
 		if((i == 0 || experiment[i-1] == ',') && experiment[i] == name[0]) {
-			for(j=0; name[j]; j++)
-				if(experiment[i+j] != name[j]) goto nomatch;
+			for(j=0; name[j]; j++) {
+				if(experiment[i+j] != name[j]) {
+					goto nomatch;
+				}
+			}
 
-			if(experiment[i+j] != '\0' && experiment[i+j] != ',')
+			if(experiment[i+j] != '\0' && experiment[i+j] != ',') {
 				goto nomatch;
+			}
 			return 1;
 		}
 	nomatch:;

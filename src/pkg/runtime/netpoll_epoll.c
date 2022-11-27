@@ -10,12 +10,14 @@
 int32	runtime·epollcreate(int32 size);
 int32	runtime·epollcreate1(int32 flags);
 int32	runtime·epollctl(int32 epfd, int32 op, int32 fd, EpollEvent *ev);
+// 这是一段汇编代码, 底层直接是 232 号系统调用 epoll_wait (我觉得可以用 c 语言直接写???)
 int32	runtime·epollwait(int32 epfd, EpollEvent *ev, int32 nev, int32 timeout);
 void	runtime·closeonexec(int32 fd);
 
 // epfd 是全局变量, 难道整个进程只需要1个??? 
 // nginx中也是这么用的么???
-static int32 epfd = -1;  // epoll descriptor
+// epoll descriptor
+static int32 epfd = -1;
 
 // caller: 
 // 	1. netpoll.goc -> runtime_pollServerInit()
@@ -58,7 +60,7 @@ runtime·netpollclose(uintptr fd)
 	return -res;
 }
 
-// 轮询查找已经准备好的网络连接, 返回状态变为 runnable 的 goroutine 列表.
+// 轮询查找已经准备好的网络连接, 返回状态变为 runnable 的 goroutine 列表(非阻塞).
 //
 // polls for ready network connections
 // returns list of goroutines that become runnable
@@ -103,6 +105,7 @@ retry:
 		}
 
 		if(mode) {
+			// 该函数在同目录下的 netpool.goc 文件中定义
 			runtime·netpollready(&gp, (void*)ev->data, mode);
 		} 
 	}

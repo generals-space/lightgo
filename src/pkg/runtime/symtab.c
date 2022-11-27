@@ -50,7 +50,9 @@ static String end = { (uint8*)"end", 3 };
 
 // 初始化函数符号表
 // ...但好像只是一个检测的过程, 符号表在这之前应该就已经填好了.
-// caller: runtime·schedinit() 只有这一处调用
+//
+// caller: 
+// 	1. runtime·schedinit() 只有这一处调用
 void
 runtime·symtabinit(void)
 {
@@ -80,12 +82,17 @@ runtime·symtabinit(void)
 			// 函数符号表中的成员未按照地址排序, 是不应该出现的.
 			f1 = (Func*)(pclntab + ftab[i].funcoff);
 			f2 = (Func*)(pclntab + ftab[i+1].funcoff);
-			runtime·printf("function symbol table not sorted by program counter: %p %s > %p %s", 
+			runtime·printf(
+				"function symbol table not sorted by program counter: %p %s > %p %s", 
 				ftab[i].entry, runtime·funcname(f1), ftab[i+1].entry, 
-				i+1 == nftab ? "end" : runtime·funcname(f2));
-			for(j=0; j<=i; j++)
-				runtime·printf("\t%p %s\n", 
-					ftab[j].entry, runtime·funcname((Func*)(pclntab + ftab[j].funcoff)));
+				i+1 == nftab ? "end" : runtime·funcname(f2)
+			);
+			for(j=0; j<=i; j++) {
+				runtime·printf(
+					"\t%p %s\n", 
+					ftab[j].entry, runtime·funcname((Func*)(pclntab + ftab[j].funcoff))
+				);
+			}
 			runtime·throw("invalid runtime symbol table");
 		}
 	}
@@ -111,11 +118,13 @@ readvarint(byte **pp)
 	return v;
 }
 
-// caller: mgc0.c -> addframeroots() (在这个函数中有两处调用)
 // 获取目标函数 f 的参数列表或局部变量的地址信息.
 // 参数 i 的取值可以为 FUNCDATA_GCArgs(值为0)/FUNCDATA_GCLocals(值为1),
 // 在 funcdata.h 中定义.
 // 表示获取指定函数对象 f 的传入参数/局部变量的地址信息.
+//
+// caller: 
+// 	1. mgc0.c -> addframeroots() (在这个函数中有两处调用)
 void*
 runtime·funcdata(Func *f, int32 i)
 {

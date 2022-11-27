@@ -64,9 +64,10 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 	runtime·futex(addr, FUTEX_WAIT, val, &ts, nil, 0);
 }
 
-// If any procs are sleeping on addr, wake up at most cnt.
 // wakeup可以唤醒在 addr 处休眠的进程, 可能不只一个,
 // cnt 可以指定此次操作能够唤醒多少个休眠中的进程.
+//
+// If any procs are sleeping on addr, wake up at most cnt.
 void
 runtime·futexwakeup(uint32 *addr, uint32 cnt)
 {
@@ -74,11 +75,12 @@ runtime·futexwakeup(uint32 *addr, uint32 cnt)
 
 	ret = runtime·futex(addr, FUTEX_WAKE, cnt, nil, nil, 0);
 
-	if(ret >= 0) return;
+	if(ret >= 0) {
+		return;
+	} 
 
 	// I don't know that futex wakeup can return EAGAIN or EINTR, 
-	// but if it does, 
-	// it would be safe to loop and call futex again.
+	// but if it does, it would be safe to loop and call futex again.
 	// ...这里很难理解
 	runtime·printf("futexwakeup addr=%p returned %D\n", addr, ret);
 	*(int32*)0x1006 = 0x1006;
@@ -86,6 +88,11 @@ runtime·futexwakeup(uint32 *addr, uint32 cnt)
 
 // runtime·sched_getaffinity()是汇编代码, 是名为 sched_getaffinity()的系统调用.
 extern runtime·sched_getaffinity(uintptr pid, uintptr len, uintptr *buf);
+
+// getproccount 获取物理机实际 cpu 核数
+//
+// caller:
+// 	1. runtime·osinit() 只有这一处, 在 runtime 启动时被调用.
 static int32
 getproccount(void)
 {
@@ -94,12 +101,13 @@ getproccount(void)
 
 	cnt = 0;
 	r = runtime·sched_getaffinity(0, sizeof(buf), buf);
-	if(r > 0)
-	for(i = 0; i < r/sizeof(buf[0]); i++) {
-		t = buf[i];
-		t = t - ((t >> 1) & 0x5555555555555555ULL);
-		t = (t & 0x3333333333333333ULL) + ((t >> 2) & 0x3333333333333333ULL);
-		cnt += (int32)((((t + (t >> 4)) & 0xF0F0F0F0F0F0F0FULL) * 0x101010101010101ULL) >> 56);
+	if(r > 0) {
+		for(i = 0; i < r/sizeof(buf[0]); i++) {
+			t = buf[i];
+			t = t - ((t >> 1) & 0x5555555555555555ULL);
+			t = (t & 0x3333333333333333ULL) + ((t >> 2) & 0x3333333333333333ULL);
+			cnt += (int32)((((t + (t >> 4)) & 0xF0F0F0F0F0F0F0FULL) * 0x101010101010101ULL) >> 56);
+		}
 	}
 
 	return cnt ? cnt : 1;
@@ -128,10 +136,12 @@ enum
 	CLONE_NEWIPC = 0x8000000,
 };
 
-// 汇编代码实现 clone 系统调用.
+// 调用 clone 系统调用创建新的系统线程, 并绑定到传入的 M 对象, 新线程将执行 runtime·mstart() 方法.
+//
+// clone 系统调用由汇编代码实现.
 //
 // caller:
-// 	1. src/pkg/runtime/proc.c -> newm() 创建 m 对象时, 调用此函数创建系统线程.
+// 	1. src/pkg/runtime/proc.c -> newm() 创建 m 对象时, 调用此函数创建系统线程. 只有这一处.
 void
 runtime·newosproc(M *mp, void *stk)
 {
@@ -171,8 +181,20 @@ runtime·newosproc(M *mp, void *stk)
 		);
 		runtime·throw("runtime.newosproc");
 	}
+
+	// 自定义 runtime 信息打印
+	if(runtime·debug.scheddetail >= 3) {
+		// 注意, 调用 clone 时, 传入的 mp 对象还只是一个空的结构体, 并没有绑定任何 p 跟 g,
+		// 所以这里都是空的, 就不打印ta们的 id 值了.
+		runtime·printf(
+			"newosproc m=%d g=%p p=%p newproc=%d\n",
+			mp->id, mp->curg, mp->p, ret
+		);
+	}
 }
 
+// caller: 
+// 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 主程序入口
 void
 runtime·osinit(void)
 {
@@ -243,8 +265,9 @@ runtime·sigpanic(void)
 	switch(g->sig) {
 	case SIGBUS:
 		if(g->sigcode0 == BUS_ADRERR && g->sigcode1 < 0x1000) {
-			if(g->sigpc == 0)
+			if(g->sigpc == 0) {
 				runtime·panicstring("call of nil func value");
+			}
 			runtime·panicstring("invalid memory address or nil pointer dereference");
 		}
 		runtime·printf("unexpected fault address %p\n", g->sigcode1);
@@ -254,8 +277,9 @@ runtime·sigpanic(void)
 			g->sigcode0 == SEGV_MAPERR || 
 			g->sigcode0 == SEGV_ACCERR) && 
 			g->sigcode1 < 0x1000) {
-			if(g->sigpc == 0)
+			if(g->sigpc == 0) {
 				runtime·panicstring("call of nil func value");
+			}
 			runtime·panicstring("invalid memory address or nil pointer dereference");
 		}
 		runtime·printf("unexpected fault address %p\n", g->sigcode1);

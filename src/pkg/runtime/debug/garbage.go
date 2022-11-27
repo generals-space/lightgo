@@ -24,7 +24,9 @@ func readGCStats(*[]time.Duration)
 func enableGC(bool) bool
 func setGCPercent(int) int
 func freeOSMemory()
+// 由 src/pkg/runtime/stack.c -> runtime∕debug·setMaxStack() 函数实现
 func setMaxStack(int) int
+// 由 src/pkg/runtime/proc.c -> runtime∕debug·setMaxThreads() 函数实现
 func setMaxThreads(int) int
 
 // ReadGCStats reads statistics about garbage collection into stats.

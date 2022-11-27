@@ -26,7 +26,9 @@ func chan02() {
 func chan03() {
 	var schan chan string
 	schan = make(chan string)
+	// 有下面这个协程在, 就不会出现因为 deadlock 而 panic 的情况了, 而是直接阻塞.
 	go func(){
+		// 1个小时后才有 receiver 出现
 		time.Sleep(time.Second*3600)
 		log.Printf("%s\n", <-schan)
 	}()

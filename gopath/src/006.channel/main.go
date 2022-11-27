@@ -23,4 +23,4 @@ func main() {
 }
 
 // go build -gcflags='-l -N' -o main.gobin main.go
-// export GODEBUG=schedtrace=1000,scheddetail=1
+// export GODEBUG==1000,scheddetail=1schedtrace

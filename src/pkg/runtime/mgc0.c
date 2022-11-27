@@ -218,10 +218,15 @@ static void	gchelperstart(void);
 static struct {
 	uint64	full;  // lock-free list of full blocks
 	uint64	empty; // lock-free list of empty blocks
+
 	// prevents false-sharing between full/empty and nproc/nwait
-	byte	pad0[CacheLineSize]; 
+	byte	pad0[CacheLineSize];
+
 	// 参与执行gc的协程数量, 其值由 runtime·gcprocs() 设置.
-	// 取值为 min(GOMAXPROCS, ncpu, MaxGcproc)
+	// 取值为 min(GOMAXPROCS, ncpu, MaxGcproc), 其中
+	// 1. GOMAXPROCS 由开发者通过环境变量设置;
+	// 2. ncpu 为物理机实际 cpu 核数(在 runtime 启动时自动探测);
+	// 3. MaxGcproc 
 	// 参与执行gc的协程要运行的是 runtime·gchelper() 函数.
 	uint32	nproc;
 	volatile uint32	nwait;

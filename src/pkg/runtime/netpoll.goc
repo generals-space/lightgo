@@ -228,6 +228,9 @@ runtime·netpollfd(PollDesc *pd)
 	return pd->fd;
 }
 
+// caller:
+// 	1. src/pkg/runtime/netpoll_epoll.c -> runtime·netpoll()
+//
 // make pd ready, newly runnable goroutines (if any) are enqueued info gpp list
 void
 runtime·netpollready(G **gpp, PollDesc *pd, int32 mode)
