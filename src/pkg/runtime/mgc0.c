@@ -22,12 +22,13 @@ enum {
 	ScanStackByFrames = 0,
 	IgnorePreciseGC = 0,
 
-	// Four bits per word (see #defines below).
-	// word 是一种逻辑单位, 与 pointer 同级, 占用空间 4 bits.
-	// 那我觉得这里其实是把每 4 bits 叫作一个 word.
-	// bitmap 中只要一个word(4 bits)就可以描述一个 arena 中的pointer(8 bits * 8).
+	// wordsPerBitmapWord = 16, 表示 bitmap 中每个 word 对应 arena 中 word 的个数.
+	//
+	// word(字)是一种逻辑单位, 与指针(pointer)同级, 占用空间 4 bits.
+	// bitmap 区域中只要一个 word(4 bits)就可以描述一个 arena 中的指针(8 bits * 8).
 	// bitmap:arena == 1:16
-	// wordsPerBitmapWord = 16
+	//
+	// Four bits per word (see #defines below).
 	wordsPerBitmapWord = sizeof(void*)*8/4,
 	// bitShift = 16
 	bitShift = sizeof(void*)*8/4,
@@ -42,8 +43,7 @@ enum {
 
 	// Pointer map
 	BitsPerPointer = 2,
-	// 每个指针的信息用 BitsPerPointer 个 bit 即可表示,
-	// 可有如下4种情况.
+	// 每个指针的信息用 BitsPerPointer 个 bit 即可表示, 可有如下4种情况.
 	// 在 scanbitvector() 函数中有对相关变量与 3(0000 0000 0000 0011)做与操作,
 	// 得到结果后与如下4种情况做比较的操作. 
 	BitsNoPointer = 0, 	// 非指针对象
@@ -52,85 +52,59 @@ enum {
 	BitsEface = 3,		// 接口数据对象
 };
 
+// 关于 bitmap 中, 每个 word(字)的每个"bit位"的描述.
+//
+// <!link!>: {32a3d702-70db-4cae-852b-5c12ce491afc}
+//
 // Bits in per-word bitmap.
 // #defines because enum might not be able to hold the values.
 //
 // Each word in the bitmap describes wordsPerBitmapWord words of heap memory. 
-// bitmap中的每个字(word)都描述了arena中wordsPerBitmapWord(即16)个字.
-// (我觉得这里word只是一个大小的单位, 并没有具体意义)
 //
 // There are 4 bitmap bits dedicated to each heap word,
 // so on a 64-bit system there is one bitmap word per 16 heap words.
-// arena区域中的每个指针, 都可以用bitmap区域中4 bit来描述, 
-// 所以在64位系统中, bitmap区域中一个字可以指定16个堆中的字(大小4 bits).
 //
 // The bits in the word are packed together by type first, then by heap location, 
 // so each 64-bit bitmap word consists of, from top to bottom,
-// the 16 bitSpecial bits for the corresponding heap words, then the 16 bitMarked bits,
-// then the 16 bitNoScan/bitBlockBoundary bits, then the 16 bitAllocated bits.
+// the 16 bitSpecial bits for the corresponding heap words,
+// then the 16 bitMarked bits,
+// then the 16 bitNoScan/bitBlockBoundary bits,
+// then the 16 bitAllocated bits.
 // This layout makes it easier to iterate over the bits of a given type.
-// 字中的bit位填充, 首先表示目标类型, 之后的表示处于堆的位置.
-// 所以在bitmap中每个64-bit的字(一个字就是一个指针, 8 bytes, 也即64 bits)的组成, 从上到下依次为, 
-// 16个bitSpecial, 用于表示指定的heap中的字, 然后是16个bitMarked,
-// 还有16个bitNoScan/bitBlockBoundary, 然后是16个bitAllocated.
-// 这样的布局使得迭代一个指定类型的bit位时更加容易.
 //
 // The bitmap starts at mheap.arena_start and extends *backward* from there. 
 // On a 64-bit system the off'th word in the arena is tracked by
 // the off/16+1'th word before mheap.arena_start. 
 // (On a 32-bit system, the only difference is that the divisor is 8.)
-// bitmap区域从mheap.arena_start开始, 并且向后扩展.
-// 在64位系统中, arena区域的第off个字, 可以通过mheap.arena_start前
-// (就是bitmap区域了)的第(off/16+1)个字查询到(没毛病).
 //
 // To pull out the bits corresponding to a given pointer p, we use:
-// 为了找到 bitmap 中描述指定指针 p 的相关 bit 位, 通常进行如下计算:
 // 
-// p为某个对象在arena区域所占空间的起始地址, off是偏移量(两个地址间的差, 并不是字节, 而是精确到bit了).
-// b则表示bitmap中相应字的位置...??? 好像不管怎么算, 单位都不太对啊
 //	off = p - (uintptr*)mheap.arena_start;  // word offset
 //	b = (uintptr*)mheap.arena_start - off/wordsPerBitmapWord - 1;
 //	shift = off % wordsPerBitmapWord
 //	bits = *b >> shift; // 注意这里对b用*做取值操作.
 //	/* then test bits & bitAllocated, bits & bitMarked, etc. */
 //
-// 下图可以分析出off与b的计算方法, x1表示1个字的大小
-//     * bitmap *|********************** arena *************************
-//     +----+----|--------------------------+--------------------------+
-//     | x1 | x1 |            x16           |            x16           |
-//     +----+----|--------------------------+--------------------------+
-//        |   └────────────────┘                          ↑
-//        └───────────────────────────────────────────────┘
-//
-// 下面可以分析出shift的计算方法, shift是指在bitmap中的一个字中, 指向目标heap中字的那4 bit的偏移量.
-// 但这4 bit并不是连续的, 而是分别存放在4段.
-// 如下, shift为2(从0开始), 目标是arena区域的某16个字中的第2个指针块, 
-// 而bits则是那4 bit各自右移得到的 0x 000* 000* 000* 000* 
-// 与bitAllocated, bitNoScan做与操作可以得到结果.
-// 
-//                                       bitBlockBoundary
-//     bitSpecial    |    bitMarked    |    bitNoScan    |   bitAllocated
-// |********|********|********|********|********|********|********|********|      <====================================== bitmap
-//                |                 └─────────┐┌──────┘                 |
-//                └──────────────────────────┐||┌───────────────────────┘
-//                                           ↓↓↓↓
-//                                +----+----+----+----+----+----+----+----|----+----+----+----+----+----+----+----+
-//                                | x1 | x1 | x1 |   ...   | x1 | x1 | x1 | x1 | x1 | x1 |   ...   | x1 | x1 | x1 | <==== arena
-//                                +----+----+----+----+----+----+----+----|----+----+----+----+----+----+----+----+
-//                                | <-------------- x16 ----------------> |
-//
 // FFFF FFFF FFFF FFFF
 // 使用 printf() 打印时, 格式需要使用"%D", 才能打印64位长整型(与常规c语言的"%ld"不太一样)
 //
 // 0000 0000 0000 0001(1)
 #define bitAllocated		((uintptr)1<<(bitShift*0))
-// 0000 0000 0001 0000(65536)
-#define bitNoScan		((uintptr)1<<(bitShift*1))	/* when bitAllocated is set */
+// 0000 0000 0001 0000(65536) (与 bitBlockBoundary 取值相同)
+/* when bitAllocated is set */
+#define bitNoScan		((uintptr)1<<(bitShift*1))
 // 0000 0001 0000 0000(4294967296)
-#define bitMarked		((uintptr)1<<(bitShift*2))	/* when bitAllocated is set */
+/* when bitAllocated is set */
+#define bitMarked		((uintptr)1<<(bitShift*2))
 // 0001 0000 0000 0000(281474976710656)
-#define bitSpecial		((uintptr)1<<(bitShift*3))	/* when bitAllocated is set - has finalizer or being profiled */
-#define bitBlockBoundary	((uintptr)1<<(bitShift*1))	/* when bitAllocated is NOT set */
+/* when bitAllocated is set - has finalizer or being profiled */
+#define bitSpecial		((uintptr)1<<(bitShift*3))
+// 0000 0000 0001 0000(65536) (与 bitNoScan 取值相同)
+/* when bitAllocated is NOT set */
+#define bitBlockBoundary	((uintptr)1<<(bitShift*1))
+// bitMask 是3种已知的"bit位"组合, 用来先对目标块的"bit位"进行清零的. 
+// 最典型的例子就是: *bitp & ~(bitMask<<shift)
+//
 // 0001 0001 0000 0001
 #define bitMask (bitBlockBoundary | bitAllocated | bitMarked | bitSpecial)
 
@@ -150,6 +124,10 @@ enum {
 //
 uint32 runtime·worldsema = 1;
 
+// 常用的对象构造语法: (Obj){p, n, ti}
+// p: 该对象实际存储数据的位置
+// n: 该对象存储的数据的大小(bytes)
+// ti: 该对象的类型信息
 typedef struct Obj Obj;
 struct Obj
 {
@@ -198,10 +176,11 @@ extern byte ebss[];
 extern byte gcdata[];
 extern byte gcbss[];
 
-// 用来执行finalizer的协程 ~~链表~~, 不对, 好像只有一个
+// 用来执行 finalizer 的协程 ~~链表~~, 不对, 好像只有一个
 static G *fing; 
-// list of finalizers that are to be executed
 // 等待执行的finalizer链表
+//
+// list of finalizers that are to be executed
 static FinBlock *finq; 
 static FinBlock *finc; // cache of free blocks
 static FinBlock *allfin; // list of all blocks
@@ -290,11 +269,13 @@ static struct {
 	} markonly;
 } gcstats;
 
-// 标记对象. 主要就是找到该对象在bitmap区域的映射地址, 添加bitMarked标记.
+// 标记对象. 主要就是找到该对象在 bitmap 区域的映射地址, 添加 bitMarked 标记.
+// (需要目标块已存在 bitAllocated 标记)
+//
+// 	@param obj: arena 区域中的某个指针(ta在 bitmap 区域一定有对应的描述字(word)信息)
 //
 // markonly marks an object. 
-// It returns true if the object
-// has been marked by this function, false otherwise.
+// It returns true if the object has been marked by this function, false otherwise.
 // This function doesn't append the object to any buffer.
 static bool
 markonly(void *obj)
@@ -309,25 +290,32 @@ markonly(void *obj)
 		return false;
 	}
 
-	// obj may be a pointer to a live object.
-	// Try to find the beginning of the object.
 	// obj可能是指向一个对象的指针, 尝试找到这个对象的起始地址.
 	// 这么说其实是obj可能是某个结构体内部的成员? 虽然是指针但并不指向对象的起始位置.
+	//
+	// obj may be a pointer to a live object.
+	// Try to find the beginning of the object.
 
-	// Round down to word boundary. 
 	// 向下取整到字边界...啥意思?
+	//
+	// Round down to word boundary. 
 	obj = (void*)((uintptr)obj & ~((uintptr)PtrSize-1));
 
+	// 下面几行计算语句, 根据 obj 对象地址, 反推其在 bitmap 中描述字的地址, 详细解释可见:
+	// <!link!>: {32a3d702-70db-4cae-852b-5c12ce491afc}
+	//
 	// Find bits for this word.
-	// 找到这个字在bitmap中的位置
 	off = (uintptr*)obj - (uintptr*)runtime·mheap.arena_start;
 	bitp = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
 	shift = off % wordsPerBitmapWord;
 	xbits = *bitp;
 	bits = xbits >> shift;
 
+	// 如果正好指向一个块的起始位置(后面还有连续的内容)
+	//
+	// 注意: 这里两个"bit位"是或运算, 表示同时成立.
+	//
 	// Pointing at the beginning of a block?
-	// 如果正好指向一个块的边界
 	if((bits & (bitAllocated|bitBlockBoundary)) != 0) {
 		if(CollectStats) {
 			runtime·xadd64(&gcstats.markonly.foundbit, 1);
@@ -335,9 +323,11 @@ markonly(void *obj)
 		goto found;
 	}
 
+	// 如果指向的不是起始地址, 反向寻找直到找到边界.
+	// 不过这个 for{} 循环的意思, 好像边界就是在当前 bitmap 块内...那更大的对象呢.
+	//
 	// Pointing just past the beginning?
 	// Scan backward a little to find a block boundary.
-	// 如果指向的不是起始地址, 反向寻找直到找到边界.
 	for(j=shift; j-->0; ) {
 		if(((xbits>>j) & (bitAllocated|bitBlockBoundary)) != 0) {
 			shift = j;
@@ -357,7 +347,7 @@ markonly(void *obj)
 	if(sizeof(void*) == 8) {
 		x -= (uintptr)runtime·mheap.arena_start>>PageShift;
 	} 
-	// runtime·mheap.spans是MSpan类型指针的指针, 用于查询...???
+	// runtime·mheap.spans 是MSpan类型指针的指针, 用于查询...???
 	// s应该是指向MSpan的地址.
 	s = runtime·mheap.spans[x];
 
@@ -384,19 +374,29 @@ markonly(void *obj)
 		runtime·xadd64(&gcstats.markonly.foundspan, 1);
 	} 
 
+// 为目标字设置 bitMarked 标记.
 found:
+	// 如果 obj 已经失去了 bitAllocated 标记, 或是已经拥有了 bitMarked 标记.
+	// 表示ta被人释放/标记过了, 直接退出, 不再进行下一步操作.
+	//
 	// Now we have bits, bitp, and shift correct for
 	// obj pointing at the base of the object.
 	// Only care about allocated and not marked.
-	// 如果obj已经拥有bitMarked标记, 返回false
-	if((bits & (bitAllocated|bitMarked)) != bitAllocated) return false;
-	// 如果只有一个GC工作线程, 直接添加bitMarked标记
-	if(work.nproc == 1) *bitp |= bitMarked<<shift;
-	else {
+	if((bits & (bitAllocated|bitMarked)) != bitAllocated) {
+		return false;
+	}
+	// 如果只有一个 GC 工作线程, 直接添加 bitMarked 标记
+	if(work.nproc == 1) {
+		*bitp |= bitMarked<<shift;
+	} else {
 		for(;;) {
 			x = *bitp;
-			if(x & (bitMarked<<shift)) return false;
-			if(runtime·casp((void**)bitp, (void*)x, (void*)(x|(bitMarked<<shift)))) break;
+			if(x & (bitMarked<<shift)) {
+				return false;
+			} 
+			if(runtime·casp((void**)bitp, (void*)x, (void*)(x|(bitMarked<<shift)))) {
+				break;
+			} 
 		}
 	}
 
@@ -480,14 +480,17 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 
 	// If buffer is nearly full, get a new one.
 	if(wbuf == nil || nobj+n >= nelem(wbuf->obj)) {
-		if(wbuf != nil) wbuf->nobj = nobj;
+		if(wbuf != nil) {
+			wbuf->nobj = nobj;
+		} 
 
 		wbuf = getempty(wbuf);
 		wp = wbuf->obj;
 		nobj = 0;
 
-		if(n >= nelem(wbuf->obj))
+		if(n >= nelem(wbuf->obj)) {
 			runtime·throw("ptrbuf has to be smaller than WorkBuf");
+		}
 	}
 
 	// TODO(atom): This block is a branch of an if-then-else statement.
@@ -502,8 +505,9 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 
 			// obj belongs to interval [mheap.arena_start, mheap.arena_used).
 			if(Debug > 1) {
-				if(obj < runtime·mheap.arena_start || obj >= runtime·mheap.arena_used)
+				if(obj < runtime·mheap.arena_start || obj >= runtime·mheap.arena_used) {
 					runtime·throw("object is outside of mheap");
+				}
 			}
 
 			// obj may be a pointer to a live object.
@@ -524,8 +528,9 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 
 			// Pointing at the beginning of a block?
 			if((bits & (bitAllocated|bitBlockBoundary)) != 0) {
-				if(CollectStats)
+				if(CollectStats) {
 					runtime·xadd64(&gcstats.flushptrbuf.foundbit, 1);
+				}
 				goto found;
 			}
 
@@ -538,8 +543,9 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 					obj = (byte*)obj - (shift-j)*PtrSize;
 					shift = j;
 					bits = xbits>>shift;
-					if(CollectStats)
+					if(CollectStats) {
 						runtime·xadd64(&gcstats.flushptrbuf.foundword, 1);
+					}
 					goto found;
 				}
 			}
@@ -548,11 +554,13 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 			// (Manually inlined copy of MHeap_LookupMaybe.)
 			k = (uintptr)obj>>PageShift;
 			x = k;
-			if(sizeof(void*) == 8)
+			if(sizeof(void*) == 8) {
 				x -= (uintptr)arena_start>>PageShift;
+			}
 			s = runtime·mheap.spans[x];
-			if(s == nil || k < s->start || obj >= s->limit || s->state != MSpanInUse)
+			if(s == nil || k < s->start || obj >= s->limit || s->state != MSpanInUse) {
 				continue;
+			}
 			p = (byte*)((uintptr)s->start<<PageShift);
 			if(s->sizeclass == 0) {
 				obj = p;
@@ -568,36 +576,43 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 			shift = off % wordsPerBitmapWord;
 			xbits = *bitp;
 			bits = xbits >> shift;
-			if(CollectStats)
+			if(CollectStats) {
 				runtime·xadd64(&gcstats.flushptrbuf.foundspan, 1);
+			}
 
 		found:
 			// Now we have bits, bitp, and shift correct for
 			// obj pointing at the base of the object.
 			// Only care about allocated and not marked.
-			if((bits & (bitAllocated|bitMarked)) != bitAllocated)
+			if((bits & (bitAllocated|bitMarked)) != bitAllocated) {
 				continue;
-			if(work.nproc == 1)
+			}
+			if(work.nproc == 1) {
 				*bitp |= bitMarked<<shift;
+			}
 			else {
 				for(;;) {
 					x = *bitp;
-					if(x & (bitMarked<<shift))
+					if(x & (bitMarked<<shift)) {
 						goto continue_obj;
-					if(runtime·casp((void**)bitp, (void*)x, (void*)(x|(bitMarked<<shift))))
+					}
+					if(runtime·casp((void**)bitp, (void*)x, (void*)(x|(bitMarked<<shift)))) {
 						break;
+					}
 				}
 			}
 
 			// If object has no pointers, don't need to scan further.
-			if((bits & bitNoScan) != 0)
+			if((bits & bitNoScan) != 0) {
 				continue;
+			}
 
 			// Ask span about size class.
 			// (Manually inlined copy of MHeap_Lookup.)
 			x = (uintptr)obj >> PageShift;
-			if(sizeof(void*) == 8)
+			if(sizeof(void*) == 8) {
 				x -= (uintptr)arena_start>>PageShift;
+			}
 			s = runtime·mheap.spans[x];
 
 			PREFETCH(obj);
@@ -648,13 +663,15 @@ flushobjbuf(Obj *objbuf, Obj **objbufpos, Obj **_wp, Workbuf **_wbuf, uintptr *_
 			obj.ti = 0;
 		}
 
-		if(obj.p == nil || obj.n == 0)
+		if(obj.p == nil || obj.n == 0) {
 			continue;
+		}
 
 		// If buffer is full, get a new one.
 		if(wbuf == nil || nobj >= nelem(wbuf->obj)) {
-			if(wbuf != nil)
+			if(wbuf != nil) {
 				wbuf->nobj = nobj;
+			}
 			wbuf = getempty(wbuf);
 			wp = wbuf->obj;
 			nobj = 0;
@@ -700,18 +717,22 @@ checkptr(void *obj, uintptr objti)
 	Type *t;
 	MSpan *s;
 
-	if(!Debug)
+	if(!Debug) {
 		runtime·throw("checkptr is debug only");
+	}
 
-	if(obj < runtime·mheap.arena_start || obj >= runtime·mheap.arena_used)
+	if(obj < runtime·mheap.arena_start || obj >= runtime·mheap.arena_used) {
 		return;
+	}
 	type = runtime·gettype(obj);
 	t = (Type*)(type & ~(uintptr)(PtrSize-1));
-	if(t == nil)
+	if(t == nil) {
 		return;
+	}
 	x = (uintptr)obj >> PageShift;
-	if(sizeof(void*) == 8)
+	if(sizeof(void*) == 8) {
 		x -= (uintptr)(runtime·mheap.arena_start)>>PageShift;
+	}
 	s = runtime·mheap.spans[x];
 	objstart = (byte*)((uintptr)s->start<<PageShift);
 	if(s->sizeclass != 0) {
@@ -721,12 +742,15 @@ checkptr(void *obj, uintptr objti)
 	tisize = *(uintptr*)objti;
 	// Sanity check for object size: it should fit into the memory block.
 	if((byte*)obj + tisize > objstart + s->elemsize) {
-		runtime·printf("object of type '%S' at %p/%p does not fit in block %p/%p\n",
-			       *t->string, obj, tisize, objstart, s->elemsize);
+		runtime·printf(
+			"object of type '%S' at %p/%p does not fit in block %p/%p\n",
+			*t->string, obj, tisize, objstart, s->elemsize
+		);
 		runtime·throw("invalid gc type info");
 	}
-	if(obj != objstart)
+	if(obj != objstart) {
 		return;
+	}
 	// If obj points to the beginning of the memory block,
 	// check type info as well.
 	if(t->string == nil ||
@@ -739,15 +763,30 @@ checkptr(void *obj, uintptr objti)
 		// A simple best-effort check until first GC_END.
 		for(j = 1; pc1[j] != GC_END && pc2[j] != GC_END; j++) {
 			if(pc1[j] != pc2[j]) {
-				runtime·printf("invalid gc type info for '%s' at %p, type info %p, block info %p\n",
-					       t->string ? (int8*)t->string->str : (int8*)"?", j, pc1[j], pc2[j]);
+				runtime·printf(
+					"invalid gc type info for '%s' at %p, type info %p, block info %p\n",
+					t->string ? (int8*)t->string->str : (int8*)"?", j, pc1[j], pc2[j]
+				);
 				runtime·throw("invalid gc type info");
 			}
 		}
 	}
 }
 
-// ##scanblock
+// scanblock 扫描一个起始地址为 b, 大小为 n bytes 的块, 
+// 目的是找到这个块引用的所有其他的对象.
+// 没有使用递归, 而是使用了一个 Workbuf* 结构体指针的工作列表, 然后遍历ta.
+// 维护一个列表比递归更简单(在栈分配上), 而且更高效.
+// ...应该就是广度优先与深度优先的区别吧.
+// ...超长的一个函数
+// wbuf: current work buffer
+// wp:   storage for next queued pointer (write pointer)
+// nobj: number of queued objects
+// caller: 
+// 	1. markroot()
+// 	2. runtime·gchelper()
+// 	3. gc()
+//
 // scanblock scans a block of n bytes starting at pointer b 
 // for references to other objects, 
 // scanning any it finds recursively until there are no
@@ -758,16 +797,6 @@ checkptr(void *obj, uintptr objti)
 // Keeping an explicit work list is easier 
 // on the stack allocator and more efficient.
 // 
-// scanblock扫描一个起始地址为b的大小为n bytes的块, 
-// 目的是找到这个块引用的所有其他的对象.
-// 没有使用递归, 而是使用了一个Workbuf*结构体指针的工作列表, 然后遍历ta.
-// 维护一个列表比递归更简单(在栈分配上), 而且更高效.
-// ...应该就是广度优先与深度优先的区别吧.
-// ...超长的一个函数
-// wbuf: current work buffer
-// wp:   storage for next queued pointer (write pointer)
-// nobj: number of queued objects
-// caller: markroot(), runtime·gchelper(), gc().
 static void
 scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 {
@@ -787,8 +816,9 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 	Hchan *chan;
 	ChanType *chantype;
 
-	if(sizeof(Workbuf) % PageSize != 0)
+	if(sizeof(Workbuf) % PageSize != 0) {
 		runtime·throw("scanblock: size of Workbuf is suboptimal");
+	}
 
 	// Memory arena parameters.
 	arena_start = runtime·mheap.arena_start;
@@ -1188,8 +1218,9 @@ debug_scanblock(byte *b, uintptr n)
 	uintptr size, *bitp, bits, shift, i, xbits, off;
 	MSpan *s;
 
-	if(!DebugMark)
+	if(!DebugMark) {
 		runtime·throw("debug_scanblock without DebugMark");
+	}
 
 	if((intptr)n < 0) {
 		runtime·printf("debug_scanblock %p %D\n", b, (int64)n);
@@ -1209,16 +1240,18 @@ debug_scanblock(byte *b, uintptr n)
 		obj = (byte*)vp[i];
 
 		// Words outside the arena cannot be pointers.
-		if((byte*)obj < runtime·mheap.arena_start || (byte*)obj >= runtime·mheap.arena_used)
+		if((byte*)obj < runtime·mheap.arena_start || (byte*)obj >= runtime·mheap.arena_used) {
 			continue;
+		}
 
 		// Round down to word boundary.
 		obj = (void*)((uintptr)obj & ~((uintptr)PtrSize-1));
 
 		// Consult span table to find beginning.
 		s = runtime·MHeap_LookupMaybe(&runtime·mheap, obj);
-		if(s == nil)
+		if(s == nil) {
 			continue;
+		}
 
 		p =  (byte*)((uintptr)s->start<<PageShift);
 		size = s->elemsize;
@@ -1239,34 +1272,43 @@ debug_scanblock(byte *b, uintptr n)
 		// Now we have bits, bitp, and shift correct for
 		// obj pointing at the base of the object.
 		// If not allocated or already marked, done.
-		if((bits & bitAllocated) == 0 || (bits & bitSpecial) != 0)  // NOTE: bitSpecial not bitMarked
+		//
+		// NOTE: bitSpecial not bitMarked
+		if((bits & bitAllocated) == 0 || (bits & bitSpecial) != 0) {
 			continue;
+		}
 		*bitp |= bitSpecial<<shift;
-		if(!(bits & bitMarked))
+		if(!(bits & bitMarked)) {
 			runtime·printf("found unmarked block %p in %p\n", obj, vp+i);
+		}
 
 		// If object has no pointers, don't need to scan further.
-		if((bits & bitNoScan) != 0)
+		if((bits & bitNoScan) != 0) {
 			continue;
+		}
 
 		debug_scanblock(obj, size);
 	}
 }
 
-// ##enqueue
+// 	@param obj: work.roots 数组中的某个成员.
+//
+// caller:
+// 	1. markroot()
+// 	2. scanblock()
+//
 // Append obj to the work buffer.
 // _wbuf, _wp, _nobj are input/output parameters 
 // and are specifying the work buffer.
-static void
-enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
+static void enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 {
 	uintptr nobj, off;
 	Obj *wp;
 	Workbuf *wbuf;
 
-	if(Debug > 1) 
-		runtime·printf("append obj(%p %D %p)\n", 
-			obj.p, (int64)obj.n, obj.ti);
+	if(Debug > 1) {
+		runtime·printf("append obj(%p %D %p)\n", obj.p, (int64)obj.n, obj.ti);
+	}
 
 	// Align obj.b to a word boundary.
 	off = (uintptr)obj.p & (PtrSize-1);
@@ -1276,7 +1318,9 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 		obj.ti = 0;
 	}
 
-	if(obj.p == nil || obj.n == 0) return;
+	if(obj.p == nil || obj.n == 0) {
+		return;
+	} 
 
 	// Load work buffer state
 	wp = *_wp;
@@ -1293,7 +1337,9 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 
 	// If buffer is full, get a new one.
 	if(wbuf == nil || nobj >= nelem(wbuf->obj)) {
-		if(wbuf != nil) wbuf->nobj = nobj;
+		if(wbuf != nil) {
+			wbuf->nobj = nobj;
+		} 
 		wbuf = getempty(wbuf);
 		wp = wbuf->obj;
 		nobj = 0;
@@ -1309,9 +1355,13 @@ enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 	*_nobj = nobj;
 }
 
-// 在addroots()之后调用.
-// desc为work.markfor, i为任务索引, 这里是[0 到 (work.nroot-1)]
-// caller: gc()
+// 	@param desc: work.markfor, 实际是 markroot(), 是一个函数.
+// 	@param i: 为任务索引, work.roots 为全部任务, i 的范围在 [0, (work.nroot-1)]
+//
+// caller: 
+// 	1. gc() 只有这一处. 在 addroots() 之后被设置, 
+// 	但实际是在 src/pkg/runtime/parfor.c -> runtime·parfordo() 中, 
+// 	当作 desc->body 被调用.
 static void
 markroot(ParFor *desc, uint32 i)
 {
@@ -1332,7 +1382,9 @@ markroot(ParFor *desc, uint32 i)
 static Workbuf*
 getempty(Workbuf *b)
 {
-	if(b != nil) runtime·lfstackpush(&work.full, &b->node);
+	if(b != nil) {
+		runtime·lfstackpush(&work.full, &b->node);
+	} 
 
 	b = (Workbuf*)runtime·lfstackpop(&work.empty);
 	if(b == nil) {
@@ -1341,8 +1393,9 @@ getempty(Workbuf *b)
 		if(work.nchunk < sizeof *b) {
 			work.nchunk = 1<<20;
 			work.chunk = runtime·SysAlloc(work.nchunk, &mstats.gc_sys);
-			if(work.chunk == nil)
+			if(work.chunk == nil) {
 				runtime·throw("runtime: cannot allocate memory");
+			}
 		}
 		b = (Workbuf*)work.chunk;
 		work.chunk += sizeof *b;
@@ -1356,7 +1409,9 @@ getempty(Workbuf *b)
 static void
 putempty(Workbuf *b)
 {
-	if(CollectStats) runtime·xadd64(&gcstats.putempty, 1);
+	if(CollectStats) {
+		runtime·xadd64(&gcstats.putempty, 1);
+	} 
 
 	runtime·lfstackpush(&work.empty, &b->node);
 }
@@ -1367,13 +1422,19 @@ getfull(Workbuf *b)
 {
 	int32 i;
 
-	if(CollectStats) runtime·xadd64(&gcstats.getfull, 1);
+	if(CollectStats) {
+		runtime·xadd64(&gcstats.getfull, 1);
+	} 
 
-	if(b != nil) runtime·lfstackpush(&work.empty, &b->node);
+	if(b != nil) {
+		runtime·lfstackpush(&work.empty, &b->node);
+	} 
 
 	b = (Workbuf*)runtime·lfstackpop(&work.full);
 
-	if(b != nil || work.nproc == 1) return b;
+	if(b != nil || work.nproc == 1) {
+		return b;
+	} 
 
 	runtime·xadd(&work.nwait, +1);
 	for(i=0;; i++) {
@@ -1381,12 +1442,16 @@ getfull(Workbuf *b)
 			runtime·xadd(&work.nwait, -1);
 			b = (Workbuf*)runtime·lfstackpop(&work.full);
 			
-			if(b != nil) return b;
+			if(b != nil) {
+				return b;
+			} 
 			
 			runtime·xadd(&work.nwait, +1);
 		}
 		
-		if(work.nwait == work.nproc) return nil;
+		if(work.nwait == work.nproc) {
+			return nil;
+		} 
 
 		if(i < 10) {
 			m->gcstats.nprocyield++;
@@ -1421,23 +1486,26 @@ handoff(Workbuf *b)
 	return b1;
 }
 
-// ##addroot
-// 只是简单地把参数obj添加到work.roots列表下...
+// 只是简单地把参数 obj 添加到 work.roots 列表下.
+//
+// caller:
+// 	1. addroots
+//
 static void
 addroot(Obj obj)
 {
 	uint32 cap;
 	Obj *new;
-	// 为root节点容量扩容
+	// 为 root 节点扩容
 	if(work.nroot >= work.rootcap) {
 		cap = PageSize/sizeof(Obj);
-		
+
 		if(cap < 2*work.rootcap) {
 			cap = 2*work.rootcap;
 		} 
-		
+
 		new = (Obj*)runtime·SysAlloc(cap*sizeof(Obj), &mstats.gc_sys);
-		
+
 		if(new == nil) {
 			runtime·throw("runtime: cannot allocate memory");
 		} 
@@ -1462,8 +1530,10 @@ struct BitVector
 	uint32 data[];
 };
 
+// caller: 
+// 	1. scanbitvector() 只有这一处
+//
 // Scans an interface data value when the interface type indicates that it is a pointer.
-// caller: scanbitvector() 只有这一处
 static void
 scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 {
@@ -1474,8 +1544,7 @@ scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 		if(bits == BitsIface) {
 			tab = *(Itab**)scanp;
 
-			if(tab->type->size <= sizeof(void*) && 
-				(tab->type->kind & KindNoPointers)) {
+			if(tab->type->size <= sizeof(void*) && (tab->type->kind & KindNoPointers)) {
 				return;
 			}
 		} else { 
@@ -1544,9 +1613,12 @@ scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 	}
 }
 
-// Scan a stack frame: local variables and function arguments/results.
 // 扫描栈帧, 包括局部变量和函数参数及返回值.
-// caller: addstackroots() 只有这一处
+//
+// caller: 
+// 	1. addstackroots() 只有这一处
+//
+// Scan a stack frame: local variables and function arguments/results.
 static void
 addframeroots(Stkframe *frame, void*)
 {
@@ -1592,14 +1664,14 @@ addframeroots(Stkframe *frame, void*)
 	}
 }
 
-// addroots操作遍历栈空间时调用.
-// 由于此时已经经过了STW, 所以理论上所有的g对象都处于休眠状态.
+// addroots ...
+//
+// 由于此时已经经处于 STW 阶段, 所以理论上所有的 g 对象都处于休眠状态.
 // 对所有处于 runnable, waiting 和 syscall 状态的g对象都调用此函数.
 //
 // caller: 
-// 	1. addroots()
-static void
-addstackroots(G *gp)
+// 	1. addroots() 遍历栈空间时调用
+static void addstackroots(G *gp)
 {
 	M *mp;
 	int32 n;
@@ -1693,7 +1765,7 @@ addfinroots(void *v)
 // 这就是添加传说中的根节点吗?
 //
 // caller: 
-// 	1. gc() 只有一处被调用过.
+// 	1. gc() 只有这一处.
 static void
 addroots(void)
 {
@@ -1704,15 +1776,16 @@ addroots(void)
 
 	work.nroot = 0;
 
+	// gcdata 与 gcbss 都是全局变量
+	// data 是数据段, bss 是静态全局变量所在段...这里原来不是堆吗?
+	//
 	// data & bss
 	// TODO(atom): load balancing
-	// ##addroot
-	// gcdata与gcbss都是全局变量
-	// data是数据段, bss是静态全局变量所在段...这里原来不是堆吗?
 	addroot((Obj){data, edata - data, (uintptr)gcdata});
 	addroot((Obj){bss, ebss - bss, (uintptr)gcbss});
 
-	// 这是遍历堆空间?
+	// 遍历堆空间
+	//
 	// MSpan.types
 	allspans = runtime·mheap.allspans;
 	for(spanidx=0; spanidx<runtime·mheap.nspan; spanidx++) {
@@ -1733,7 +1806,7 @@ addroots(void)
 			}
 		}
 	}
-	// 遍历栈空间, gc的目标不只是堆. 除了堆和栈, 还有全局变量区.
+	// 遍历栈空间, gc 的目标不只是堆. 除了堆和栈, 还有全局变量区.
 	// stacks
 	for(gp=runtime·allg; gp!=nil; gp=gp->alllink) {
 		switch(gp->status){
@@ -1743,7 +1816,7 @@ addroots(void)
 		case Gdead:
 			break;
 		case Grunning:
-			// 此时已经经过STW, 不应该有g还处于运行状态的.
+			// 此时已经经过 STW, 不应该有 g 还处于运行状态的.
 			runtime·throw("mark - world not stopped");
 		case Grunnable:
 		case Gsyscall:
@@ -1800,9 +1873,16 @@ handlespecial(byte *p, uintptr size)
 	return true;
 }
 
-// sweep释放或收集在mark阶段没有被标记的块的finalizers终结器.
-// 并且清理了mark标识位, 为下一次GC做准备.
-// desc为work.sweepfor, idx为任务索引, 这里是[0 到 (runtime·mheap.nspan-1)]
+// sweepspan 释放或收集在 mark 阶段没有被标记的块的 finalizers 终结器.
+// 并且清理了 mark 标识位, 为下一次GC做准备.
+//
+// 	@param desc: work.sweepfor 成员;
+// 	@param idx: 任务索引, 这里是[0, (runtime·mheap.nspan-1)]
+//
+// caller:
+// 	1. gc() 只有这一处. 在 addroots() 之后被设置
+// 	但实际是在 src/pkg/runtime/parfor.c -> runtime·parfordo() 中, 
+// 	当作 desc->body 被调用.
 //
 // Sweep frees or collects finalizers for blocks not marked in the mark phase.
 // It clears the mark bits in preparation for the next GC round.
@@ -1822,22 +1902,23 @@ sweepspan(ParFor *desc, uint32 idx)
 	MSpan *s;
 
 	USED(&desc);
-	// 这个s才是本次sweep的目标吧
+	// 这个 s 才是本次 sweep 的目标
 	s = runtime·mheap.allspans[idx];
 	if(s->state != MSpanInUse) {
 		return;
-	} 
+	}
 
 	arena_start = runtime·mheap.arena_start;
-	p = (byte*)(s->start << PageShift); // s的起始地址, 指针类型(start为页号)
+	// p 为 s 的起始地址, 指针类型(start 为页号)
+	p = (byte*)(s->start << PageShift);
 	cl = s->sizeclass;
 	size = s->elemsize;
 	if(cl == 0) {
-		// size等级为0, 表示是在heap分配的>32k的大对象.
-		// 这里的n应该是span包含的...对象的个数?
+		// size等级为 0, 表示是在 heap 分配的 >32k 的大对象.
+		// 这里的 n 应该是 span 包含的...对象的个数?
 		n = 1;
 	} else {
-		// 小对象
+		// 常规小对象
 		// Chunk full of small blocks.
 		npages = runtime·class_to_allocnpages[cl];
 		n = (npages << PageShift) / size;
@@ -1856,11 +1937,12 @@ sweepspan(ParFor *desc, uint32 idx)
 		break;
 	}
 
+	// 从地址 p 开始, size 为步长, 对 n 个对象遍历操作.
+	// 目前当前线程拥有这个 span 的控制权, 对其 bitmap 标记的修改无需原子操作
+	//
 	// Sweep through n objects of given size starting at p.
-	// This thread owns the span now, so it can manipulate
-	// the block bitmap without atomic operations.
-	// 对n个对象遍历操作.
-	// 目前当前线程拥有这个span的控制权, 对其bitmap标记的修改无需原子操作
+	// This thread owns the span now, so it can manipulate the block bitmap
+	// without atomic operations.
 	for(; n > 0; n--, p += size, type_data+=type_data_inc) {
 		uintptr off, *bitp, shift, bits;
 
@@ -1871,7 +1953,7 @@ sweepspan(ParFor *desc, uint32 idx)
 		// 该block未被分配, 跳过
 		if((bits & bitAllocated) == 0) {
 			continue;
-		} 
+		}
 		// 该block已经被标记过
 		if((bits & bitMarked) != 0) {
 			if(DebugMark) {
@@ -1897,8 +1979,9 @@ sweepspan(ParFor *desc, uint32 idx)
 		*bitp = (*bitp & ~(bitMask<<shift)) | (bitBlockBoundary<<shift);
 
 		if(cl == 0) {
-			// Free large span.
 			// 大对象, 直接归还给heap
+			//
+			// Free large span.
 			runtime·unmarkspan(p, 1<<PageShift);
 			// needs zeroing
 			*(uintptr*)p = (uintptr)0xdeaddeaddeaddeadll;
@@ -1916,16 +1999,18 @@ sweepspan(ParFor *desc, uint32 idx)
 				break;
 			}
 			// mark as "needs to be zeroed"
-			if(size > sizeof(uintptr)) ((uintptr*)p)[1] = (uintptr)0xdeaddeaddeaddeadll;	
-			// 将可回收的小对象object组成链表
+			if(size > sizeof(uintptr)) {
+				((uintptr*)p)[1] = (uintptr)0xdeaddeaddeaddeadll;
+			}
+			// 将可回收的小对象 object 组成链表
 			end->next = (MLink*)p;
 			end = (MLink*)p;
 			nfree++;
 		}
 	}
 
-	// 如果nfree大于0, 表示找了可回收的object(存放在p链表中).
-	// 将可回收的object链表归还给span
+	// 如果 nfree 大于0, 表示找了可回收的 object(存放在p链表中).
+	// 将可回收的 object 链表归还给 span
 	if(nfree) {
 		c->local_nsmallfree[cl] += nfree;
 		c->local_cachealloc -= nfree * size;
@@ -2011,9 +2096,11 @@ runtime·memorydump(void)
 }
 
 // 执行这个函数的都是参与gc的几个协程, 数量在 [1-nproc] 之间.
-// caller: proc.c -> stopm(), 只有这一处.
-// stopm() 这个函数有一个休眠等待的过程, 被唤醒时, 如果 m->helpgc > 0,
-// 就会调用这个函数, 来辅助执行gc.
+//
+// caller: 
+// 	1. proc.c -> stopm(), 只有这一处.
+// 	stopm() 这个函数有一个休眠等待的过程, 被唤醒时, 如果 m->helpgc > 0,
+// 	就会调用这个函数, 来辅助执行 gc.
 void
 runtime·gchelper(void)
 {
@@ -2063,7 +2150,9 @@ runtime·gchelper(void)
 // 
 static int32 gcpercent = GcpercentUnknown;
 
-// caller: updatememstats(), gc()
+// caller: 
+// 	1. updatememstats()
+// 	2. gc()
 static void
 cachestats(void)
 {
@@ -2209,14 +2298,22 @@ readgogc(void)
 
 static FuncVal runfinqv = {runfinq};
 
-// param force: 是否为强制 gc. 其实应该叫例行 gc, 普通 gc 是看空间使用量, 到达一定比率开始执行.
-// 				如果2分钟内没有被动 gc, 则进行主动的例行 gc.
+// runtime·gc 先进入 STW 阶段, 然后调用 runtime·mcall(mgc) 在 g0 上进行实际 gc 行为,
+// 完成后, 再解除 STW, 重新启用调度器.
+//
+// 	@param force: 是否为强制 gc(其实应该叫例行 gc) 普通 gc 是看空间使用量, 到达一定比率开始执行.
+// 	如果2分钟内没有被动 gc, 则进行主动的例行 gc.
 //
 // caller:
-// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() 分配可gc对象的同时, 检查空间使用情况, 满足条件时进行一次gc.
-// 	2. runfinq()
-// 	3. src/pkg/runtime/mheap.c -> forcegchelper() 2分钟内没有进行 gc 时, 则进行例行 gc(也叫强制 gc)
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() force 参数 = false
+// 	分配可gc对象的同时, 检查空间使用情况, 满足条件时调用本函数进行一次 gc.
+// 	2. src/pkg/runtime/mheap.c -> forcegchelper() force 参数 = true
+// 	2分钟内没有进行 gc 时, 则进行例行 gc(也叫强制 gc)
+// 	在进程启动初期就创建一个协程完成这项工作(runtime·MHeap_Scavenger())
+// 	3. runfinq()
+// 	还没想通使用场景
 // 	4. src/pkg/runtime/mheap.c -> runtime∕debug·freeOSMemory()
+// 	调试使用
 // 	5. GC() runtime 标准库中的 GC() 函数, 由开发者主动调用
 void
 runtime·gc(int32 force)
@@ -2224,14 +2321,15 @@ runtime·gc(int32 force)
 	struct gc_args a;
 	int32 i;
 
-	// The atomic operations are not atomic if the uint64s
-	// are not aligned on uint64 boundaries. 
-	// This has been a problem in the past.
-	// 在empty/full这两个uint64类型的成员没有在uint64边界上对齐时, 
+	// 在 empty/full 这两个 uint64 类型的成员没有在 uint64 边界上对齐时, 
 	// 原子操作其实并不原子...
 	// 这个问题在之前就出现了.
 	// 7 == 0111
 	// work对象在当前文件的开头定义(第200行左右)
+	//
+	// The atomic operations are not atomic if the uint64s
+	// are not aligned on uint64 boundaries. 
+	// This has been a problem in the past.
 	if((((uintptr)&work.empty) & 7) != 0) {
 		runtime·throw("runtime: gc work buffer is misaligned");
 	}
@@ -2239,41 +2337,44 @@ runtime·gc(int32 force)
 		runtime·throw("runtime: gc work buffer is misaligned");
 	}
 
+	// 如下情况退出GC
+	// 1. enablegc == 0 表示 runtime 还未启动完成, 该值在 runtime·schedinit() 末尾才被赋值为 1
+	// 2. 很多持有lock锁的库中会调用malloc, 为了避免优先级混乱的问题, 在持有锁的函数中就不要调用gc了.
+	// malloc下面的mallocgc可以在没有锁的情况下进行gc操作.
+	//
 	// The gc is turned off (via enablegc) until the bootstrap has completed.
-	// Also, malloc gets called in the guts
-	// of a number of libraries that might be holding locks. 
+	// Also, malloc gets called in the guts of a number of libraries
+	// that might be holding locks. 
 	// To avoid priority inversion problems, 
 	// don't bother trying to run gc while holding a lock. 
 	// The next mallocgc without a lock will do the gc instead.
-	// 如下情况退出GC
-	// 1. enablegc == 0表示runtime还未启动完成, 这个值在runtime·schedinit()末尾才被赋值为1
-	// 2. 很多持有lock锁的库中会调用malloc, 为了避免优先级混乱的问题, 在持有锁的函数中就不要调用gc了.
-	// malloc下面的mallocgc可以在没有锁的情况下进行gc操作.
 	if(!mstats.enablegc || g == m->g0 || m->locks > 0 || runtime·panicking) {
 		return;
 	}
 
+	// 首次调用(gcpercent 初始值就是 GcpercentUnknown)
+	//
 	// first time through
-	// 首次调用(gcpercent初始值就是GcpercentUnknown)
 	if(gcpercent == GcpercentUnknown) {
 		runtime·lock(&runtime·mheap);
-		// 第一次执行, 调用 readgogc() 从环境变量中取GOGC设置. 
-		// GOGC为off时得到-1, 其他的默认情况下返回100
+		// 第一次执行, 调用 readgogc() 从环境变量中取 GOGC 设置. 
+		// GOGC == off 时得到 -1, 其他的默认情况下返回 100
 		if(gcpercent == GcpercentUnknown) {
 			gcpercent = readgogc();
 		} 
 
 		runtime·unlock(&runtime·mheap);
 	}
-	// 当GOGC设置为off时, gcpercent的值将取-1
+	// 当 GOGC == off 时, gcpercent 的值将取-1, 相当于关闭GC.
 	if(gcpercent < 0) {
 		return;
 	} 
 
-	// gc STW前尝试获取全局锁
+	// gc STW 前尝试获取全局锁
 	runtime·semacquire(&runtime·worldsema, false);
 
-	// 如果不强制gc, 而此时还没有 next_gc 的时间时, 就退出了...
+	// 如果不是强制(例行) gc, 而此时还没有 next_gc 的时间时, 就退出了...
+	// 这种情况适用于第1种主调函数
 	if(!force && mstats.heap_alloc < mstats.next_gc) {
 		// typically threads which lost the race to grab worldsema exit here when gc is done.
 		runtime·semrelease(&runtime·worldsema);
@@ -2285,15 +2386,17 @@ runtime·gc(int32 force)
 	m->gcing = 1;
 	runtime·stoptheworld();
 
-	// Run gc on the g0 stack. 
-	// We do this so that the g stack we're currently running on will no longer change. 
-	// Cuts the root set down a bit (g0 stacks are not scanned, 
-	// and we don't need to scan gc's internal state). 
-	// Also an enabler for copyable stacks.
 	// GODEBUG="gotrace=2" 会引发两次回收
+	//
+	// Run gc on the g0 stack. 
+	// We do this so that the g stack we're currently running on will no longer change.
+	// Cuts the root set down a bit
+	// (g0 stacks are not scanned, and we don't need to scan gc's internal state).
+	// Also an enabler for copyable stacks.
 	for(i = 0; i < (runtime·debug.gctrace > 1 ? 2 : 1); i++) {
+		// 调用 runtime·mcall(mgc), 在 g0 上进行实际的 gc 操作.
+		//
 		// switch to g0, call gc(&a), then switch back
-		// 这其实就是runtime·mcall的作用
 		g->param = &a;
 		g->status = Gwaiting;
 		g->waitreason = "garbage collection";
@@ -2306,23 +2409,27 @@ runtime·gc(int32 force)
 		a.start_time = runtime·nanotime();
 	}
 
+	// gc 完成后.
+	//
 	// all done
 	m->gcing = 0;
 	m->locks++;
-	// gc STW后释放全局锁
+	// gc 后释放全局锁, 
 	runtime·semrelease(&runtime·worldsema);
 	runtime·starttheworld();
 	m->locks--;
 
-	// now that gc is done, kick off finalizer thread if needed
-	// 现在gc已经完成, 如果有需要, 则启动finalizer线程.
+	// 现在 gc 已经完成, 如果有需要, 则启动 finalizer 线程.
 	// finq 等待执行的finalizer链表
+	//
+	// now that gc is done, kick off finalizer thread if needed
 	if(finq != nil) {
 		runtime·lock(&finlock);
-		// kick off or wake up goroutine to run queued finalizers
 		// fing 用来执行finalizer的线程对象, 指针类型
 		// 如果finq不空, 但fing为nil, 就创建一个G协程, 来运行runfinqv.
 		// 而funfinqv其实就是runqinq函数.
+		//
+		// kick off or wake up goroutine to run queued finalizers
 		if(fing == nil) {
 			fing = runtime·newproc1(&runfinqv, nil, 0, 0, runtime·gc);
 		}
@@ -2336,14 +2443,17 @@ runtime·gc(int32 force)
 		}
 		runtime·unlock(&finlock);
 	}
+	// 使已经在排队的 finalizer 有机会执行...
+	// 话说 startworld 并不表示重新开始调度吗???
+	//
 	// give the queued finalizers, if any, a chance to run
-	// 使已经在排队的finalizer有机会执行...
-	// 话说startworld并不表示重新开始调度吗???
 	runtime·gosched();
 }
 
+// 	@param gp: 主调函数所在的 g 对象
+//
 // caller: 
-// 	1. runtime·gc() 在STW后调用
+// 	1. runtime·gc() 在进入 STW 阶段后, 调用 runtime·mcall(mgc) 在 g0 上执行该函数
 static void
 mgc(G *gp)
 {
@@ -2355,10 +2465,11 @@ mgc(G *gp)
 
 // 确定参与 gc 的协程数量, 调用 addroots() 添加根节点.
 //
+// 	@param gp: 主调函数所在的 g 对象
+//
 // caller:
-// 	1. mgc() 只有这一处(mgc()则是由 runtime·gc()调用的)
-static void
-gc(struct gc_args *args)
+// 	1. mgc() 只有这一处, mgc()则是由 runtime·gc()调用的, 该函数是在 g0 上执行的.
+static void gc(struct gc_args *args)
 {
 	int64 t0, t1, t2, t3, t4;
 	uint64 heap0, heap1, obj0, obj1, ninstr;
@@ -2369,7 +2480,7 @@ gc(struct gc_args *args)
 
 	t0 = args->start_time;
 
-	// 清空 gcstats, 记录本次gc的数据
+	// 清空 gcstats, 记录本次 gc 的数据
 	if(CollectStats) {
 		runtime·memclr((byte*)&gcstats, sizeof(gcstats));
 	} 
@@ -2386,8 +2497,9 @@ gc(struct gc_args *args)
 		obj0 = mstats.nmalloc - mstats.nfree;
 	}
 
-	// disable gc during mallocs in parforalloc
 	// ...这还要啥disable啊, 现在就是gc啊
+	//
+	// disable gc during mallocs in parforalloc
 	m->locks++;
 	if(work.markfor == nil) {
 		work.markfor = runtime·parforalloc(MaxGcproc);
@@ -2409,11 +2521,12 @@ gc(struct gc_args *args)
 	// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, ncpu, MaxGcproc).
 	work.nproc = runtime·gcprocs();
 	addroots();
-	// 设置markfor, sweepfor并⾏mark、sweep 属性, markroot与sweepspan都是函数
+	// 将 work.markfor 成员的 body 字段, 设置为 markroot 函数
 	runtime·parforsetup(work.markfor, work.nproc, work.nroot, nil, false, markroot);
+	// 将 work.sweepfor 成员的 body 字段, 设置为 sweepspan 函数
 	runtime·parforsetup(work.sweepfor, work.nproc, runtime·mheap.nspan, nil, true, sweepspan);
-	// 如果执行gc操作的协程数量大于1, 那么在进行之后的操作之前, 需要保证这些协程全部完成才行.
-	// 所以下面有 notesleep(alldone) 的语句, 而在 sleep 之前, 则需要使用 claer 对目标锁对象清零.
+	// 如果执行 gc 操作的协程数量大于1, 那么在进行之后的操作之前, 需要保证这些协程全部完成才行.
+	// 所以下面有 notesleep(alldone) 的语句, 而在 sleep 之前, 则需要使用 clear 对目标锁对象清零.
 	if(work.nproc > 1) {
 		runtime·noteclear(&work.alldone);
 		runtime·helpgc(work.nproc);
@@ -2422,7 +2535,7 @@ gc(struct gc_args *args)
 	t1 = runtime·nanotime();
 
 	gchelperstart();
-	// 并行mark, 执行上面设置的markroot操作
+	// 并行 mark, 执行上面设置的 markroot() 函数
 	runtime·parfordo(work.markfor);
 	// ...这参数都是nil, 效果是啥???
 	// 对了, 在parfordo中循环调用的markfor, 也就是markroot函数中,
@@ -2439,7 +2552,7 @@ gc(struct gc_args *args)
 
 	t2 = runtime·nanotime();
 
-	// 并行sweep, 执行上面设置的sweepspan操作
+	// 并行 sweep, 执行上面设置的 sweepspan() 函数
 	runtime·parfordo(work.sweepfor);
 	bufferList[m->helpgc].busy = 0;
 
@@ -2522,11 +2635,15 @@ gc(struct gc_args *args)
 
 			runtime·printf(
 				"markonly base lookup: bit %D word %D span %D\n", 
-				gcstats.markonly.foundbit, gcstats.markonly.foundword, gcstats.markonly.foundspan
+				gcstats.markonly.foundbit, 
+				gcstats.markonly.foundword, 
+				gcstats.markonly.foundspan
 			);
 			runtime·printf(
 				"flushptrbuf base lookup: bit %D word %D span %D\n", 
-				gcstats.flushptrbuf.foundbit, gcstats.flushptrbuf.foundword, gcstats.flushptrbuf.foundspan
+				gcstats.flushptrbuf.foundbit, 
+				gcstats.flushptrbuf.foundword, 
+				gcstats.flushptrbuf.foundspan
 			);
 		}
 	}
@@ -2592,17 +2709,23 @@ runtime∕debug·setGCPercent(intgo in, intgo out)
 {
 	runtime·lock(&runtime·mheap);
 
-	if(gcpercent == GcpercentUnknown) gcpercent = readgogc();
-	
+	if(gcpercent == GcpercentUnknown) {
+		gcpercent = readgogc();
+	} 
+
 	out = gcpercent;
 
-	if(in < 0) in = -1;
-	
+	if(in < 0) {
+		in = -1;
+	} 
+
 	gcpercent = in;
 	runtime·unlock(&runtime·mheap);
 	FLUSH(&out);
 }
 
+// 做一些准备工作, 比如验证 m->helpgc 的合法性, 判断当前g是否为g0等
+//
 // caller: 
 // 	1. runtime·gchelper()
 // 	2. gc()
@@ -2693,10 +2816,15 @@ runfinq(void)
 	}
 }
 
-// 标记从地址v开始, 大小为n的内存块为已分配状态.
+// 标记从地址v开始, 大小为 n 的内存块为已分配状态.
+// 不过, 只设置了 v 在 bitmap 区域中最开头的块的标记, 没有设置后续的描述字.
+// 变量 n 只是被用做边界检查, 在设置目标字的"bit位"时, 并没有用到ta.
+//
+// 	@param v: arena 区域中目标对象的起始地址指针.
 //
 // caller:
-// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc()
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() 只有这一处
+// 	为新对象在堆上分配空间时调用.
 //
 // mark the block at v of size n as allocated.
 // If noscan is true, mark it as not needing scanning.
@@ -2709,44 +2837,40 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 		runtime·printf("markallocated %p+%p\n", v, n);
 	}
 
-	// 如果v+n的区域超出了arena部分, 则抛出异常.
+	// 如果 v+n 的区域超出了 arena 部分, 则抛出异常.
 	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start) {
 		runtime·throw("markallocated: bad pointer");
 	}
 
-	// off 是起始地址 v 距 arena_start 处的偏移量, 是一个整数.
+	// 下面几行计算语句, 根据 obj 对象地址, 反推其在 bitmap 中描述字的地址, 详细解释可见:
+	// <!link!>: {32a3d702-70db-4cae-852b-5c12ce491afc}
+	//
 	// word offset
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;
-	// 这是计算映射在bitmap区域中的位置, b 是一个指针.
-	//
-	// 注意: 指针-指针, 得到的数值应该乘以8, 才能真正表示两个指针间的差值.
-	// 如果将 arena_start 和 b 将 0xXXX 形式的16进制指针, 转换成10进制,
-	// 那下面的公式其实应该为 arena_start - b = (off/wordsPerBitmapWord + 1) * 8
-	// 假设 off 为 15360, 则 arena_start - b = (15360 / 16 + 1) * 8
+	// b 为 v 对象在 bitmap 区域中描述字(word)信息所在的地址指针.
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
-	// 注意: shift 是取模结果, 用来测整除的.
 	shift = off % wordsPerBitmapWord;
 
-	// 无限循环, 直到设置成功才结束.
+	// 无限循环, 直到设置成功才结束(主要是应对多协程运行时, casp 的原子操作).
 	for(;;) {
-		// 注意: bits, obits 都是64位整型, 需要 8 个 bytes 的空间存储这些标记,
-		// b 只是一个地址起点位置吧???
-
-		// 取出在地址b处的描述字的值(obits = old bits).
-		obits = *b; 
-		// 为obits设置bitMask和bitAllocated标记
+		// 取出在地址 b 处的描述字(word)的值(obits = old/original bits).
+		//
+		// 为了应对多协程, 从 b 指针处取值都要放到 for{} 循环中, 否则获取到的值与实际值会有出入.
+		obits = *b;
+		// (obits & ~(bitMask<<shift)) 在不改变其他word的"bit位"的条件下, 对目标字进行清零,
+		// | (bitAllocated<<shift) 为目标"bit位"设置 bitAllocated 标记.
 		bits = (obits & ~(bitMask<<shift)) | (bitAllocated<<shift);
-		// 如果noscan为true, 则设置bitNoScan标记
+		// 如果 noscan 为 true, 则设置 bitNoScan 标记
 		if(noscan) {
 			bits |= bitNoScan<<shift;
-		} 
+		}
 
-		// 如果只有一个P, 可以直接为地址b赋值, 如果有多个, 则需要使用原子操作.
+		// 如果只有一个P, 可以直接为地址b赋值; 如果有多个, 则需要使用原子操作.
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
 		} else {
-			// 比较地址b处的值是否与obits相同, 如相同则将其替换为bits
+			// 先比较地址 b 处的值是否与 obits 相同, 如相同则将其替换为 bits(类似于乐观锁)
 			//
 			// more than one goroutine is potentially running: use atomic op
 			if(runtime·casp((void**)b, (void*)obits, (void*)bits)) {
@@ -2757,7 +2881,7 @@ runtime·markallocated(void *v, uintptr n, bool noscan)
 }
 
 // 标记从地址v开始, 大小为n的内存块为空闲状态.
-// 操作流程与runtime·markallocated基本相同.
+// 操作流程与 runtime·markallocated 基本相同.
 //
 // mark the block at v of size n as freed.
 void
@@ -2765,7 +2889,9 @@ runtime·markfreed(void *v, uintptr n)
 {
 	uintptr *b, obits, bits, off, shift;
 
-	if(0) runtime·printf("markfreed %p+%p\n", v, n);
+	if(0) {
+		runtime·printf("markfreed %p+%p\n", v, n);
+	}
 
 	if((byte*)v+n > (byte*)runtime·mheap.arena_used || 
 		(byte*)v < runtime·mheap.arena_start) {
@@ -2778,7 +2904,6 @@ runtime·markfreed(void *v, uintptr n)
 
 	for(;;) {
 		obits = *b;
-		// 所以bitMask是干啥的?
 		bits = (obits & ~(bitMask<<shift)) | (bitBlockBoundary<<shift);
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;
@@ -2914,7 +3039,9 @@ runtime·setblockspecial(void *v, bool s)
 {
 	uintptr *b, off, shift, bits, obits;
 
-	if(DebugMark) return;
+	if(DebugMark) {
+		return;
+	} 
 
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
@@ -2933,7 +3060,9 @@ runtime·setblockspecial(void *v, bool s)
 			break;
 		} else {
 			// more than one goroutine is potentially running: use atomic op
-			if(runtime·casp((void**)b, (void*)obits, (void*)bits)) break;
+			if(runtime·casp((void**)b, (void*)obits, (void*)bits)) {
+				break;
+			} 
 		}
 	}
 }

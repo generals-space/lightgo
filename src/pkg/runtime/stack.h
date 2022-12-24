@@ -69,18 +69,7 @@ enum {
 	// for OS-specific purposes like signal handling. 
 	// Used on Windows and on Plan 9 
 	// because they do not use a separate stack.
-#ifdef GOOS_windows
-	StackSystem = 512 * sizeof(uintptr),
-#else
-#ifdef GOOS_plan9
-	// The size of the note handler frame varies among architectures,
-	// but 512 bytes should be enough for every implementation.
-	// note handler 的大小因体系结构而异, 但是512字节对每种实现都应该足够了.
-	StackSystem = 512,
-#else
 	StackSystem = 0,
-#endif	// Plan 9
-#endif	// Windows
 
 	// The amount of extra stack to allocate beyond the size
 	// needed for the single frame that triggered the split.

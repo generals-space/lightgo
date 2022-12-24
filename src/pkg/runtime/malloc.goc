@@ -36,8 +36,9 @@ extern volatile intgo runtime·MemProfileRate;
 // 3. 如果分配的块之后需要调用 runtime·free() 手动释放(即不由GC操作来回收空间), 
 // 则 typ 参数必须指定为0(此时 flag 参数一般为 FlagNoInvokeGC).
 // 
-// param size: 申请分配的空间大小
-// param flag: 目标空间的标记, 如 FlagNoInvokeGC 表示该空间不需要 GC 回收.
+// 	@param size: 申请分配的空间大小;
+// 	@param typ: FlagNoScan, FlagNoGC 等标记;
+// 	@param flag: 目标空间的标记, 如 FlagNoInvokeGC 表示该空间不需要 GC 回收;
 //
 // caller:
 // 	1. runtime·malloc()
@@ -52,7 +53,7 @@ extern volatile intgo runtime·MemProfileRate;
 // Small objects are allocated from the per-thread cache's free lists.
 // Large objects (> 32 kB) are allocated straight from the heap.
 // If the block will be freed with runtime·free(), typ must be 0.
-void*
+void* 
 runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 {
 	int32 sizeclass;
@@ -431,10 +432,11 @@ uintptr runtime·sizeof_C_MStats = sizeof(MStats);
 
 #define MaxArena32 (2U<<30)
 
-// 初始化内存分配器
+// 初始化内存分配器, 划分各内存区域(span, bitmap, arena)
 //
 // caller: 
-// 	1. src/pkg/runtime/proc.c -> runtime·schedinit()
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 
+// 	程序启动, 初始化 runtime 调度器时被调用.
 void
 runtime·mallocinit(void)
 {
@@ -502,12 +504,19 @@ runtime·mallocinit(void)
 		arena_size = MaxMem;
 		bitmap_size = arena_size / (sizeof(void*)*8/4);
 		spans_size = arena_size / PageSize * sizeof(runtime·mheap.spans[0]);
+		// 如果要打印这3者的原始值, 需要使用 %D
+		// runtime·printf("arena size: %dGB\n", arena_size / 1024 / 1024 / 1024);
+		// runtime·printf("bitmap size: %dGB\n", bitmap_size / 1024 / 1024 / 1024);
+		// runtime·printf("spans size: %dMB\n", spans_size / 1024 / 1024);
+
 		spans_size = ROUND(spans_size, PageSize);
 		for(i = 0; i <= 0x7f; i++) {
 			p = (void*)(i<<40 | 0x00c0ULL<<32);
 			// 保留虚拟地址范围, 并未实际分配内存.
 			p = runtime·SysReserve(p, bitmap_size + spans_size + arena_size);
-			if(p != nil) break;
+			if(p != nil) {
+				break;
+			} 
 		}
 	} // 64 位 OS 赋值结束
 
@@ -552,26 +561,21 @@ runtime·mallocinit(void)
 		// to a MB boundary.
 		want = (byte*)ROUND((uintptr)end + (1<<18), 1<<20);
 		p = runtime·SysReserve(want, bitmap_size + spans_size + arena_size);
-		if(p == nil)
+		if(p == nil) {
 			runtime·throw("runtime: cannot reserve arena virtual address space");
-		if((uintptr)p & (((uintptr)1<<PageShift)-1))
+		}
+		if((uintptr)p & (((uintptr)1<<PageShift)-1)) {
 			runtime·printf(
 				"runtime: SysReserve returned unaligned address %p; asked for %p",
 				p, bitmap_size+spans_size+arena_size
 			);
+		}
 	} // 32 位 OS 赋值结束
 
 	if((uintptr)p & (((uintptr)1<<PageShift)-1)){
 		runtime·throw("runtime: SysReserve returned unaligned address");
 	}
 
-	//                        arena_used(初始arena的使用为0, 所以其地址与 arena_start 在同一位置)
-	// span     bitmap        arena_start                 arena_end
-	//   ↓        ↓                ↓                          ↓
-	//   +--------|----------------+--------------------------+
-	//   |  span  |     bitmap     |           arena          |
-	//   +--------|----------------+--------------------------+
-	//
 	// 保留区域头部存储 spans、bitmap. 仅设置地址, 并没有分配内存
 	// runtime·mheap 是一个全局变量, 这里规定span, bitmap和arena3个区域的地址划分.
 	runtime·mheap.spans = (MSpan**)p;
@@ -594,6 +598,10 @@ runtime·mallocinit(void)
 	runtime·free(runtime·malloc(1));
 }
 
+// 	@param h: runtime·mheap 全局对象指针
+//
+// caller:
+// 	1. src/pkg/runtime/mheap.c -> MHeap_Grow()
 void*
 runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
 {
@@ -737,6 +745,9 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 
 static Lock settype_lock;
 
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> gc()
+// 	在 g0 上执行 gc 时, 调用该函数.
 void
 runtime·settype_flush(M *mp)
 {
@@ -882,7 +893,11 @@ runtime·new(Type *typ, uint8 *ret)
 	// 	"runtime·new() type info -- size: %d, align: %d, kind: %d, string: %s\n", 
 	// 	typ->size, typ->align, typ->kind, typ->string
 	// );
-	ret = runtime·mallocgc(typ->size, (uintptr)typ | TypeInfo_SingleObject, typ->kind&KindNoPointers ? FlagNoScan : 0);
+	ret = runtime·mallocgc(
+		typ->size, 
+		(uintptr)typ | TypeInfo_SingleObject, 
+		typ->kind&KindNoPointers ? FlagNoScan : 0
+	);
 	FLUSH(&ret);
 }
 
@@ -895,7 +910,11 @@ cnew(Type *typ, intgo n, int32 objtyp)
 	if(n < 0 || (typ->size > 0 && n > MaxMem/typ->size)) {
 		runtime·panicstring("runtime: allocation size out of range");
 	}
-	return runtime·mallocgc(typ->size*n, (uintptr)typ | objtyp, typ->kind&KindNoPointers ? FlagNoScan : 0);
+	return runtime·mallocgc(
+		typ->size*n, 
+		(uintptr)typ | objtyp, 
+		typ->kind&KindNoPointers ? FlagNoScan : 0
+	);
 }
 
 // 等同于 runtime·new(), 不过主调函数是 C 语言
@@ -992,7 +1011,10 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 	return;
 
 badfunc:
-	runtime·printf("runtime.SetFinalizer: cannot pass %S to finalizer %S\n", *obj.type->string, *finalizer.type->string);
+	runtime·printf(
+		"runtime.SetFinalizer: cannot pass %S to finalizer %S\n", 
+		*obj.type->string, *finalizer.type->string
+	);
 throw:
 	runtime·throw("runtime.SetFinalizer");
 }

@@ -306,7 +306,7 @@ runtime·main(void)
 
 	if(m != &runtime·m0) {
 		runtime·throw("runtime·main not on m0");
-	} 
+	}
 	// 通过 scavenger 变量启动独立的协程运行 runtime·MHeap_Scavenger(), 进行垃圾回收.
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
 
@@ -547,12 +547,16 @@ needaddgcproc(void)
 	return n > 0;
 }
 
-// 当确定执行gc操作的协程数量大于1时调用此函数.
+// 从调度器中获取 nproc-1 个 m 对象, 为ta们分配 helpgc 的任务.
+//
 //
 // param nproc: 执行 gc 的协程数量.
 //
 // caller: 
-// 	1. mgc0.c -> gc()
+// 	1. mgc0.c -> gc() 只有这一处
+// 	当执行gc操作的协程数量大于1时调用此函数(此时处于 STW 阶段, 只有1个 M 在运行).
+// 	不过此时还没有开始, 要等 src/pkg/runtime/mgc0.c -> gchelperstart() 后,
+// 	才会正式执行 gc 任务.
 void
 runtime·helpgc(int32 nproc)
 {
@@ -564,21 +568,19 @@ runtime·helpgc(int32 nproc)
 	// one M is currently running
 	for(n = 1; n < nproc; n++) { 
 		// m 中的 mcache 用的其实是ta绑定的 p 的 mcache
-		// 如果这个if条件为true, 说明遍历到了当前m的p对象, 需要跳过.
+		// 如果这个if条件成立, 说明遍历到了当前m的p对象, 需要跳过.
 		if(runtime·allp[pos]->mcache == m->mcache) {
 			pos++;
 		}
 
-		// 从sched获取一个空闲的m对象, 设置其helpgc序号,
-		// 并且与 allp[pos] 绑定.
+		// 从 sched 获取一个空闲的 m 对象, 设置其 helpgc 序号, 并且与 allp[pos] 绑定.
+		// 这些 m 都将执行 gc 的任务(标记, 清除).
 		mp = mget();
-		// 这里报的错是什么意思?
-		// 由于 nproc = min(GOMAXPROCS, ncpu, MaxGcproc), 
-		// 而 m 的数量一定是比 p 多的, 所以???
 		if(mp == nil) {
+			// inconsistency 不一致
 			runtime·throw("runtime·gcprocs inconsistency");
 		}
-		// 这是设置序号吧?
+		// 设置当前 m 的 helpgc 序号, 表示当前 m 在所有参与 gc 的线程列表中的索引.
 		mp->helpgc = n;
 		// 为什么只绑定 mcache? 不使用 acquirep() 完成?
 		mp->mcache = runtime·allp[pos]->mcache;
@@ -622,9 +624,11 @@ runtime·freezetheworld(void)
 	runtime·usleep(1000);
 }
 
-// caller: proc.c -> runtime·gomaxprocsfunc(), 
-//			mgc0.c -> runtime·gc(), 
-//			mgc0.c -> runtime·ReadMemStats()
+// caller: 
+// 	1. src/pkg/runtime/mgc0.c -> runtime·gc()
+// 	开始进行 gc 前, 先调用本函数进入 STW 阶段
+// 	2. src/pkg/runtime/mgc0.c -> runtime·ReadMemStats()
+// 	3. proc.c -> runtime·gomaxprocsfunc()
 void
 runtime·stoptheworld(void)
 {
@@ -697,7 +701,8 @@ runtime·stoptheworld(void)
 	}
 }
 
-// caller: runtime·starttheworld() 只有这一处调用.
+// caller: 
+// 	1. runtime·starttheworld() 只有这一处调用.
 static void
 mhelpgc(void)
 {
@@ -830,7 +835,7 @@ runtime·mstart(void)
 {
 	if(g != m->g0) {
 		runtime·throw("bad runtime·mstart");
-	} 
+	}
 
 	// Record top of stack for use by mcall.
 	// Once we call schedule we're never coming back,
@@ -849,7 +854,7 @@ runtime·mstart(void)
 	// 装载信号处理函数
 	if(m == &runtime·m0) {
 		runtime·initsig();
-	} 
+	}
 	// mstart 被 newm 调用时可能会提供 mstartfn 函数
 	// 执行完成目标 fn 后, 该 m 会加入到 g 的抢夺队列(schedule).
 	if(m->mstartfn) {
@@ -857,6 +862,12 @@ runtime·mstart(void)
 	} 
 
 	if(m->helpgc) {
+		// 对于 helpgc 的赋值, 有如下几种可能: 
+		// 1. 如果是一个常规 clone 出来的新线程, helpgc 应该为0.
+		// 如果 helpgc 不为 0, 表示其父进程之前是参与过 gc 的, 这里需要将其重置.
+		// 感觉有点不严谨, 为什么不在 gc 结束时将其重置???
+		//
+		// 2. 在 gc 过程中进行 clone...好像更不对啊.
 		m->helpgc = 0;
 		stopm();
 	} else if(m != &runtime·m0) {
@@ -932,7 +943,9 @@ runtime·allocm(P *p)
 		mp->g0 = runtime·malg(8192);
 	}
 
-	if(p == m->p) releasep();
+	if(p == m->p) {
+		releasep();
+	} 
 
 	m->locks--;
 	// restore the preemption request 
@@ -1203,7 +1216,7 @@ newm(void(*fn)(void), P *p)
 
 		if(_cgo_thread_start == nil) {
 			runtime·throw("_cgo_thread_start missing");
-		} 
+		}
 		ts.m = mp;
 		ts.g = mp->g0;
 		ts.fn = runtime·mstart;
@@ -1229,8 +1242,12 @@ newm(void(*fn)(void), P *p)
 static void
 stopm(void)
 {
-	if(m->locks) runtime·throw("stopm holding locks");
-	if(m->p) runtime·throw("stopm holding p");
+	if(m->locks) {
+		runtime·throw("stopm holding locks");
+	} 
+	if(m->p) {
+		runtime·throw("stopm holding p");
+	} 
 	if(m->spinning) {
 		// 如果当前m处于自旋, 那么结束自旋, 
 		// 同时将全局调度器的 nmspinning 字段减1

@@ -100,7 +100,8 @@ typedef	uintptr	PageID;		// address >> PageShift
 enum
 {
 	// Computed constant. 
-	// The definition of MaxSmallSize and the algorithm in msize.c produce some number of different allocation size classes. 
+	// The definition of MaxSmallSize and the algorithm in msize.c produce
+	// some number of different allocation size classes. 
 	// NumSizeClasses is that number. 
 	// It's needed here because there are static arrays of this length; 
 	// when msize runs its size choosing algorithm it double-checks that NumSizeClasses agrees.
@@ -134,14 +135,7 @@ enum
 	// On other 64-bit platforms, we limit the arena to 128GB, or 37 bits.
 	// On 32-bit, we don't bother limiting anything, so we use the full 32-bit address.
 #ifdef _64BIT
-#ifdef GOOS_windows
-	// Windows counts memory used by page table into committed memory
-	// of the process, so we can't reserve too much memory.
-	// See http://golang.org/issue/5402 and http://golang.org/issue/5236.
-	MHeapMap_Bits = 35 - PageShift,
-#else
 	MHeapMap_Bits = 37 - PageShift,
-#endif
 #else
 	MHeapMap_Bits = 32 - PageShift,
 #endif
@@ -154,10 +148,12 @@ enum
 	MaxGcproc = 8,
 };
 
+// 虽然在 vscode 中, _64BIT 的条件语句是灰色的, 但实际在目前的主机上编译时, 都是64位的.
+//
 // Maximum memory allocation size, a hint for callers.
-// This must be a #define instead of an enum because it
-// is so large.
+// This must be a #define instead of an enum because it is so large.
 #ifdef _64BIT
+// pow(2, 37) = 128G
 #define	MaxMem	(1ULL<<(MHeapMap_Bits+PageShift))	/* 128 GB or 32 GB */
 #else
 #define	MaxMem	((uintptr)-1)
@@ -373,10 +369,11 @@ void	runtime·MCache_Refill(MCache *c, int32 sizeclass);
 void	runtime·MCache_Free(MCache *c, void *p, int32 sizeclass, uintptr size);
 void	runtime·MCache_ReleaseAll(MCache *c);
 
+// MTypes 结构描述了在 span 中分配的块的类型, 
+// 其中 compression 成员描述了 data 成员的布局(compression 可取 MTypes_XXX)
+//
 // MTypes describes the types of blocks allocated within a span.
 // The compression field describes the layout of the data.
-// MTypes结构描述了在span中分配的块的类型, 
-// 其中compression成员描述了data成员的布局(compression可取MTypes_XXX)
 // MTypes_Empty:
 //     All blocks are free, or no type information is available for allocated blocks.
 //     The data field has no meaning.
@@ -414,6 +411,7 @@ struct MTypes
 enum
 {
 	MSpanInUse = 0,
+	// 在 MHeap_FreeLocked() 中被赋值
 	MSpanFree,
 	MSpanListHead,
 	MSpanDead,
@@ -430,19 +428,25 @@ struct MSpan
 	//
 	// starting page number
 	PageID	start;
-	// 该span中页的数量, 同一sizeclass的MSpan对象中npages的值相同.
+	// 该 span 中页的数量, 同一 sizeclass 的 MSpan 对象中 npages 的值相同.
 	//
 	// number of pages in span
 	uintptr	npages;
-	// list of free objects
 	// 该span中空闲的对象链表
+	//
+	// list of free objects
 	MLink	*freelist;
-	// number of allocated objects in this span
 	// 当前span中已分配的对象的数量.
+	//
+	// number of allocated objects in this span
 	uint32	ref;
-	int32	sizeclass;	// size class
-	uintptr	elemsize;	// computed from sizeclass or from npages
-	uint32	state;		// MSpanInUse etc
+	// size等级为 0 时, 表示是在 heap 分配的 >32k 的大对象.
+	int32	sizeclass;
+	// computed from sizeclass or from npages
+	uintptr	elemsize;
+	// 表示当前 span 对象的状态, 包括 MSpanInUse, MSpanFree 等.
+	// 在 MHeap_FreeLocked() 中被赋值为 MSpanFree;
+	uint32	state;
 	int64   unusedsince;	// First time spotted by GC in MSpanFree state
 	uintptr npreleased;	// number of pages released to the OS
 	byte	*limit;		// end of data in span
@@ -475,15 +479,8 @@ int32	runtime·MCentral_AllocList(MCentral *c, MLink **first);
 void	runtime·MCentral_FreeList(MCentral *c, MLink *first);
 void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
 
-// heap 本身只存储 free[] 数组和 large, 应该就是arena区域.
-// 但是其他全局数据也存储在这里, 应该是挂的指针, 比如spans, bitmap
-//
-//                        arena_used(初始arena的使用为0, 所以其地址与 arena_start 在同一位置)
-// span     bitmap        arena_start                 arena_end
-//   ↓        ↓                ↓                          ↓
-//   +--------|----------------+--------------------------+
-//   |  span  |     bitmap     |           arena          |
-//   +--------|----------------+--------------------------+
+// heap 本身只存储 free[] 数组和 large, 应该就是 arena 区域.
+// 但是其他全局数据也存储在这里, 应该是挂的指针, 比如 spans, bitmap
 //
 // Main malloc heap.
 // The heap itself is the "free[]" and "large" arrays,
@@ -498,8 +495,14 @@ struct MHeap
 	// free lists of given length
 	MSpan free[MaxMHeapList];
 	MSpan large;			// free lists length >= MaxMHeapList
-	MSpan **allspans;		// MSpan指针类型, 存储所有span对象指针
-	uint32	nspan;			// 这是用来表示堆中span中的总个数?
+	// 数组对象的指针, 存储着堆中所有 span 对象指针.
+	//
+	// 下面的 nspan 成员表示其中 span 对象的数量
+	MSpan **allspans;
+	// 表示堆中 span 中的总个数, 即 allspans 数组中的成员数量
+	//
+	// 在 src/pkg/runtime/mheap.c -> RecordSpan() 中进行计数
+	uint32	nspan;
 	// allspans 成员列表能存储的 MSpan 的指针的个数, 可以说是其容量.
 	// 在为 allspans 分配空间时会同时为此成员赋值.
 	uint32	nspancap;

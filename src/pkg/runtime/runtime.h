@@ -96,6 +96,13 @@ typedef	struct	DebugVars	DebugVars;
  * Per-CPU declaration.
  *
  * 这里声明的是全局 m 和 g 对象, g = m->g0
+ * 
+ * 全局 m 变量不是所谓的 m0, 并不唯一, 应该是当前线程的 m id.
+ * 在 src/pkg/runtime/os_linux.c -> runtime·newosproc() clone 出一个新的系统线程后,
+ * 在 src/pkg/runtime/proc.c -> runtime·mstart() 中, 该 m 变量就已经是自己的 id 了.
+ * 
+ * 所谓的 m0, 应该是 src/pkg/runtime/proc.c -> runtime·m0 
+ * 
  * 在 src/pkg/runtime/asm_amd64.s -> _rt0_go() 初始化过程被赋值
  * (在 runtime·osinit 和 runtime·schedinit 之前)
  * 
@@ -422,9 +429,10 @@ struct	M
 	int32	locks;
 	int32	dying;
 	int32	profilehz;
-	// helpgc 是一个作用类似于序号或是递增id一样的数值. 
-	// 新m初始启动时, 由 runtime·mstart 设置值为0.
-	// 范围在 [1-nproc], 0会留给STW后启动gc的那个m.
+	// 默认为 0, 新 m 初始启动时, 由 runtime·mstart 设置.
+	// 当大于0时, 表示当前 m 将参与 gc, 该值为当前 m 在所有参与 gc 的 m 列表中的索引序号.
+	//
+	// 范围在 [1, nproc], 0 会留给 STW 后启动 gc 的那个 m(即 m0).
 	// 在 starttheworld()->mhelpgc() 时会将其设置为 -1.
 	int32	helpgc;
 	bool	spinning;
@@ -645,16 +653,35 @@ struct LFNode
 // Parallel for descriptor.
 struct ParFor
 {
-	void (*body)(ParFor*, uint32);	// executed for each element
-	uint32 done;			// number of idle threads
-	uint32 nthr;			// total number of threads
+	// body 可以有2个值, 都是在 gc 时的行为, 分别为 
+	// 	1. src/pkg/runtime/mgc0.c -> markroot() 标记
+	// 	2. src/pkg/runtime/mgc0.c -> sweepspan() 清除
+	//
+	// executed for each element
+	void (*body)(ParFor*, uint32);
+	// number of idle threads
+	uint32 done;
+	// 表示并发执行的线程数, 取值为 src/pkg/runtime/mgc0.c -> work.nproc
+	//
+	// total number of threads
+	uint32 nthr;
 	uint32 nthrmax;			// maximum number of threads
 	uint32 thrseq;			// thread id sequencer
-	uint32 cnt;			// iteration space [0, cnt)
-	void *ctx;			// arbitrary user context
-	bool wait;			// if true, wait while all threads finish processing,
-					// otherwise parfor may return while other threads are still working
-	ParForThread *thr;		// array of thread descriptors
+	// cnt 应该是待执行的任务的数量, 分别对应
+	// 1. src/pkg/runtime/mgc0.c -> work.nroot
+	// 2. src/pkg/runtime/malloc.h -> runtime·mheap.nspan
+	//
+	// iteration space [0, cnt)
+	uint32 cnt;
+	// ctx 从2处调用来看, 此值只有 nil
+	//
+	// arbitrary user context
+	void *ctx;
+	// if true, wait while all threads finish processing,
+	// otherwise parfor may return while other threads are still working
+	bool wait;
+	// array of thread descriptors
+	ParForThread *thr;
 	uint32 pad;			// to align ParForThread.pos for 64-bit atomic operations
 	// stats
 	uint64 nsteal;

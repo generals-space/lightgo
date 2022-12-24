@@ -42,7 +42,7 @@ RecordSpan(void *vh, byte *p)
 
 	h = vh;
 	s = (MSpan*)p;
-	// 内存不⾜时(allspans指针空间不足), 重新申请, 并将原数据转移过来.
+	// 内存不⾜时(allspans 指针空间不足), 重新申请, 并将原数据转移过来.
 	if(h->nspan >= h->nspancap) {
 		// ...总空间64k?
 		cap = 64*1024/sizeof(all[0]);
@@ -69,10 +69,11 @@ RecordSpan(void *vh, byte *p)
 // 2. 为 free(列表), large 成员构造空对象(双向循环链表, 成员都为 MSpanList 类型);
 // 3. 为 central 成员构造空对象(MCentral 类型);
 //
-// param: *h runtime·mheap 对象指针
+// 	@param *h: runtime·mheap 全局对象指针
 //
 // caller: 
 // 	1. src/pkg/runtime/malloc.goc -> runtime·mallocinit()
+// 	初始化内存分配器时, 划分好了堆的3大块区域后, 调用此函数对堆对象进行初始化.
 //
 // Initialize the heap; fetch memory using alloc.
 void
@@ -86,15 +87,21 @@ runtime·MHeap_Init(MHeap *h)
 	//
 	// runtime·MSpanList_Init() 只是将目标对象初始化为空的双向链表, 没有额外操作.
 	// 按照 MHeap 中对free的定义: `MSpan free[MaxMHeapList]`, free数组可容纳256个双向链表.
-	for(i=0; i<nelem(h->free); i++) runtime·MSpanList_Init(&h->free[i]);
+	for(i=0; i<nelem(h->free); i++) {
+		runtime·MSpanList_Init(&h->free[i]);
+	} 
 
 	runtime·MSpanList_Init(&h->large);
 
 	// h->central 与 h->free 的作用差不多, 类型也差不多, 
 	// 只不过为对象分配空间时, h->free 的优先级更高.
-	for(i=0; i<nelem(h->central); i++) runtime·MCentral_Init(&h->central[i], i);
+	for(i=0; i<nelem(h->central); i++) {
+		runtime·MCentral_Init(&h->central[i], i);
+	} 
 }
 
+// caller:
+// 	1. src/pkg/runtime/malloc.goc -> runtime·MHeap_SysAlloc()
 void
 runtime·MHeap_MapSpans(MHeap *h)
 {
@@ -103,11 +110,15 @@ runtime·MHeap_MapSpans(MHeap *h)
 	// Map spans array, PageSize at a time.
 	n = (uintptr)h->arena_used;
 	
-	if(sizeof(void*) == 8) n -= (uintptr)h->arena_start;
+	if(sizeof(void*) == 8) {
+		n -= (uintptr)h->arena_start;
+	} 
 	n = n / PageSize * sizeof(h->spans[0]);
 	n = ROUND(n, PageSize);
 
-	if(h->spans_mapped >= n) return;
+	if(h->spans_mapped >= n) {
+		return;
+	} 
 	runtime·SysMap((byte*)h->spans + h->spans_mapped, n - h->spans_mapped, &mstats.other_sys);
 	h->spans_mapped = n;
 }
@@ -116,9 +127,9 @@ runtime·MHeap_MapSpans(MHeap *h)
 // 超过32k的对象才从 heap 分配, 哪还有 size 等级???
 // 好吧, 在 runtime·mallocgc() 中调用时的确是为大对象分配空间, 而且 sizeclass 值指定为0.
 //
-// param h: runtime·mheap 对象指针
-// param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
-// param sizeclass: 
+// 	@param h: runtime·mheap 全局对象指针
+// 	@param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
+// 	@param sizeclass: 
 //       在被 runtime·mallocgc() 调用时, 由于是为大对象分配空间, 所以此值为 0.
 //
 // caller: 
@@ -149,15 +160,21 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 		}
 	}
 	runtime·unlock(h);
-	if(s != nil && *(uintptr*)(s->start<<PageShift) != 0 && zeroed)
+	if(s != nil && *(uintptr*)(s->start<<PageShift) != 0 && zeroed) {
 		runtime·memclr((byte*)(s->start<<PageShift), s->npages<<PageShift);
+	}
 	return s;
 }
 
 // 只有一处调用, 看来是在 runtime·MHeap_Alloc() 先加锁, 实际的操作在这里啊.
 //
+// 	@param h: runtime·mheap 全局对象指针
+// 	@param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
+// 	@param sizeclass: 
+//       在被 runtime·mallocgc() 调用时, 由于是为大对象分配空间, 所以此值为 0.
+//
 // caller: 
-// 	1. MHeap_AllocLocked()
+// 	1. runtime·MHeap_Alloc() 只有这一处
 static MSpan*
 MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 {
@@ -176,15 +193,23 @@ MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 
 	// Best fit in list of large spans.
 	if((s = MHeap_AllocLarge(h, npage)) == nil) {
-		if(!MHeap_Grow(h, npage)) return nil;
-		if((s = MHeap_AllocLarge(h, npage)) == nil) return nil;
+		if(!MHeap_Grow(h, npage)) {
+			return nil;
+		} 
+		if((s = MHeap_AllocLarge(h, npage)) == nil) {
+			return nil;
+		} 
 	}
 
 HaveSpan:
 	// Mark span in use.
 	// 标记该span对象为MSpanInUse状态, 并从free的这个span链表中移除.
-	if(s->state != MSpanFree) runtime·throw("MHeap_AllocLocked - MSpan not free");
-	if(s->npages < npage) runtime·throw("MHeap_AllocLocked - bad npages");
+	if(s->state != MSpanFree) {
+		runtime·throw("MHeap_AllocLocked - MSpan not free");
+	} 
+	if(s->npages < npage) {
+		runtime·throw("MHeap_AllocLocked - bad npages");
+	} 
 	runtime·MSpanList_Remove(s);
 	s->state = MSpanInUse;
 
@@ -228,11 +253,16 @@ HaveSpan:
 		runtime·MSpan_Init(t, s->start + npage, s->npages - npage);
 		s->npages = npage;
 		p = t->start;
-		if(sizeof(void*) == 8) p -= ((uintptr)h->arena_start>>PageShift);
-		if(p > 0) h->spans[p-1] = s;
+		if(sizeof(void*) == 8) {
+			p -= ((uintptr)h->arena_start>>PageShift);
+		} 
+		if(p > 0) {
+			h->spans[p-1] = s;
+		} 
 		h->spans[p] = t;
 		h->spans[p+t->npages-1] = t;
-		*(uintptr*)(t->start<<PageShift) = *(uintptr*)(s->start<<PageShift);  // copy "needs zeroing" mark
+		// copy "needs zeroing" mark
+		*(uintptr*)(t->start<<PageShift) = *(uintptr*)(s->start<<PageShift); 
 		t->state = MSpanInUse;
 		MHeap_FreeLocked(h, t);
 		t->unusedsince = s->unusedsince; // preserve age
@@ -244,8 +274,12 @@ HaveSpan:
 	s->elemsize = (sizeclass==0 ? s->npages<<PageShift : runtime·class_to_size[sizeclass]);
 	s->types.compression = MTypes_Empty;
 	p = s->start;
-	if(sizeof(void*) == 8) p -= ((uintptr)h->arena_start>>PageShift);
-	for(n=0; n<npage; n++) h->spans[p+n] = s;
+	if(sizeof(void*) == 8) {
+		p -= ((uintptr)h->arena_start>>PageShift);
+	} 
+	for(n=0; n<npage; n++) {
+		h->spans[p+n] = s;
+	} 
 	return s;
 }
 
@@ -269,17 +303,24 @@ BestFit(MSpan *list, uintptr npage, MSpan *best)
 
 		if(best == nil
 		|| s->npages < best->npages
-		|| (s->npages == best->npages && s->start < best->start))
+		|| (s->npages == best->npages && s->start < best->start)) {
 			best = s;
+		}
 	}
 	return best;
 }
 
-// Try to add at least npage pages of memory to the heap,
-// returning whether it worked.
-// 尝试增加至少npage个页的内存空间给目标堆
+// 尝试增加至少 npage 个页的内存空间给目标堆
 // 返回是否成功
 // ...这是堆容量的时候要增长的?
+//
+// 	@param h: runtime·mheap 全局对象指针
+// 	@param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
+//
+// caller:
+// 	1. MHeap_AllocLocked()
+//
+// Try to add at least npage pages of memory to the heap, returning whether it worked.
 static bool
 MHeap_Grow(MHeap *h, uintptr npage)
 {
@@ -289,13 +330,14 @@ MHeap_Grow(MHeap *h, uintptr npage)
 	PageID p;
 
 	// Ask for a big chunk, to reduce the number of mappings
-	// the operating system needs to track; also amortizes
-	// the overhead of an operating system mapping.
+	// the operating system needs to track;
+	// also amortizes the overhead of an operating system mapping.
 	// Allocate a multiple of 64kB (16 pages).
 	npage = (npage+15)&~15;
 	ask = npage<<PageShift;
-	if(ask < HeapAllocChunk)
+	if(ask < HeapAllocChunk) {
 		ask = HeapAllocChunk;
+	}
 
 	v = runtime·MHeap_SysAlloc(h, ask);
 	if(v == nil) {
@@ -304,7 +346,10 @@ MHeap_Grow(MHeap *h, uintptr npage)
 			v = runtime·MHeap_SysAlloc(h, ask);
 		}
 		if(v == nil) {
-			runtime·printf("runtime: out of memory: cannot allocate %D-byte block (%D in use)\n", (uint64)ask, mstats.heap_sys);
+			runtime·printf(
+				"runtime: out of memory: cannot allocate %D-byte block (%D in use)\n", 
+				(uint64)ask, mstats.heap_sys
+			);
 			return false;
 		}
 	}
@@ -314,8 +359,9 @@ MHeap_Grow(MHeap *h, uintptr npage)
 	s = runtime·FixAlloc_Alloc(&h->spanalloc);
 	runtime·MSpan_Init(s, (uintptr)v>>PageShift, ask>>PageShift);
 	p = s->start;
-	if(sizeof(void*) == 8)
+	if(sizeof(void*) == 8) {
 		p -= ((uintptr)h->arena_start>>PageShift);
+	}
 	h->spans[p] = s;
 	h->spans[p + s->npages - 1] = s;
 	s->state = MSpanInUse;
@@ -332,8 +378,9 @@ runtime·MHeap_Lookup(MHeap *h, void *v)
 	uintptr p;
 	
 	p = (uintptr)v;
-	if(sizeof(void*) == 8)
+	if(sizeof(void*) == 8) {
 		p -= (uintptr)h->arena_start;
+	}
 	return h->spans[p >> PageShift];
 }
 
@@ -350,15 +397,18 @@ runtime·MHeap_LookupMaybe(MHeap *h, void *v)
 	MSpan *s;
 	PageID p, q;
 
-	if((byte*)v < h->arena_start || (byte*)v >= h->arena_used)
+	if((byte*)v < h->arena_start || (byte*)v >= h->arena_used) {
 		return nil;
+	}
 	p = (uintptr)v>>PageShift;
 	q = p;
-	if(sizeof(void*) == 8)
+	if(sizeof(void*) == 8) {
 		q -= (uintptr)h->arena_start >> PageShift;
+	}
 	s = h->spans[q];
-	if(s == nil || p < s->start || v >= s->limit || s->state != MSpanInUse)
+	if(s == nil || p < s->start || v >= s->limit || s->state != MSpanInUse) {
 		return nil;
+	}
 	return s;
 }
 
@@ -391,7 +441,10 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	s->types.compression = MTypes_Empty;
 
 	if(s->state != MSpanInUse || s->ref != 0) {
-		runtime·printf("MHeap_FreeLocked - span %p ptr %p state %d ref %d\n", s, s->start<<PageShift, s->state, s->ref);
+		runtime·printf(
+			"MHeap_FreeLocked - span %p ptr %p state %d ref %d\n", 
+			s, s->start<<PageShift, s->state, s->ref
+		);
 		runtime·throw("MHeap_FreeLocked - invalid free");
 	}
 	mstats.heap_idle += s->npages<<PageShift;
@@ -406,7 +459,9 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	// Coalesce with earlier, later spans.
 	p = s->start;
 	// 这里p是距arena_start偏移的页数啊..
-	if(sizeof(void*) == 8) p -= (uintptr)h->arena_start >> PageShift;
+	if(sizeof(void*) == 8) {
+		p -= (uintptr)h->arena_start >> PageShift;
+	} 
 	// h->spans[p-1] 能表示span对象吗? p也不是span索引啊..
 	if(p > 0 && (t = h->spans[p-1]) != nil && t->state != MSpanInUse) {
 		if(t->npreleased == 0) {  // cant't touch this otherwise

@@ -33,7 +33,8 @@ int32 runtime·class_to_size[NumSizeClasses];
 int32 runtime·class_to_allocnpages[NumSizeClasses];
 
 // The SizeToClass lookup is implemented using two arrays,
-// one mapping sizes <= 1024 to their class and one mapping sizes >= 1024 and <= MaxSmallSize to their class.
+// one mapping sizes <= 1024 to their class and one mapping sizes >= 1024
+// and <= MaxSmallSize to their class.
 // All objects are 8-aligned, so the first array is indexed by the size divided by 8 (rounded up). 
 // Objects >= 1024 bytes are 128-aligned, 
 // so the second array is indexed by the size divided by 128 (rounded up). 

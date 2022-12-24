@@ -60,8 +60,9 @@ addfintab(Fintab *t, void *k, FuncVal *fn, uintptr nret, Type *fint, PtrType *ot
 			t->ndead--;
 			goto ret;
 		}
-		if(++i == t->max)
+		if(++i == t->max) {
 			i = 0;
+		}
 	}
 
 	// cannot happen - table is known to be non-full
@@ -80,15 +81,18 @@ lookfintab(Fintab *t, void *k, bool del, Fin *f)
 {
 	int32 i, j;
 
-	if(t->max == 0)
+	if(t->max == 0) {
 		return false;
+	}
 	i = (uintptr)k % (uintptr)t->max;
 	for(j=0; j<t->max; j++) {
-		if(t->key[i] == nil)
+		if(t->key[i] == nil) {
 			return false;
+		}
 		if(t->key[i] == k) {
-			if(f)
+			if(f) {
 				*f = t->val[i];
+			}
 			if(del) {
 				t->key[i] = (void*)-1;
 				t->val[i].fn = nil;
@@ -98,8 +102,9 @@ lookfintab(Fintab *t, void *k, bool del, Fin *f)
 			}
 			return true;
 		}
-		if(++i == t->max)
+		if(++i == t->max) {
 			i = 0;
+		}
 	}
 
 	// cannot happen - table is known to be non-full
@@ -116,8 +121,9 @@ resizefintab(Fintab *tab)
 
 	runtime·memclr((byte*)&newtab, sizeof newtab);
 	newtab.max = tab->max;
-	if(newtab.max == 0)
+	if(newtab.max == 0) {
 		newtab.max = 3*3*3;
+	}
 	else if(tab->ndead < tab->nkey/2) {
 		// grow table if not many dead values.
 		// otherwise just rehash into table of same size.
@@ -129,8 +135,9 @@ resizefintab(Fintab *tab)
 	
 	for(i=0; i<tab->max; i++) {
 		k = tab->key[i];
-		if(k != nil && k != (void*)-1)
+		if(k != nil && k != (void*)-1) {
 			addfintab(&newtab, k, tab->val[i].fn, tab->val[i].nret, tab->val[i].fint, tab->val[i].ot);
+		}
 	}
 	
 	runtime·free(tab->key);
@@ -150,8 +157,9 @@ runtime·addfinalizer(void *p, FuncVal *f, uintptr nret, Type *fint, PtrType *ot
 	byte *base;
 	
 	if(debug) {
-		if(!runtime·mlookup(p, &base, nil, nil) || p != base)
+		if(!runtime·mlookup(p, &base, nil, nil) || p != base) {
 			runtime·throw("addfinalizer on invalid pointer");
+		}
 	}
 	
 	tab = TAB(p);
@@ -192,8 +200,9 @@ runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret, Type **fin
 	runtime·lock(tab);
 	res = lookfintab(tab, p, del, &f);
 	runtime·unlock(tab);
-	if(res==false)
+	if(res==false) {
 		return false;
+	}
 	*fn = f.fn;
 	*nret = f.nret;
 	*fint = f.fint;
@@ -201,6 +210,11 @@ runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret, Type **fin
 	return true;
 }
 
+// 	@param fn: src/pkg/runtime/mgc0.c -> addfinroots()
+//
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> addroots() 只有这一处 
+// 	完成对 堆, 栈 部分的遍历后, 调用该函数.
 void
 runtime·walkfintab(void (*fn)(void*))
 {
@@ -212,8 +226,11 @@ runtime·walkfintab(void (*fn)(void*))
 		runtime·lock(&fintab[i]);
 		key = fintab[i].key;
 		ekey = key + fintab[i].max;
-		for(; key < ekey; key++)
-			if(*key != nil && *key != ((void*)-1)) fn(*key);
+		for(; key < ekey; key++) {
+			if(*key != nil && *key != ((void*)-1)) {
+				fn(*key);
+			} 
+		}
 		runtime·unlock(&fintab[i]);
 	}
 }

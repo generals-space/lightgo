@@ -1,3 +1,23 @@
+在 make.bash 执行期间, dist 会先在 src/cmd/dist/ 目录下生成`dist`可执行文件.
+
+在打印如下语句后, 执行`./src/cmd/dist/dist bootstrap -a -v`命令编译各目录
+```
+Building compilers and Go bootstrap tool for host, linux/amd64.
+```
+
+```
+$ ./src/cmd/dist/dist bootstrap -a -v
+lib9
+libbio
+libmach
+misc/pprof
+cmd/addr2line
+cmd/nm
+cmd/objdump
+...
+```
+
+
 ```console
 $ ./src/make.bash
 $ gdb /root/go/pkg/tool/linux_amd64/dist

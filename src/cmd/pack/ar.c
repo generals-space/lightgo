@@ -1423,8 +1423,15 @@ int	m7[] = { 1, ROTH, 'r', '-' };
 int	m8[] = { 1, WOTH, 'w', '-' };
 int	m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
 
-// 不知道为为什么全局的 m 对象声明会跳转到这里...
+// 不知道为什么全局的 m 对象声明会跳转到这里...
 // 应该转到 src/pkg/runtime/runtime.h -> "extern	register	M*	m;"
+//
+// 全局 m 变量不是所谓的 m0, 并不唯一, 应该是当前线程的 m id.
+// 在 src/pkg/runtime/os_linux.c -> runtime·newosproc() clone 出一个新的系统线程后,
+// 在 src/pkg/runtime/proc.c -> runtime·mstart() 中, 该 m 变量就已经是自己的 id 了.
+// 
+// 所谓的 m0, 应该是 src/pkg/runtime/proc.c -> runtime·m0 
+// 
 int	*m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9};
 
 void
