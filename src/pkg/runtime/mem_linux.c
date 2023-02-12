@@ -114,7 +114,7 @@ runtime·SysFree(void *v, uintptr n, uint64 *stat)
 	runtime·munmap(v, n);
 }
 
-// 为内存分配器申请预留的虚拟内存地址(并未实际分配, 这个值可以非常大)
+// 为内存分配器申请预留的**虚拟内存**地址(并未实际分配, 这个值可以非常大)
 //
 // param *v: 主调函数计算出来的虚拟内存起始地址;
 // param n: 需要申请的内存大小, 256MB spans + 8GB bitmap + 128GB arena;
@@ -134,7 +134,9 @@ runtime·SysReserve(void *v, uintptr n)
 	if(sizeof(void*) == 8 && (uintptr)v >= 0xffffffffU) {
 		p = mmap_fixed(v, 64<<10, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);
 		if (p != v) {
-			if(p >= (void*)4096) runtime·munmap(p, 64<<10);
+			if(p >= (void*)4096) {
+				runtime·munmap(p, 64<<10);
+			} 
 			return nil;
 		}
 		runtime·munmap(p, 64<<10);
@@ -142,12 +144,18 @@ runtime·SysReserve(void *v, uintptr n)
 	}
 
 	p = runtime·mmap(v, n, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);
-	if((uintptr)p < 4096) return nil;
+	if((uintptr)p < 4096) {
+		return nil;
+	} 
 	return p;
 }
 
-void
-runtime·SysMap(void *v, uintptr n, uint64 *stat)
+// runtime·SysMap 调用 mmap 从之前申请过的**虚拟内存**中, 划分实际的内存空间, 并记录.
+//
+// 	@param v: runtime·mheap->arena_start/arena_used 等地址指针, 意为从此处开始分配
+// 	@param n: 待分配的字节数
+//
+void runtime·SysMap(void *v, uintptr n, uint64 *stat)
 {
 	void *p;
 	
@@ -156,15 +164,25 @@ runtime·SysMap(void *v, uintptr n, uint64 *stat)
 	// On 64-bit, we don't actually have v reserved, so tread carefully.
 	if(sizeof(void*) == 8 && (uintptr)v >= 0xffffffffU) {
 		p = mmap_fixed(v, n, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
-		if(p == (void*)ENOMEM) runtime·throw("runtime: out of memory");
+		if(p == (void*)ENOMEM) {
+			runtime·throw("runtime: out of memory");
+		}
 		if(p != v) {
-			runtime·printf("runtime: address space conflict: map(%p) = %p\n", v, p);
+			runtime·printf(
+				"runtime: address space conflict: map(%p) = %p\n", v, p
+			);
 			runtime·throw("runtime: address space conflict");
 		}
 		return;
 	}
-
-	p = runtime·mmap(v, n, PROT_READ|PROT_WRITE, MAP_ANON|MAP_FIXED|MAP_PRIVATE, -1, 0);
-	if(p == (void*)ENOMEM) runtime·throw("runtime: out of memory");
-	if(p != v) runtime·throw("runtime: cannot map pages in arena address space");
+	// 如下是 32 位的处理逻辑
+	p = runtime·mmap(
+		v, n, PROT_READ|PROT_WRITE, MAP_ANON|MAP_FIXED|MAP_PRIVATE, -1, 0
+	);
+	if(p == (void*)ENOMEM) {
+		runtime·throw("runtime: out of memory");
+	}
+	if(p != v) {
+		runtime·throw("runtime: cannot map pages in arena address space");
+	}
 }

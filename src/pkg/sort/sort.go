@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package sort provides primitives for sorting slices and user-defined
-// collections.
+// Package sort provides primitives for sorting slices and user-defined collections.
 package sort
+
+// [Golang源码分析之sort](https://www.jianshu.com/p/8b925d07abd8)
 
 // A type, typically a collection, that satisfies sort.Interface can be
 // sorted by the routines in this package.  The methods require that the
@@ -12,6 +13,8 @@ package sort
 type Interface interface {
 	// Len is the number of elements in the collection.
 	Len() int
+	// 判断成员 i 是否小于成员 j
+	//
 	// Less reports whether the element with
 	// index i should sort before the element with index j.
 	Less(i, j int) bool
@@ -26,6 +29,8 @@ func min(a, b int) int {
 	return b
 }
 
+// 插入排序
+//
 // Insertion sort
 func insertionSort(data Interface, a, b int) {
 	for i := a + 1; i < b; i++ {
@@ -186,6 +191,8 @@ func quickSort(data Interface, a, b, maxDepth int) {
 	}
 }
 
+// Sort 调用了 quickSort, 但其实根据不同场景, 分别选择了 快排, 堆排和选择排序.
+//
 // Sort sorts data.
 // It makes one call to data.Len to determine n, and O(n*log(n)) calls to
 // data.Less and data.Swap. The sort is not guaranteed to be stable.
@@ -193,6 +200,7 @@ func Sort(data Interface) {
 	// Switch to heapsort if depth of 2*ceil(lg(n+1)) is reached.
 	n := data.Len()
 	maxDepth := 0
+	// >> 是二进制维度下的右移操作, 相当于除以2.
 	for i := n; i > 0; i >>= 1 {
 		maxDepth++
 	}
@@ -216,6 +224,8 @@ func Reverse(data Interface) Interface {
 	return &reverse{data}
 }
 
+// IsSorted 判断目标数组是否经过排序(单调递增)
+//
 // IsSorted reports whether data is sorted.
 func IsSorted(data Interface) bool {
 	n := data.Len()

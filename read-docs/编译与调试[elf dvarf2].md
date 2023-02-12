@@ -18,3 +18,7 @@
 [go build是如何工作的](https://www.jianshu.com/p/9e71718aa7ef)
     - go build 创建了一个临时目录 /tmp/go-build249279931 并且填充一些框架性的子目录用于保存编译的结果。
     - 编译器和链接器仅接受了单一的文件作为包的内容，如果包含多个目标文件，在使用它们之前，必须将其打包到一个单一的 .a 归档文件中。
+
+[Golang Internals, Part 1: Main Concepts and Project Structure](https://www.altoros.com/blog/golang-internals-part-1-main-concepts-and-project-structure/)
+    - 系列文章
+    - 编译器级别的文章

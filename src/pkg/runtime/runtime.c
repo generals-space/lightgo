@@ -85,8 +85,9 @@ runtime·args(int32 c, uint8 **v)
 {
 	argc = c;
 	argv = v;
-	if(runtime·sysargs != nil)
+	if(runtime·sysargs != nil) {
 		runtime·sysargs(c, v);
+	}
 }
 
 int32 runtime·isplan9;
@@ -108,10 +109,11 @@ runtime·goargs(void)
 	if(Windows) return;
 	// 为s参数列表分配空间
 	s = runtime·malloc(argc*sizeof s[0]);
-	for(i=0; i<argc; i++)
+	for(i=0; i<argc; i++) {
 		// 将argv[i]处的字符串构建为内置String对象并赋值给s[i]
 		// 那么问题来了...argv的值是在哪里赋的? 
 		s[i] = runtime·gostringnocopy(argv[i]);
+	}
 	os·Args.array = (byte*)s;
 	os·Args.len = argc;
 	os·Args.cap = argc;
@@ -123,12 +125,14 @@ runtime·goenvs_unix(void)
 	String *s;
 	int32 i, n;
 
-	for(n=0; argv[argc+1+n] != 0; n++)
+	for(n=0; argv[argc+1+n] != 0; n++) {
 		;
+	}
 
 	s = runtime·malloc(n*sizeof s[0]);
-	for(i=0; i<n; i++)
+	for(i=0; i<n; i++) {
 		s[i] = runtime·gostringnocopy(argv[argc+1+i]);
+	}
 	syscall·envs.array = (byte*)s;
 	syscall·envs.len = n;
 	syscall·envs.cap = n;
@@ -150,8 +154,9 @@ runtime·atoi(byte *p)
 	int32 n;
 
 	n = 0;
-	while('0' <= *p && *p <= '9')
+	while('0' <= *p && *p <= '9') {
 		n = n*10 + *p++ - '0';
+	}
 	return n;
 }
 

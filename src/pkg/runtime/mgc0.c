@@ -91,16 +91,16 @@ enum {
 // 0000 0000 0000 0001(1)
 #define bitAllocated		((uintptr)1<<(bitShift*0))
 // 0000 0000 0001 0000(65536) (与 bitBlockBoundary 取值相同)
-/* when bitAllocated is set */
+// when bitAllocated is set
 #define bitNoScan		((uintptr)1<<(bitShift*1))
 // 0000 0001 0000 0000(4294967296)
-/* when bitAllocated is set */
+// when bitAllocated is set
 #define bitMarked		((uintptr)1<<(bitShift*2))
 // 0001 0000 0000 0000(281474976710656)
-/* when bitAllocated is set - has finalizer or being profiled */
+// when bitAllocated is set - has finalizer or being profiled
 #define bitSpecial		((uintptr)1<<(bitShift*3))
 // 0000 0000 0001 0000(65536) (与 bitNoScan 取值相同)
-/* when bitAllocated is NOT set */
+// when bitAllocated is NOT set
 #define bitBlockBoundary	((uintptr)1<<(bitShift*1))
 // bitMask 是3种已知的"bit位"组合, 用来先对目标块的"bit位"进行清零的. 
 // 最典型的例子就是: *bitp & ~(bitMask<<shift)
@@ -1486,10 +1486,10 @@ handoff(Workbuf *b)
 	return b1;
 }
 
-// 只是简单地把参数 obj 添加到 work.roots 列表下.
+// 只是简单地把 obj 对象添加到 work.roots 列表下.
 //
 // caller:
-// 	1. addroots
+// 	1. addroots()
 //
 static void
 addroot(Obj obj)
@@ -1926,7 +1926,7 @@ sweepspan(ParFor *desc, uint32 idx)
 	nfree = 0;
 	end = &head; // 初始时链表尾部与头部处于同一位置
 	c = m->mcache;
-	
+
 	type_data = (byte*)s->types.data;
 	type_data_inc = sizeof(uintptr);
 	compression = s->types.compression;
@@ -1950,11 +1950,11 @@ sweepspan(ParFor *desc, uint32 idx)
 		bitp = (uintptr*)arena_start - off/wordsPerBitmapWord - 1;
 		shift = off % wordsPerBitmapWord;
 		bits = *bitp>>shift;
-		// 该block未被分配, 跳过
+		// 该 block 未被分配, 跳过
 		if((bits & bitAllocated) == 0) {
 			continue;
 		}
-		// 该block已经被标记过
+		// 该 block 已经被标记过
 		if((bits & bitMarked) != 0) {
 			if(DebugMark) {
 				if(!(bits & bitSpecial)) {
@@ -2538,7 +2538,7 @@ static void gc(struct gc_args *args)
 	// 并行 mark, 执行上面设置的 markroot() 函数
 	runtime·parfordo(work.markfor);
 	// ...这参数都是nil, 效果是啥???
-	// 对了, 在parfordo中循环调用的markfor, 也就是markroot函数中,
+	// 对了, 在parfordo中循环调用的 markfor, 也就是 markroot 函数中,
 	// 最后一句就是scanblock.
 	// 那么, 这里的scanblock...是查漏补缺的? 但好像也没什么实际作用啊.
 	scanblock(nil, nil, 0, true);
@@ -2942,10 +2942,13 @@ runtime·checkfreed(void *v, uintptr n)
 	}
 }
 
-// 标记在内存span的地址v处, 分配了n个大小为size的块.
+// 标记在内存 span 的地址 v 处, 分配了 n 个大小为 size 的块.
+//
+// 	@param v: arena 区域中某个已分配空间的指针地址
 //
 // caller: 
-// 	1. malloc.goc -> runtime·mallocgc()
+// 	1. malloc.goc -> runtime·mallocgc() 从堆上分配超过32k的大对象成功后,
+// 	调用本函数, 标记目标区域为已分配.
 // 	2. mcentral.c -> MCentral_Grow()
 //
 // mark the span of memory at v as having n blocks of the given size.
@@ -3067,8 +3070,9 @@ runtime·setblockspecial(void *v, bool s)
 	}
 }
 
-void
-runtime·MHeap_MapBits(MHeap *h)
+// caller:
+// 	1. src/pkg/runtime/malloc.goc -> runtime·MHeap_SysAlloc() 只有这一处
+void runtime·MHeap_MapBits(MHeap *h)
 {
 	// Caller has added extra mappings to the arena.
 	// Add extra mappings of bitmap words as needed.

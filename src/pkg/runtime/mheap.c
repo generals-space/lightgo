@@ -31,7 +31,7 @@ static MSpan *BestFit(MSpan*, uintptr, MSpan*);
 // caller: 
 // 	1. runtime·MHeap_Init() 假
 // 	2. src/pkg/runtime/mfixalloc.c -> runtime·FixAlloc_Alloc() 真
-//     在该函数中, 对 FixAlloc->first 对象的调用, 才是真正的调用.
+//     在该函数中, FixAlloc->first() 才是真正的调用.
 static void
 RecordSpan(void *vh, byte *p)
 {
@@ -80,28 +80,32 @@ void
 runtime·MHeap_Init(MHeap *h)
 {
 	uint32 i;
-	runtime·FixAlloc_Init(&h->spanalloc, sizeof(MSpan), RecordSpan, h, &mstats.mspan_sys);
-	runtime·FixAlloc_Init(&h->cachealloc, sizeof(MCache), nil, nil, &mstats.mcache_sys);
+	runtime·FixAlloc_Init(
+		&h->spanalloc, sizeof(MSpan), RecordSpan, h, &mstats.mspan_sys
+	);
+	runtime·FixAlloc_Init(
+		&h->cachealloc, sizeof(MCache), nil, nil, &mstats.mcache_sys
+	);
 
-	// h->mapcache needs no init
-	//
 	// runtime·MSpanList_Init() 只是将目标对象初始化为空的双向链表, 没有额外操作.
 	// 按照 MHeap 中对free的定义: `MSpan free[MaxMHeapList]`, free数组可容纳256个双向链表.
+	//
+	// h->mapcache needs no init
 	for(i=0; i<nelem(h->free); i++) {
 		runtime·MSpanList_Init(&h->free[i]);
-	} 
-
+	}
 	runtime·MSpanList_Init(&h->large);
 
 	// h->central 与 h->free 的作用差不多, 类型也差不多, 
 	// 只不过为对象分配空间时, h->free 的优先级更高.
 	for(i=0; i<nelem(h->central); i++) {
+		// 调用 runtime·MSpanList_Init() 分别初始化 central 对象的 empty/noempty 成员.
 		runtime·MCentral_Init(&h->central[i], i);
 	} 
 }
 
 // caller:
-// 	1. src/pkg/runtime/malloc.goc -> runtime·MHeap_SysAlloc()
+// 	1. src/pkg/runtime/malloc.goc -> runtime·MHeap_SysAlloc() 只有这一处
 void
 runtime·MHeap_MapSpans(MHeap *h)
 {
@@ -112,29 +116,35 @@ runtime·MHeap_MapSpans(MHeap *h)
 	
 	if(sizeof(void*) == 8) {
 		n -= (uintptr)h->arena_start;
-	} 
+	}
+	// runtime·printf("n: %D\n", n);
 	n = n / PageSize * sizeof(h->spans[0]);
+	// runtime·printf("n: %D\n", n);
 	n = ROUND(n, PageSize);
+	// runtime·printf("n: %D\n", n);
 
 	if(h->spans_mapped >= n) {
 		return;
-	} 
+	}
+	// runtime·printf("n: %D\n", n);
 	runtime·SysMap((byte*)h->spans + h->spans_mapped, n - h->spans_mapped, &mstats.other_sys);
 	h->spans_mapped = n;
+	// runtime·printf("n: %D\n", h->spans_mapped);
 }
 
 // 从 heap 分配一组大小为 npage 个页的空间, 并且在 HeapMap 和 HeapMapCache 记录其 size 等级...
-// 超过32k的对象才从 heap 分配, 哪还有 size 等级???
-// 好吧, 在 runtime·mallocgc() 中调用时的确是为大对象分配空间, 而且 sizeclass 值指定为0.
 //
 // 	@param h: runtime·mheap 全局对象指针
 // 	@param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
 // 	@param sizeclass: 
-//       在被 runtime·mallocgc() 调用时, 由于是为大对象分配空间, 所以此值为 0.
+//       在被 runtime·mallocgc() 调用时, 如果是为大对象分配空间, 所以此值为 0.
 //
 // caller: 
-// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc()
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() 如果目标对象所需空间大于 32k,
+// 	调用些函数从堆上直接分配, 而不是从 m 自身 cache 的 span 列表中分配.
 // 	2. src/pkg/runtime/mcentral.c -> MCentral_Grow()
+// 	当 mcentral 的 nonempty 链表已无可分配的空闲块时, 调用本函数从 heap 处取一个 span 块,
+// 	并切分成对象块, 并组成空闲链表备用.
 //
 // Allocate a new span of npage pages from the heap
 // and record its size class in the HeapMap and HeapMapCache.
@@ -151,6 +161,7 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 	mstats.heap_alloc += m->mcache->local_cachealloc;
 	m->mcache->local_cachealloc = 0;
 
+	// runtime·printf("npage: %D, sizeclass: %d\n", npage, sizeclass);
 	s = MHeap_AllocLocked(h, npage, sizeclass);
 	if(s != nil) {
 		mstats.heap_inuse += npage<<PageShift;
@@ -166,6 +177,7 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 	return s;
 }
 
+// 从 heap 分配一组大小为 npage 个页的空间, 并且在 HeapMap 和 HeapMapCache 记录其 size 等级...
 // 只有一处调用, 看来是在 runtime·MHeap_Alloc() 先加锁, 实际的操作在这里啊.
 //
 // 	@param h: runtime·mheap 全局对象指针
@@ -195,21 +207,22 @@ MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 	if((s = MHeap_AllocLarge(h, npage)) == nil) {
 		if(!MHeap_Grow(h, npage)) {
 			return nil;
-		} 
+		}
 		if((s = MHeap_AllocLarge(h, npage)) == nil) {
 			return nil;
 		} 
 	}
 
 HaveSpan:
+	// 标记该 span 对象为 MSpanInUse 状态, 并从 free 的这个 span 链表中移除.
+	//
 	// Mark span in use.
-	// 标记该span对象为MSpanInUse状态, 并从free的这个span链表中移除.
 	if(s->state != MSpanFree) {
 		runtime·throw("MHeap_AllocLocked - MSpan not free");
-	} 
+	}
 	if(s->npages < npage) {
 		runtime·throw("MHeap_AllocLocked - bad npages");
-	} 
+	}
 	runtime·MSpanList_Remove(s);
 	s->state = MSpanInUse;
 
@@ -244,21 +257,22 @@ HaveSpan:
 	}
 	s->npreleased = 0;
 
-	// 找到的span对象包含的页数可能多于期望值, 此时需要将多余的页放回heap.
+	// 找到的 span 对象包含的页数可能多于期望值, 此时需要将多余的页放回 heap.
 	if(s->npages > npage) {
-		// Trim extra and put it back in the heap.
 		// mheap->spanalloc在runtime·FixAlloc_Init()时指定了first函数为RecordSpan, 
 		// 此时就可以用上了.
+		//
+		// Trim extra and put it back in the heap.
 		t = runtime·FixAlloc_Alloc(&h->spanalloc);
 		runtime·MSpan_Init(t, s->start + npage, s->npages - npage);
 		s->npages = npage;
 		p = t->start;
 		if(sizeof(void*) == 8) {
 			p -= ((uintptr)h->arena_start>>PageShift);
-		} 
+		}
 		if(p > 0) {
 			h->spans[p-1] = s;
-		} 
+		}
 		h->spans[p] = t;
 		h->spans[p+t->npages-1] = t;
 		// copy "needs zeroing" mark
@@ -276,10 +290,10 @@ HaveSpan:
 	p = s->start;
 	if(sizeof(void*) == 8) {
 		p -= ((uintptr)h->arena_start>>PageShift);
-	} 
+	}
 	for(n=0; n<npage; n++) {
 		h->spans[p+n] = s;
-	} 
+	}
 	return s;
 }
 
@@ -310,35 +324,46 @@ BestFit(MSpan *list, uintptr npage, MSpan *best)
 	return best;
 }
 
-// 尝试增加至少 npage 个页的内存空间给目标堆
-// 返回是否成功
-// ...这是堆容量的时候要增长的?
+// 尝试增加至少 npage 个页的内存空间到 runtime·mheap 中.
+//
+// 由于 runtime 一开始就为内存分配器分配了极大的**虚拟内存**(span+bitmap+arena),
+// 这里只是调用 runtime·MHeap_SysAlloc(), 从 arena_used 地址开始, 继续分配额外的空间.
 //
 // 	@param h: runtime·mheap 全局对象指针
 // 	@param npage: 需要分配的页数(主调函数已经将 size 大小转换成页数了)
 //
-// caller:
-// 	1. MHeap_AllocLocked()
+// 	@return: 是否扩容成功.
 //
-// Try to add at least npage pages of memory to the heap, returning whether it worked.
-static bool
-MHeap_Grow(MHeap *h, uintptr npage)
+// caller:
+// 	1. MHeap_AllocLocked() 只有这一处
+//
+// Try to add at least npage pages of memory to the heap,
+// returning whether it worked.
+static bool MHeap_Grow(MHeap *h, uintptr npage)
 {
 	uintptr ask;
 	void *v;
 	MSpan *s;
 	PageID p;
 
+	// runtime·printf("npage: %D\n", npage);
+
 	// Ask for a big chunk, to reduce the number of mappings
 	// the operating system needs to track;
 	// also amortizes the overhead of an operating system mapping.
 	// Allocate a multiple of 64kB (16 pages).
 	npage = (npage+15)&~15;
+	// runtime·printf("npage: %D\n", npage);
+
 	ask = npage<<PageShift;
+	// runtime·printf("ask: %D\n", ask);
+
 	if(ask < HeapAllocChunk) {
 		ask = HeapAllocChunk;
 	}
+	// runtime·printf("ask: %D\n", ask);
 
+	// v 表示从 runtime·mheap->arena_used 开始, 大小为 ask 的内存空间.
 	v = runtime·MHeap_SysAlloc(h, ask);
 	if(v == nil) {
 		if(ask > (npage<<PageShift)) {
@@ -354,24 +379,35 @@ MHeap_Grow(MHeap *h, uintptr npage)
 		}
 	}
 
-	// Create a fake "in use" span and free it, so that the
-	// right coalescing happens.
+	// 扩容完成, 创建一个 span 对象, 检测一下是否可用, 完成后再释放.
+	//
+	// Create a fake "in use" span and free it, so that the right coalescing happens.
 	s = runtime·FixAlloc_Alloc(&h->spanalloc);
 	runtime·MSpan_Init(s, (uintptr)v>>PageShift, ask>>PageShift);
+	// p 其实为 v>>PageShift, 即该 span 对象的起始页号.
 	p = s->start;
+	// 如果是64位系统
 	if(sizeof(void*) == 8) {
+		// 此时 p 为 span 起始处跟 arena_start 的页数.
 		p -= ((uintptr)h->arena_start>>PageShift);
 	}
+	// runtime·printf(
+	// 	"v start: %D, arena start: %D, p: %D\n", 
+	// 	(uintptr)v>>PageShift, (uintptr)h->arena_start>>PageShift, p
+	// );
 	h->spans[p] = s;
 	h->spans[p + s->npages - 1] = s;
 	s->state = MSpanInUse;
 	MHeap_FreeLocked(h, s);
+	// 验证完成, 释放并返回.
+
 	return true;
 }
 
+//
+//
 // Look up the span at the given address.
-// Address is guaranteed to be in map
-// and is guaranteed to be start or end of span.
+// Address is guaranteed to be in map and is guaranteed to be start or end of span.
 MSpan*
 runtime·MHeap_Lookup(MHeap *h, void *v)
 {
@@ -412,8 +448,12 @@ runtime·MHeap_LookupMaybe(MHeap *h, void *v)
 	return s;
 }
 
-// Free the span back into the heap.
 // 将目标span收回到heap
+//
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> sweepspan() GC的"清除"流程, 调用此方法回收超过32k的大对象.
+//
+// Free the span back into the heap.
 void
 runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct)
 {
@@ -431,8 +471,8 @@ runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct)
 	runtime·unlock(h);
 }
 
-static void
-MHeap_FreeLocked(MHeap *h, MSpan *s)
+// MHeap_FreeLocked 将目录 span 回收, 归还到 heap.
+static void MHeap_FreeLocked(MHeap *h, MSpan *s)
 {
 	uintptr *sp, *tp;
 	MSpan *t;
@@ -477,7 +517,9 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 		t->state = MSpanDead;
 		runtime·FixAlloc_Free(&h->spanalloc, t);
 	}
-	if((p+s->npages)*sizeof(h->spans[0]) < h->spans_mapped && (t = h->spans[p+s->npages]) != nil && t->state != MSpanInUse) {
+	if((p+s->npages)*sizeof(h->spans[0]) < h->spans_mapped 
+		&& (t = h->spans[p+s->npages]) != nil 
+		&& t->state != MSpanInUse) {
 		if(t->npreleased == 0) {  // cant't touch this otherwise
 			tp = (uintptr*)(t->start<<PageShift);
 			*sp |= *tp;	// propagate "needs zeroing" mark
@@ -648,10 +690,25 @@ runtime∕debug·freeOSMemory(void)
 	runtime·unlock(&runtime·mheap);
 }
 
+// runtime·MSpan_Init 初始化 span 对象, 将 start, npages 参数赋值进去.
+//
+// 	@param span: 目标 span 对象.
+// 	@param start: arena 部分, 按页计算的序号, 即页号;
+// 	@param npages: 从 start 处开始, 该 span 对象所需要的页数;
+//
+// caller:
+// 	1. MHeap_AllocLocked()
+// 	2. MHeap_Grow()
+// 	runtime·mheap arena 部分的内存扩容成功后(实际内存), 调用该方法分配一个 span 进行验证,
+// 	完成后还会释放.
+//
 // Initialize a new span with the given start and npages.
 void
 runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 {
+	// runtime·printf(
+	// 	"start: %D, npages: %D\n", start, npages
+	// );
 	span->next = nil;
 	span->prev = nil;
 	span->start = start;
@@ -666,8 +723,9 @@ runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 	span->types.compression = MTypes_Empty;
 }
 
+// 初始化目标 span 对象为空的双向链表
+//
 // Initialize an empty doubly-linked list.
-// 初始化span对象为空的双向链表
 void
 runtime·MSpanList_Init(MSpan *list)
 {
@@ -676,9 +734,13 @@ runtime·MSpanList_Init(MSpan *list)
 	list->prev = list;
 }
 
-// 将目标span从其所在的双向链表中移除
-// 可能出现在:
-// 1. span被回收, 从mcentral的empty链表中移除, 将放到 noempty 链表中.
+// 将目标 span 从其所在的双向链表中移除
+//
+// caller:
+// 	1. src/pkg/runtime/mcentral.c -> runtime·MCentral_AllocList()
+// 	分配小对象时, mcache 本地缓存资源不足, 向 mcentral 中获取一个空闲链表 s 后,
+// 	调用本函数, 将该链表从 mcentral-> nonempty 链表中移除.
+//
 void
 runtime·MSpanList_Remove(MSpan *span)
 {
@@ -696,16 +758,20 @@ runtime·MSpanList_IsEmpty(MSpan *list)
 	return list->next == list;
 }
 
-// ##runtime·MSpanList_Insert
 // 将目标span添加到目标链表list中, 看起来是放到了链表头.
-// 可能出现在:
-// 1. span被回收, 从mcentral的empty链表中移除, 放到 noempty 链表中.
+//
+// caller:
+// 	1. src/pkg/runtime/mcentral.c -> runtime·MCentral_AllocList()
+// 	分配小对象时, mcache 本地缓存资源不足, 向 mcentral 中获取一个空闲链表 s 后,
+// 	调用本函数, 将该链表放到 mcentral-> empty 链表中.
+//
 void
 runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 {
 	if(span->next != nil || span->prev != nil) {
-		runtime·printf("failed MSpanList_Insert %p %p %p\n", 
-			span, span->next, span->prev);
+		runtime·printf(
+			"failed MSpanList_Insert %p %p %p\n", span, span->next, span->prev
+		);
 		runtime·throw("MSpanList_Insert");
 	}
 	span->next = list->next;

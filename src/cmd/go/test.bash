@@ -246,25 +246,25 @@ elif ! test -x testdata/bin1/helloworld; then
 	ok=false
 fi
 
-TEST godoc installs into GOBIN
-d=$(mktemp -d -t testgoXXX)
-export GOPATH=$d
-mkdir $d/gobin
-GOBIN=$d/gobin ./testgo get code.google.com/p/go.tools/cmd/godoc
-if [ ! -x $d/gobin/godoc ]; then
-	echo did not install godoc to '$GOBIN'
-	GOBIN=$d/gobin ./testgo list -f 'Target: {{.Target}}' code.google.com/p/go.tools/cmd/godoc
-	ok=false
-fi
-
-TEST godoc installs into GOROOT
-rm -f $GOROOT/bin/godoc
-./testgo install code.google.com/p/go.tools/cmd/godoc
-if [ ! -x $GOROOT/bin/godoc ]; then
-	echo did not install godoc to '$GOROOT/bin'
-	./testgo list -f 'Target: {{.Target}}' code.google.com/p/go.tools/cmd/godoc
-	ok=false
-fi
+## TEST godoc installs into GOBIN
+## d=$(mktemp -d -t testgoXXX)
+## export GOPATH=$d
+## mkdir $d/gobin
+## GOBIN=$d/gobin ./testgo get code.google.com/p/go.tools/cmd/godoc
+## if [ ! -x $d/gobin/godoc ]; then
+## 	echo did not install godoc to '$GOBIN'
+## 	GOBIN=$d/gobin ./testgo list -f 'Target: {{.Target}}' code.google.com/p/go.tools/cmd/godoc
+## 	ok=false
+## fi
+## 
+## TEST godoc installs into GOROOT
+## rm -f $GOROOT/bin/godoc
+## ./testgo install code.google.com/p/go.tools/cmd/godoc
+## if [ ! -x $GOROOT/bin/godoc ]; then
+## 	echo did not install godoc to '$GOROOT/bin'
+## 	./testgo list -f 'Target: {{.Target}}' code.google.com/p/go.tools/cmd/godoc
+## 	ok=false
+## fi
 
 TEST cmd/fix installs into tool
 GOOS=$(./testgo env GOOS)

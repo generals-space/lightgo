@@ -280,6 +280,7 @@ runtime·main(void)
 	}
 
 	// 创建监控线程(定期垃圾回收, 以及并发任务调试相关)
+	// 使用 ps -efT 可以看到, 此时除了当前 m0 主线程, 又多出了一个线程
 	newm(sysmon, nil);
 
 	// Lock the main goroutine onto this, the main OS thread, during initialization. 
@@ -308,6 +309,8 @@ runtime·main(void)
 		runtime·throw("runtime·main not on m0");
 	}
 	// 通过 scavenger 变量启动独立的协程运行 runtime·MHeap_Scavenger(), 进行垃圾回收.
+	//
+	// 注意, 这里是创建协程, 而不是系统线程, 所以 ps -efT 是不会有变化的.
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
 
 	// 这里应该是用户编写的代码中, 出现包引用以及 init() 函数的地方, 由编译器指向.
@@ -1627,8 +1630,11 @@ top:
 	// If number of spinning M's >= number of busy P's, block.
 	// This is necessary to prevent excessive CPU consumption
 	// when GOMAXPROCS>>1 but the program parallelism is low.
-	if(!m->spinning && 2 * runtime·atomicload(&runtime·sched.nmspinning) >= runtime·gomaxprocs - runtime·atomicload(&runtime·sched.npidle))  // TODO: fast atomic
+	//
+	// TODO: fast atomic
+	if(!m->spinning && 2 * runtime·atomicload(&runtime·sched.nmspinning) >= runtime·gomaxprocs - runtime·atomicload(&runtime·sched.npidle)) {
 		goto stop;
+	}
 	if(!m->spinning) {
 		m->spinning = true;
 		runtime·xadd(&runtime·sched.nmspinning, 1);

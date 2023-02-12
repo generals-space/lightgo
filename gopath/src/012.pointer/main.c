@@ -1,4 +1,4 @@
-// pointer.c
+// main.c
 #include <stdio.h>
 
 void main(){
@@ -24,4 +24,4 @@ void main(){
     // 没有指针+指针的用法.
 }
 
-// gcc -g -o pointer pointer.c
+// gcc -g -o main main.c

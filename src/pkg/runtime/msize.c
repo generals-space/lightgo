@@ -46,10 +46,12 @@ int8 runtime·size_to_class128[(MaxSmallSize-1024)/128 + 1];
 static int32
 SizeToClass(int32 size)
 {
-	if(size > MaxSmallSize)
+	if(size > MaxSmallSize) {
 		runtime·throw("SizeToClass - invalid size");
-	if(size > 1024-8)
+	}
+	if(size > 1024-8) {
 		return runtime·size_to_class128[(size-1024+127) >> 7];
+	}
 	return runtime·size_to_class8[(size+7)>>3];
 }
 
@@ -71,16 +73,28 @@ runtime·InitSizes(void)
 	// 这里的for循环代表了划分的流程, 可以看到ta是按照size大小+align步长一点一点加上去的. 
 	// ...这个流程分析起来有点复杂, 不如打印一下日志更清晰.
 	runtime·class_to_size[0] = 0;
-	sizeclass = 1;	// 0 means no class 从第1级开始
+	// 从第1级开始(没有第0级)
+	//
+	// 0 means no class 
+	sizeclass = 1;
 	align = 8; 
 	// runtime·printf("+++ init runtime·class_to_size\n");
 	for(size = align; size <= MaxSmallSize; size += align) {
 		if((size&(size-1)) == 0) {	// bump alignment once in a while
-			if(size >= 2048) 		align = 256;
-			else if(size >= 128) 	align = size / 8;
-			else if(size >= 16)		align = 16;	// required for x86 SSE instructions, if we want to use them
+			if(size >= 2048){
+				align = 256;
+			}
+			else if(size >= 128){
+				align = size / 8;
+			}
+			else if(size >= 16) {
+				// required for x86 SSE instructions, if we want to use them
+				align = 16;
+			}
 		}
-		if((align&(align-1)) != 0) runtime·throw("InitSizes - bug");
+		if((align&(align-1)) != 0) {
+			runtime·throw("InitSizes - bug");
+		} 
 
 		// Make the allocnpages big enough that the leftover is less than 1/8 of the total,
 		// so wasted space is at most 12.5%.
@@ -94,25 +108,35 @@ runtime·InitSizes(void)
 		// 如果分配2页, 那么这个span可以容纳7个1152 byte的对象, 然后剩余128 byte, 比例为1.5625%.
 		// ...我call, 那么就是有时span只能容纳很少的对象, 不够了怎么办? 重新创建span吗?
 		allocsize = PageSize;
-		while(allocsize%size > allocsize/8) allocsize += PageSize;
+		while(allocsize%size > allocsize/8) {
+			allocsize += PageSize;
+		} 
 		npages = allocsize >> PageShift;
 
 		// 打印size与align, 会在运行目标程序时输出(编译时也会输出), 需要重新编译
-		// runtime·printf("+++ sizeclass: %d, size: %d, align: %d, pages: %d\n", sizeclass, size, align, (int32)npages);
+		// runtime·printf(
+		// 	"+++ sizeclass: %d, size: %d, align: %d, pages: %d\n", 
+		// 	sizeclass, size, align, (int32)npages
+		// );
 
-		// If the previous sizeclass chose the same allocation size and fit the same number of objects into the page, 
+		// If the previous sizeclass chose the same allocation size
+		// and fit the same number of objects into the page, 
 		// we might as well use just this size instead of having two different sizes.
-		// 如果在当前循环中, 与前面的size等级拥有同样span大小(npages的值相同, 表示页的个数相同), 且其中可以容纳的对象的个数(即allocsize/size值)也相同,
+		// 如果在当前循环中, 与前面的size等级拥有同样span大小(npages的值相同, 表示页的个数相同),
+		// 且其中可以容纳的对象的个数(即allocsize/size值)也相同,
 		// 就没有必要保留当前的size等级了.
 		// 比如, sizeclass 22, size对象大小为416 byte, 分配的总空间为4k, 可容纳9个对象, 空间浪费8.59%; 
-		// 而当时align的为32(因为 16 <= size <= 128, 当前for循环起始的if块中有提到), 下一个size对象大小为448, 分配的总空间为4k, 也可容纳9个对象, 空间浪费1.5625%.
+		// 而当时align的为32(因为 16 <= size <= 128, 当前for循环起始的if块中有提到),
+		// 下一个size对象大小为448, 分配的总空间为4k, 也可容纳9个对象, 空间浪费1.5625%.
 		// 那么sizeclass 23就可以不用保留size 448的记录了, 分配对象时直接使用size 22的.
 		if(sizeclass > 1
 		&& npages == runtime·class_to_allocnpages[sizeclass-1]
 		&& allocsize/size == allocsize/runtime·class_to_size[sizeclass-1]) {
 			runtime·class_to_size[sizeclass-1] = size;
-			// 在这里, npages可以正常输出, 但allocsize的值为0, 日志信息中表示其类型为VULONG, 不太明白为什么.
-			// runtime·printf("++++++ npages: %d, allocsize: %d\n", npages, (int64)allocsize);
+			// runtime·printf(
+			// 	"++++++ npages: %D, allocsize: %D\n", 
+			// 	npages, (int64)allocsize
+			// );
 			continue;
 		}
 
@@ -129,23 +153,29 @@ runtime·InitSizes(void)
 	}
 
 	// Initialize the size_to_class tables.
+	//
 	// 初始化size_to_class反查表, 这应该才是runtime真正需要的吧, 
 	// 毕竟肯定是先知道目标对象的大小, 才能确定需要将其分配到哪个等级的span中.
 	// 这个for循环流程就简单很多了, 反查表有两个, size_to_class8和size_to_class128.
 	// 对小于1024 byte的对象, size -> class的映射比较细, 每8 bytes分一段.
 	// 比如class 7中存放的对象size为96 bytes, class 8的为112 bytes.
-	// 那么100, 108 bytes的对象应该放在哪呢? 肯定也得是class 8, 因为class 7放不下, class 9会造成浪费.
-	// 对于大于1024的对象, nextsize步进长度变成了128, 看一下span等级表会发现, 大于1024 bytes的class等级之间,
+	// 那么100, 108 bytes的对象应该放在哪呢?
+	// 肯定也得是class 8, 因为class 7放不下, class 9会造成浪费.
+	// 对于大于1024的对象, nextsize步进长度变成了128,
+	// 看一下span等级表会发现, 大于1024 bytes的class等级之间,
 	// size的差值都是大于128的, 这样可以减少第2个for循环的次数...我猜.
 	nextsize = 0;
 	for (sizeclass = 1; sizeclass < NumSizeClasses; sizeclass++) {
 		// 在nextsize < 1024时, 步进长度为8
-		for(; nextsize < 1024 && nextsize <= runtime·class_to_size[sizeclass]; nextsize+=8)
+		for(; nextsize < 1024 && nextsize <= runtime·class_to_size[sizeclass]; nextsize+=8) {
 			runtime·size_to_class8[nextsize/8] = sizeclass;
+		}
 		// 在nextsize >= 1024时, 步进长度为128
-		if(nextsize >= 1024)
-			for(; nextsize <= runtime·class_to_size[sizeclass]; nextsize += 128)
+		if(nextsize >= 1024) {
+			for(; nextsize <= runtime·class_to_size[sizeclass]; nextsize += 128) {
 				runtime·size_to_class128[(nextsize-1024)/128] = sizeclass;
+			}
+		}
 	}
 
 	// Double-check SizeToClass.
@@ -153,10 +183,13 @@ runtime·InitSizes(void)
 		// ...call, n的步进长度就是1, 从0加到32k吗
 		for(n=0; n < MaxSmallSize; n++) {
 			sizeclass = SizeToClass(n);
-			// runtime·class_to_size[sizeclass] < n表示通过SizeToClass得到的class等级中的size无法容纳大小为n的对象, 
+			// runtime·class_to_size[sizeclass] < n 表示通过SizeToClass得到的class等级中的size无法容纳大小为n的对象, 
 			// 这肯定是不行的
 			if(sizeclass < 1 || sizeclass >= NumSizeClasses || runtime·class_to_size[sizeclass] < n) {
-				runtime·printf("size=%d sizeclass=%d runtime·class_to_size=%d\n", n, sizeclass, runtime·class_to_size[sizeclass]);
+				runtime·printf(
+					"size=%d sizeclass=%d runtime·class_to_size=%d\n", 
+					n, sizeclass, runtime·class_to_size[sizeclass]
+				);
 				runtime·printf("incorrect SizeToClass");
 				goto dump;
 			}
@@ -165,7 +198,10 @@ runtime·InitSizes(void)
 			// 但是明明前一个class等级也可以容纳, 这也是不允许的.
 			// 比如class 61容纳的对象是32k的, 虽然可以存储8 bytes的对象, 但是可能造成很大的空间浪费, 不合理.
 			if(sizeclass > 1 && runtime·class_to_size[sizeclass-1] >= n) {
-				runtime·printf("size=%d sizeclass=%d runtime·class_to_size=%d\n", n, sizeclass, runtime·class_to_size[sizeclass]);
+				runtime·printf(
+					"size=%d sizeclass=%d runtime·class_to_size=%d\n", 
+					n, sizeclass, runtime·class_to_size[sizeclass]
+				);
 				runtime·printf("SizeToClass too big");
 				goto dump;
 			}
@@ -173,26 +209,34 @@ runtime·InitSizes(void)
 	}
 
 	// Copy out for statistics table.
-	for(i=0; i<nelem(runtime·class_to_size); i++)
+	for(i=0; i<nelem(runtime·class_to_size); i++) {
 		mstats.by_size[i].size = runtime·class_to_size[i];
+	}
 	return;
 
 dump:
 	if(1){
 		runtime·printf("NumSizeClasses=%d\n", NumSizeClasses);
 		runtime·printf("runtime·class_to_size:");
-		for(sizeclass=0; sizeclass<NumSizeClasses; sizeclass++)
+		for(sizeclass=0; sizeclass<NumSizeClasses; sizeclass++) {
 			runtime·printf(" %d", runtime·class_to_size[sizeclass]);
+		}
 		runtime·printf("\n\n");
 		runtime·printf("size_to_class8:");
-		for(i=0; i<nelem(runtime·size_to_class8); i++)
-			runtime·printf(" %d=>%d(%d)\n", i*8, runtime·size_to_class8[i],
-				runtime·class_to_size[runtime·size_to_class8[i]]);
+		for(i=0; i<nelem(runtime·size_to_class8); i++) {
+			runtime·printf(
+				" %d=>%d(%d)\n", i*8, runtime·size_to_class8[i],
+				runtime·class_to_size[runtime·size_to_class8[i]]
+			);
+		}
 		runtime·printf("\n");
 		runtime·printf("size_to_class128:");
-		for(i=0; i<nelem(runtime·size_to_class128); i++)
-			runtime·printf(" %d=>%d(%d)\n", i*128, runtime·size_to_class128[i],
-				runtime·class_to_size[runtime·size_to_class128[i]]);
+		for(i=0; i<nelem(runtime·size_to_class128); i++) {
+			runtime·printf(
+				" %d=>%d(%d)\n", i*128, runtime·size_to_class128[i],
+				runtime·class_to_size[runtime·size_to_class128[i]]
+			);
+		}
 		runtime·printf("\n");
 	}
 	runtime·throw("InitSizes failed");

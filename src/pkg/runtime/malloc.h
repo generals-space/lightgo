@@ -221,7 +221,12 @@ struct FixAlloc
 	// called first time p is returned
 	void	(*first)(void *arg, byte *p);
 	void*	arg;
-	// 这个链表里可能为 MSpan, 也可能为 MCache
+	// 这个链表里可能为 MSpan, 也可能为 MCache.
+	//
+	// 注意: 在 runtime·FixAlloc_Init() 与 runtime·FixAlloc_Alloc() 过程中,
+	// 都不存在对 list 成员赋值的情况, list 成员一直都是 nil.
+	// 实际上, 只有在 runtime·FixAlloc_Free() 中, "释放" span/cache 对象时, 
+	// 才会将ta们归还到 list 链表中, 而不是归还给操作系统.
 	MLink*	list;
 	byte*	chunk;
 	uint32	nchunk;
@@ -396,20 +401,25 @@ void	runtime·MCache_ReleaseAll(MCache *c);
 //     The type of the i-th block is: data.type[data.index[i]]
 enum
 {
+	// 默认值
 	MTypes_Empty = 0,
+	// 超过32k的大对象在分配到堆上后, 会打上这个标记
 	MTypes_Single = 1,
 	MTypes_Words = 2,
 	MTypes_Bytes = 3,
 };
 struct MTypes
 {
-	byte	compression;	// one of MTypes_*
+	// 默认为 MTypes_Empty
+	byte	compression;
+	// gc标记, 如 FlagNoScan, FlagNoGC
 	uintptr	data;
 };
 
 // An MSpan is a run of pages.
 enum
 {
+	// 在 MHeap_AllocLocked() 中被赋值
 	MSpanInUse = 0,
 	// 在 MHeap_FreeLocked() 中被赋值
 	MSpanFree,
@@ -442,6 +452,8 @@ struct MSpan
 	uint32	ref;
 	// size等级为 0 时, 表示是在 heap 分配的 >32k 的大对象.
 	int32	sizeclass;
+	// src/pkg/runtime/mheap.c -> MHeap_AllocLocked() 中赋值
+	//
 	// computed from sizeclass or from npages
 	uintptr	elemsize;
 	// 表示当前 span 对象的状态, 包括 MSpanInUse, MSpanFree 等.
@@ -469,7 +481,9 @@ struct MCentral
 {
 	Lock;
 	int32 sizeclass;
+	// 存在空闲块, 还可以分配对象的链表
 	MSpan nonempty;
+	// 没有空闲块的链表
 	MSpan empty;
 	int32 nfree;
 };
@@ -490,11 +504,14 @@ struct MHeap
 	Lock;
 
 	// free 数组的每个成员都是 span 链表(循环链表).
-	// 各成员中, h->free[n]中拥有n个页, 最后一个成员成员可容纳的页数即是MaxMHeapList.
+	// 每个 h->free[n] 成员中拥有 n 个页, 最后一个成员成员可容纳的页数即是 MaxMHeapList.
 	//
 	// free lists of given length
 	MSpan free[MaxMHeapList];
-	MSpan large;			// free lists length >= MaxMHeapList
+
+	// free lists length >= MaxMHeapList
+	MSpan large;
+
 	// 数组对象的指针, 存储着堆中所有 span 对象指针.
 	//
 	// 下面的 nspan 成员表示其中 span 对象的数量
@@ -510,6 +527,9 @@ struct MHeap
 	// 该值为内存分布图中的 span 区域的起始(虚拟)地址.
 	//
 	// 在 src/pkg/runtime/malloc.goc -> runtime·mallocinit() 中被赋值.
+	// 不过此时只是指定的起始位置与虚拟内存, 并没有实际分配空间.
+	//
+	// 在 src/pkg/runtime/mheap.c -> MHeap_Grow() 中被填充(数组成员)
 	//
 	// span lookup
 	MSpan**	spans;

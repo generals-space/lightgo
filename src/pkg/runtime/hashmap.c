@@ -767,19 +767,23 @@ hash_remove(MapType *t, Hmap *h, void *key)
 	byte *k, *v;
 	bool eq;
 	
-	if(docheck)
+	if(docheck) {
 		check(t, h);
-	if(h->count == 0)
+	}
+	if(h->count == 0) {
 		return;
+	}
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	bucket = hash & (((uintptr)1 << h->B) - 1);
-	if(h->oldbuckets != nil)
+	if(h->oldbuckets != nil) {
 		grow_work(t, h, bucket);
+	}
 	b = (Bucket*)(h->buckets + bucket * h->bucketsize);
 	top = hash >> (sizeof(uintptr)*8 - 8);
-	if(top == 0)
+	if(top == 0) {
 		top = 1;
+	}
 	do {
 		for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
 			if(b->tophash[i] != top)
@@ -818,7 +822,9 @@ hash_remove(MapType *t, Hmap *h, void *key)
 // the size of this structure.
 struct hash_iter
 {
-	uint8* key; // Must be in first position.  Write nil to indicate iteration end (see cmd/gc/range.c).
+	// Must be in first position. 
+	// Write nil to indicate iteration end (see cmd/gc/range.c).
+	uint8* key;
 	uint8* value;
 
 	MapType *t;
@@ -867,10 +873,12 @@ hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 	// Can run concurrently with another hash_iter_init().
 	for(;;) {
 		old = h->flags;
-		if((old&(Iterator|OldIterator)) == (Iterator|OldIterator))
+		if((old&(Iterator|OldIterator)) == (Iterator|OldIterator)) {
 			break;
-		if(runtime·cas(&h->flags, old, old|Iterator|OldIterator))
+		}
+		if(runtime·cas(&h->flags, old, old|Iterator|OldIterator)) {
 			break;
+		}
 	}
 
 	if(h->buckets == nil) {

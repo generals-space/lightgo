@@ -66,13 +66,13 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	MLink *v;
 
 	if(size == 0) {
+		// 所有长度为0的分配操作都返回这个指针(...是不是nil对象?)
+		// golang 不要求 nil 对象有不同的值.
+		//
 		// All 0-length allocations use this pointer.
 		// The language does not require the allocations to have distinct values.
-		// 所有长度为0的分配操作都返回这个指针(...是不是nil对象?)
-		// go 不要求 nil 对象有不同的值.
 		return &runtime·zerobase;
 	}
-	// m 在 runtime.h 中声明, 也是全局变量, m 是 M 类型的列表对象.
 	if(m->mallocing) {
 		runtime·throw("malloc/free - deadlock");
 	} 
@@ -89,23 +89,26 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	c = m->mcache;
 	// 小对象从 mcache 列表中分配.
 	if(size <= MaxSmallSize) {
-		// Inlined version of SizeToClass().
 		// 下面的语句同样实现了 SizeToClass() 的功能, 相当于内联版本.
+		//
+		// Inlined version of SizeToClass().
 		if(size <= 1024-8) {
 			sizeclass = runtime·size_to_class8[(size+7)>>3];
-		} 
+		}
 		else {
 			sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
 		}
 
 		// 这里的 size 与前面的 size 大小不一定相同, 因为要分配目标等级规定的空间, 可能会有空间浪费.
 		size = runtime·class_to_size[sizeclass];
+		// runtime·printf("size: %d, sizeclass: %d\n", size, sizeclass);
 		// 先从当前线程的 mcache 中分配
 		l = &c->list[sizeclass];
-		// 如果 list 中已经没有成员(分配一个成员就会将其从 list 中移除), 则从堆中的 central 空间中拿一些过来.
+		// 如果 list 中已经没有成员(分配一个成员就会将其从 list 中移除),
+		// 则从堆中的 central 空间中拿一些过来.
 		if(l->list == nil) {
 			runtime·MCache_Refill(c, sizeclass);
-		} 
+		}
 
 		// 从 mcache 的 span 链表分配小对象, 相当于直接从链表头移除了一个成员.
 		v = l->list;
@@ -144,8 +147,9 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		size = npages<<PageShift;
 		v = (void*)(s->start << PageShift);
 
-		// setup for mark sweep
 		// 为之后的标记清除做准备(应该是记录下分配空间的位置, 方便GC时的索引)
+		//
+		// setup for mark sweep
 		runtime·markspan(v, 0, 0, true);
 	}
 
@@ -367,9 +371,9 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 //
 // caller:
 // 	1. runtime·mallocinit() 初始化内存分配器时被调用, 为 m0 创建 mcache 成员;
-// 	2. src/pkg/runtime/proc.c -> procresize() 对 p 的数量进行调整时, 为新创建的 p 对象分配 mcache;
-MCache*
-runtime·allocmcache(void)
+// 	2. src/pkg/runtime/proc.c -> procresize()
+// 	对 p 的数量进行调整时, 为新创建的 p 对象分配 mcache;
+MCache* runtime·allocmcache(void)
 {
 	intgo rate;
 	MCache *c;
@@ -385,10 +389,10 @@ runtime·allocmcache(void)
 	// make 2*rate not overflow
 	if(rate > 0x3fffffff) {
 		rate = 0x3fffffff;
-	} 
+	}
 	if(rate != 0) {
 		c->next_sample = runtime·fastrand1() % (2*rate);
-	} 
+	}
 
 	return c;
 }
@@ -599,11 +603,11 @@ runtime·mallocinit(void)
 }
 
 // 	@param h: runtime·mheap 全局对象指针
+// 	@param n: 需要向OS申请的空间大小(单位为**字节**)
 //
 // caller:
-// 	1. src/pkg/runtime/mheap.c -> MHeap_Grow()
-void*
-runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
+// 	1. src/pkg/runtime/mheap.c -> MHeap_Grow() 只有这一处
+void* runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
 {
 	byte *p;
 
@@ -623,10 +627,13 @@ runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
 			}
 		}
 	}
+	// runtime·printf("n: %D\n", n);
+
 	if(n <= h->arena_end - h->arena_used) {
 		// Keep taking from our reservation.
 		p = h->arena_used;
 		runtime·SysMap(p, n, &mstats.heap_sys);
+		// runtime·printf("n: %D\n", n);
 		h->arena_used += n;
 		runtime·MHeap_MapBits(h);
 		runtime·MHeap_MapSpans(h);
@@ -635,11 +642,13 @@ runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
 		}
 		return p;
 	}
-	
+
 	// If using 64-bit, our reservation is all we have.
 	if(sizeof(void*) == 8 && (uintptr)h->bitmap >= 0xffffffffU) {
 		return nil;
 	}
+
+	// 接下来是32位的处理逻辑, 基本不会运行到这里.
 
 	// On 32-bit, once the reservation is gone we can
 	// try to get memory at a location chosen by the OS
@@ -695,7 +704,8 @@ enum
 // param size: 待分配的空间大小. 
 //
 // caller:
-// 	1. src/pkg/runtime/mfixalloc.c -> runtime·FixAlloc_Alloc() 初始化内存分配器期间被调用.
+// 	1. src/pkg/runtime/mfixalloc.c -> runtime·FixAlloc_Alloc() 
+// 	初始化内存分配器期间被调用.
 //
 // Wrapper around SysAlloc that can allocate small chunks.
 // There is no associated free operation.
@@ -746,8 +756,8 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 static Lock settype_lock;
 
 // caller:
-// 	1. src/pkg/runtime/mgc0.c -> gc()
-// 	在 g0 上执行 gc 时, 调用该函数.
+// 	1. runtime·mallocgc()
+// 	2. src/pkg/runtime/mgc0.c -> gc() 在 g0 上执行 gc 时, 调用该函数.
 void
 runtime·settype_flush(M *mp)
 {

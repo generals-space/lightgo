@@ -10,7 +10,9 @@
 #include "arch_amd64.h"
 #include "malloc.h"
 
-// 当线程中 mcache 对象没有多余的内存时, 会调用此函数向 mcentral 获取一批内存块.
+// 在分配小对象时, 先尝试从线程的本地缓存(mcache)中分配, 
+// 当本地缓存耗尽时, 调用本函数, 从 mcentral 中重新获取"一批"内存块
+//
 // 此函数只是 runtime·MCentral_AllocList() 的包装函数, 
 // 实际的获取操作在 runtime·MCentral_AllocList() 中.
 //
@@ -18,8 +20,9 @@
 // param sizeclass: span size等级
 //
 // caller: 
-// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() 在 mcache 的某个 sizeclass
-//     的列表都被申请完了的时候, 调用此函数为其重新申请空间.
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mallocgc() 只有这一处
+// 	在分配小对象时, 先尝试从线程的本地缓存(mcache)中分配, 
+// 当本地缓存耗尽时, 调用本函数, 从 mcentral 中重新获取"一批"内存块
 void
 runtime·MCache_Refill(MCache *c, int32 sizeclass)
 {
@@ -27,10 +30,16 @@ runtime·MCache_Refill(MCache *c, int32 sizeclass)
 
 	// Replenish using central lists.
 	l = &c->list[sizeclass];
-	if(l->list) runtime·throw("MCache_Refill: the list is not empty");
+	if(l->list) {
+		runtime·throw("MCache_Refill: the list is not empty");
+	}
 
-	l->nlist = runtime·MCentral_AllocList(&runtime·mheap.central[sizeclass], &l->list);
-	if(l->list == nil) runtime·throw("out of memory");
+	l->nlist = runtime·MCentral_AllocList(
+		&runtime·mheap.central[sizeclass], &l->list
+	);
+	if(l->list == nil) {
+		runtime·throw("out of memory");
+	}
 }
 
 // Take n elements off l and return them to the central free list.
@@ -43,8 +52,9 @@ ReleaseN(MCacheList *l, int32 n, int32 sizeclass)
 	// Cut off first n elements.
 	first = l->list;
 	lp = &l->list;
-	for(i=0; i<n; i++)
+	for(i=0; i<n; i++) {
 		lp = &(*lp)->next;
+	}
 	l->list = *lp;
 	*lp = nil;
 	l->nlist -= n;
@@ -69,8 +79,9 @@ runtime·MCache_Free(MCache *c, void *v, int32 sizeclass, uintptr size)
 
 	// We transfer span at a time from MCentral to MCache,
 	// if we have 2 times more than that, release a half back.
-	if(l->nlist >= 2*(runtime·class_to_allocnpages[sizeclass]<<PageShift)/size)
+	if(l->nlist >= 2*(runtime·class_to_allocnpages[sizeclass]<<PageShift)/size) {
 		ReleaseN(l, l->nlist/2, sizeclass);
+	}
 }
 
 void

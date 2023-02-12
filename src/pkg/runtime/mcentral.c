@@ -21,9 +21,7 @@
 static bool MCentral_Grow(MCentral *c);
 static void MCentral_Free(MCentral *c, void *v);
 
-// 初始化 mcentral 对象.
-//
-// 为其中的 empty, nonempty 成员构造两个空的双向循环链表.
+// 初始化 mcentral 对象, 为其中的 empty, nonempty 成员构造两个空的双向循环链表.
 //
 // 只被调用这一次, 不过是一个for循环, 用来初始化堆中各 size 等级的 mcentral.
 //
@@ -39,13 +37,12 @@ runtime·MCentral_Init(MCentral *c, int32 sizeclass)
 	runtime·MSpanList_Init(&c->empty);
 }
 
-// 从 mcentral 的空闲列表中分配一批对象, 返回对象的个数.
-// 这些对象组成一个链表, 返回时 pfirst 指向第一个对象的地址.
-// 是在线程的 mcache 没有多余的空间来分配对象时, 尝试从 mcentral 获取一批空闲空间.
-// ...从传入参数来看, 好像没说要获取多少? 看心情吗?
-// ...继续分析得出, 此函数直接从 mcentral 的 noempty 链表中拿出一个 span,
-// 并将pfirst指向这个span的freelist, 
-// 再把这个span放到empty链表中(freelist都分配出去了, 相当于没有剩余空间了), 就完事了.
+// 在分配小对象时, 先尝试从线程的本地缓存(mcache)中分配, 
+// 当本地缓存耗尽时, 调用本函数, 从 mcentral 中重新获取"一批"内存块.
+//
+// 从具体逻辑看, 是将 mcentral 中的 nonempty 中的第1个成员链表, 全分配给主调函数了.
+//
+// 	@param pfirst: mcache 中的一个链表, 调用本函数时一般都为 nil, 本函数会把新的内存块添加到这个链表中.
 //
 // caller: 
 // 	1. src/pkg/runtime/mcache.c -> runtime·MCache_Refill() 只有这一处
@@ -61,8 +58,9 @@ runtime·MCentral_AllocList(MCentral *c, MLink **pfirst)
 	int32 cap, n;
 	// mcentral 被多线程共享, 所以从 mcentral 获取内存时需要加锁
 	runtime·lock(c);
-	// Replenish central list if empty.
 	// 如果mcentral中也没有空闲空间时, 就从堆中获取, 补充自身.
+	//
+	// Replenish central list if empty.
 	if(runtime·MSpanList_IsEmpty(&c->nonempty)) {
 		if(!MCentral_Grow(c)) {
 			runtime·unlock(c);
@@ -70,17 +68,20 @@ runtime·MCentral_AllocList(MCentral *c, MLink **pfirst)
 			return 0;
 		}
 	}
-
+	// 这是将 mcentral 中 nonempty 链表中的第1个链表的内容全献出来了.
 	s = c->nonempty.next;
-	// cap 总共可容纳的object的个数
+	// cap 总共可容纳的 object 的个数
 	cap = (s->npages << PageShift) / s->elemsize;
-	// n 空闲的object的个数
+	// n 当前 span 链表中空闲的 object 的个数
 	n = cap - s->ref;
 	*pfirst = s->freelist;
 	s->freelist = nil;
 	s->ref += n;
 	c->nfree -= n;
+
+	// 将该 span 从 nonempty 中移除,
 	runtime·MSpanList_Remove(s);
+	// 然后放到 empty 链表中.
 	runtime·MSpanList_Insert(&c->empty, s);
 	runtime·unlock(c);
 	return n;
@@ -110,8 +111,9 @@ MCentral_Free(MCentral *c, void *v)
 
 	// Find span for v.
 	s = runtime·MHeap_Lookup(&runtime·mheap, v);
-	if(s == nil || s->ref == 0)
+	if(s == nil || s->ref == 0) {
 		runtime·throw("invalid free");
+	}
 
 	// Move to nonempty if necessary.
 	if(s->freelist == nil) {
@@ -139,10 +141,12 @@ MCentral_Free(MCentral *c, void *v)
 	}
 }
 
-// Free n objects from a span s back into the central free list c.
 // 释放目标span s中的n个对象, 将空间回收到mcentral的空闲列表c中.
 // 记得mcentral也是有size等级的, 且调用者必然保证了, 与span分配的对象的size等级相同.
+//
 // caller: gc -> sweepspan()
+//
+// Free n objects from a span s back into the central free list c.
 void
 runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end)
 {
@@ -205,10 +209,13 @@ runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *sizep, int32 *npagesp, int3
 	*nobj = (npages << PageShift) / size;
 }
 
-// 从 heap 处取一个 span 块, 并切分成对象块, 并组成空闲链表备用.
+// 当 mcentral 的 nonempty 链表已无可分配的空闲块时, 调用本函数从 heap 处取一个 span 块,
+// 并切分成对象块, 并组成空闲链表备用.
 //
-// Fetch a new span from the heap and
-// carve into objects for the free list.
+// caller:
+// 	1. runtime·MCentral_AllocList() 只有这一处
+//
+// Fetch a new span from the heap and carve into objects for the free list.
 static bool
 MCentral_Grow(MCentral *c)
 {
@@ -220,7 +227,9 @@ MCentral_Grow(MCentral *c)
 
 	runtime·unlock(c);
 	runtime·MGetSizeClassInfo(c->sizeclass, &size, &npages, &n);
+
 	s = runtime·MHeap_Alloc(&runtime·mheap, npages, c->sizeclass, 0, 1);
+
 	if(s == nil) {
 		// TODO(rsc): Log out of memory
 		runtime·lock(c);

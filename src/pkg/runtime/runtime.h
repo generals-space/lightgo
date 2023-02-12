@@ -23,6 +23,7 @@ typedef	int64		intptr;
 typedef	int64		intgo; // Go's int
 typedef	uint64		uintgo; // Go's uint
 #else
+// 打印 uintptr 类型时, 最好使用 %D 表示, 而非 %d, 否则可能得到意想不到的结果.
 typedef	uint32		uintptr;
 typedef	int32		intptr;
 typedef	int32		intgo; // Go's int
@@ -448,9 +449,11 @@ struct	M
 	// on allm
 	M*	alllink;
 	M*	schedlink;
-	uint32	machport;	// Return address for Mach IPC (OS X)
+	// Return address for Mach IPC (OS X)
+	uint32	machport;
+	// mcache 存在于每个线程中, 并不是在堆上, 用于小对象无锁分配空间
 	MCache*	mcache;
-	
+
 	// stackcache 数组中已使用的数量
 	int32	stackinuse;
 	// 下一个可用的 stackcache 成员索引, 
@@ -483,8 +486,14 @@ struct	M
 	bool	needextram;
 	void	(*waitunlockf)(Lock*);
 	void*	waitlock;
-
+	// settype_buf 中存储着当前 m 已经分配的对象的地址信息, 每个对象信息包含2部分
+	// 1. p: 该对象在 arena 区域中的地址指针
+	// 2. typ: 该对象的gc标记, 如 FlagNoScan, FlagNoGC
+	// 在 settype_buf 数组中, 成员是这样排列的: [p0][typ0][p1][typ1][p2][typ2]...
+	//
+	// 注意: p 有可能是直接从 m 自身的 cache 中分配的小对象, 也有可能是直接在堆中分配的大对象.
 	uintptr	settype_buf[1024];
+	// settype_bufsize 即 settype_buf 中成员的数量
 	uintptr	settype_bufsize;
 
 	SEH*	seh;
@@ -818,7 +827,7 @@ void	runtime·noequal(bool*, uintptr, void*, void*);
 void	runtime·strequal(bool*, uintptr, void*, void*);
 void	runtime·interequal(bool*, uintptr, void*, void*);
 void	runtime·nilinterequal(bool*, uintptr, void*, void*);
-
+// 这是一个汇编实现
 bool	runtime·memeq(void*, void*, uintptr);
 
 void	runtime·memprint(uintptr, void*);

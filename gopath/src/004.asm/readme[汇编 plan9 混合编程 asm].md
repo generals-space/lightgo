@@ -3,6 +3,8 @@
 1. [Golang 调用汇编代码，太方便啦](https://my.oschina.net/zengsai/blog/123916)
     - 汇编源码其实不必命名为"xxx_ARCH.s"格式(如"add_amd64.s")
 
+## 执行方法
+
 配置好GOPATH环境变量后, 直接执行`go run main.go`即可.
 
 ```console
@@ -12,11 +14,13 @@ $ go run main.go
 
 > lib目录下的`.go`和`.asm`文件不必同名.
 
-------
+## 实现原理
 
-汇编混合编程要求汇编代码必须独立存在一个package中, 汇编代码编写函数体, 同包内使用go代码编写函数声明, 外部可以正常引用.
+汇编混合编程要求库函数代码(go与汇编)必须独立存在一个package中, 汇编代码编写函数体, 同包内使用go代码编写函数声明, 外部才可以正常引用.
 
-如果main.go与add.s存在同一目录下, 内容分别为
+> `math`标准库中存在大量的go与汇编的混合编程示例.
+
+如果`main.go`与`add.s`存在同一目录下, 内容分别为
 
 ```go
 package main

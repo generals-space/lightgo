@@ -12,8 +12,7 @@
 static bool use_aeshash;
 
 /*
- * map and chan helpers for
- * dealing with unknown types
+ * map and chan helpers for dealing with unknown types
  */
 void
 runtime·memhash(uintptr *h, uintptr s, void *a)
@@ -436,8 +435,7 @@ runtime·noequal(bool *eq, uintptr s, void *a, void *b)
 	runtime·panicstring("comparing uncomparable types");
 }
 
-Alg
-runtime·algarray[] =
+Alg runtime·algarray[] =
 {
 [AMEM]		{ runtime·memhash, runtime·memequal, runtime·memprint, runtime·memcopy },
 [ANOEQ]		{ runtime·nohash, runtime·noequal, runtime·memprint, runtime·memcopy },
