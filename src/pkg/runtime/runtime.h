@@ -24,6 +24,8 @@ typedef	int64		intgo; // Go's int
 typedef	uint64		uintgo; // Go's uint
 #else
 // 打印 uintptr 类型时, 最好使用 %D 表示, 而非 %d, 否则可能得到意想不到的结果.
+//
+// sizeof(uintptr) 值为 8
 typedef	uint32		uintptr;
 typedef	int32		intptr;
 typedef	int32		intgo; // Go's int
@@ -58,6 +60,8 @@ typedef	struct	P		P;
 typedef	struct	Note		Note;
 typedef	struct	Slice		Slice;
 typedef	struct	Stktop		Stktop;
+// runtime·printf() 打印这种类型的字符串内容时, 需要使用 ("%S", String变量)
+// 或是 ("%s", String变量->str) 格式.
 typedef	struct	String		String;
 typedef	struct	FuncVal		FuncVal;
 typedef	struct	SigTab		SigTab;
@@ -96,9 +100,9 @@ typedef	struct	DebugVars	DebugVars;
 /*
  * Per-CPU declaration.
  *
- * 这里声明的是全局 m 和 g 对象, g = m->g0
+ * 这里声明的是全局 m 和 g 对象, g != m->g0, 而是**当前协程**的 g .
  * 
- * 全局 m 变量不是所谓的 m0, 并不唯一, 应该是当前线程的 m id.
+ * 全局 m 变量不是所谓的 m0, 并不唯一, 应该是**当前线程**的 m id.
  * 在 src/pkg/runtime/os_linux.c -> runtime·newosproc() clone 出一个新的系统线程后,
  * 在 src/pkg/runtime/proc.c -> runtime·mstart() 中, 该 m 变量就已经是自己的 id 了.
  * 
@@ -159,6 +163,7 @@ enum
 };
 enum
 {
+	// 即 sizeof(void*) 的大小
 	PtrSize = sizeof(void*),
 };
 enum
@@ -274,6 +279,7 @@ struct	WinCallbackContext
 	uintptr	restorestack;	// adjust stack on return by (in bytes) (386 only)
 };
 
+// G 由 src/pkg/runtime/proc.c -> runtime·malg() 初始化
 struct	G
 {
 	// stackguard0 目前发现有两个可能值: stackguard, 或 StackPreempt
@@ -492,8 +498,13 @@ struct	M
 	// 在 settype_buf 数组中, 成员是这样排列的: [p0][typ0][p1][typ1][p2][typ2]...
 	//
 	// 注意: p 有可能是直接从 m 自身的 cache 中分配的小对象, 也有可能是直接在堆中分配的大对象.
+	//
+	// 对 settype_buf 中成员的新增操作, 可见 src/pkg/runtime/malloc.goc -> runtime·mallocgc()
+	// 其中 typ 类型为主调函数当作参数传入的, 对于开发者层面, 一般通过 new() 方法他那新对象时触发,
+	// 而 typ 参数一般由编译器解析并传入的.
 	uintptr	settype_buf[1024];
-	// settype_bufsize 即 settype_buf 中成员的数量
+
+	// settype_bufsize 即 settype_buf 数组中成员的实际数量
 	uintptr	settype_bufsize;
 
 	SEH*	seh;
@@ -674,7 +685,10 @@ struct ParFor
 	//
 	// total number of threads
 	uint32 nthr;
-	uint32 nthrmax;			// maximum number of threads
+	// 可执行 gc 的最大线程数 MaxGcproc
+	//
+	// maximum number of threads
+	uint32 nthrmax;
 	uint32 thrseq;			// thread id sequencer
 	// cnt 应该是待执行的任务的数量, 分别对应
 	// 1. src/pkg/runtime/mgc0.c -> work.nroot

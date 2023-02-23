@@ -363,6 +363,8 @@ type structType struct {
 	fields []structField // sorted by offset
 }
 
+// 具体解析见 ../runtime/mgc0.h
+//
 // NOTE: These are copied from ../runtime/mgc0.h.
 // They must be kept in sync.
 const (
@@ -533,9 +535,8 @@ func (t *uncommonType) MethodByName(name string) (m Method, ok bool) {
 	return
 }
 
-// TODO(rsc): 6g supplies these, but they are not
-// as efficient as they could be: they have commonType
-// as the receiver instead of *rtype.
+// TODO(rsc): 6g supplies these, but they are not as efficient as they could be:
+// they have commonType as the receiver instead of *rtype.
 func (t *rtype) NumMethod() int {
 	if t.Kind() == Interface {
 		tt := (*interfaceType)(unsafe.Pointer(t))
@@ -1565,6 +1566,9 @@ const (
 	_MAXVALSIZE = 128
 )
 
+// caller:
+// 	1. MapOf() 只有这一处
+//
 func bucketOf(ktyp, etyp *rtype) *rtype {
 	if ktyp.size > _MAXKEYSIZE {
 		ktyp = PtrTo(ktyp).(*rtype)
@@ -1607,6 +1611,9 @@ func bucketOf(ktyp, etyp *rtype) *rtype {
 	return b
 }
 
+// caller:
+// 	1. bucketOf() 只有这一处
+//
 // Take the GC program for "t" and append it to the GC program "gc".
 func appendGCProgram(gc []uintptr, t *rtype) []uintptr {
 	p := t.gc
@@ -1627,7 +1634,10 @@ loop:
 		case _GC_ARRAY_START, _GC_REGION:
 			argcnt = 3
 		default:
-			panic("unknown GC program op for " + *t.string + ": " + strconv.FormatUint(*(*uint64)(p), 10))
+			panic(
+				"unknown GC program op for " + *t.string + ": " + 
+				strconv.FormatUint(*(*uint64)(p), 10),
+			)
 		}
 		for i := 0; i < argcnt+1; i++ {
 			gc = append(gc, *(*uintptr)(p))

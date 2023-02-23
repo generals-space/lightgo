@@ -28,6 +28,11 @@ struct Type
 	uint8 kind;
 	Alg *alg;
 	void *gc;
+	// string 字段表示当前类型的字符化描述, 其内容可以是:
+	// 1. os.File
+	// 2. struct { F uintptr; A0 **exec.Cmd }
+	// 3. [1]string
+	// ...等, 可以使用 %S 打印该字段
 	String *string;
 	UncommonType *x;
 	Type *ptrto;

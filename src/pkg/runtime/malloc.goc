@@ -53,9 +53,14 @@ extern volatile intgo runtime·MemProfileRate;
 // Small objects are allocated from the per-thread cache's free lists.
 // Large objects (> 32 kB) are allocated straight from the heap.
 // If the block will be freed with runtime·free(), typ must be 0.
-void* 
-runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
+void* runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 {
+
+	// runtime·printf(
+	// 	"runtime·mallocgc() type info -- typ: %D, %d, size: %d\n", 
+	// 	typ, sizeof(uintptr), size
+	// );
+
 	int32 sizeclass;
 	intgo rate;
 	MCache *c;
@@ -75,7 +80,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 	}
 	if(m->mallocing) {
 		runtime·throw("malloc/free - deadlock");
-	} 
+	}
 
 	// Disable preemption during settype_flush.
 	// We can not use m->mallocing for this, because settype_flush calls mallocgc.
@@ -220,14 +225,14 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 
 // 调用 runtime·mallocgc(), 并使用 FlagNoInvokeGC 标记, 
 // 通过此函数分配的空间都是由调用者再通过 runtime·free() 释放的, 而不是通过GC来回收.
+// 一般主调函数都是 runtime 用来分配内部组件的.
 //
 // 此函数的主调函数都是 runtime 级别, 开发者声明变量申请空间用的是 runtime·new() 方法.
 //
 // caller:
 // 	1. runtime·mallocinit() 初始化内存分配器完成后, 调用此方法试用.
 // 	2. src/pkg/runtime/proc.c -> runtime·schedinit() (初始化内存分配器与 m0 后)为 P 链表申请空间.
-void*
-runtime·malloc(uintptr size)
+void* runtime·malloc(uintptr size)
 {
 	return runtime·mallocgc(size, 0, FlagNoInvokeGC);
 }
@@ -301,14 +306,16 @@ runtime·free(void *v)
 	m->mallocing = 0;
 }
 
-int32
-runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> addstackroots() gc的标记清除过程中的"标记"过程时调用.
+int32 runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 {
 	uintptr n, i;
 	byte *p;
 	MSpan *s;
 
 	m->mcache->local_nlookup++;
+	// sizeof(void*) == 8, 所以不会进到这个分支.
 	if (sizeof(void*) == 4 && m->mcache->local_nlookup >= (1<<30)) {
 		// purge cache stats to prevent overflow
 		runtime·lock(&runtime·mheap);
@@ -317,7 +324,7 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 	}
 
 	s = runtime·MHeap_LookupMaybe(&runtime·mheap, v);
-	
+
 	if(sp) {
 	 	*sp = s;
 	}
@@ -758,8 +765,8 @@ static Lock settype_lock;
 // caller:
 // 	1. runtime·mallocgc()
 // 	2. src/pkg/runtime/mgc0.c -> gc() 在 g0 上执行 gc 时, 调用该函数.
-void
-runtime·settype_flush(M *mp)
+// 	之后才是添加根节点, 标记, 清除...等流程(此时已经处于 STW 状态).
+void runtime·settype_flush(M *mp)
 {
 	uintptr *buf, *endbuf;
 	uintptr size, ofs, j, t;
@@ -767,6 +774,7 @@ runtime·settype_flush(M *mp)
 	uintptr *data2;
 	byte *data3;
 	void *v;
+	// 这里的 type 其实可以追溯到 runtime·new() 中的 typ 参数.
 	uintptr typ, p;
 	MSpan *s;
 
@@ -781,6 +789,11 @@ runtime·settype_flush(M *mp)
 		typ = *buf;
 		buf++;
 
+		// 如下几行其实是 src/pkg/runtime/mheap.c -> runtime·MHeap_Lookup() 的代码.
+		// 没有用函数调用, 而是直接搬过来了.
+		//
+		// 找到 v (arena 区域中的某个地址)对应的 span 对象.
+		//
 		// (Manually inlined copy of runtime·MHeap_Lookup)
 		p = (uintptr)v>>PageShift;
 		if(sizeof(void*) == 8) {
@@ -788,6 +801,7 @@ runtime·settype_flush(M *mp)
 		}
 		s = runtime·mheap.spans[p];
 
+		// sizeclass == 0 表示该 span 中存放的是一个超过 32k 的大对象, 处理起来很简单.
 		if(s->sizeclass == 0) {
 			s->types.compression = MTypes_Single;
 			s->types.data = typ;
@@ -795,13 +809,24 @@ runtime·settype_flush(M *mp)
 		}
 
 		size = s->elemsize;
+		// ofs 表示该 span 中的索引, 因为在 span 中, 存放着相同大小的块, 排列类似如下 
+		//				  ┌--------┐ ┌--------┐ ┌--------┐ ┌--------┐
+		// span->start -> |elemsize| |elemsize| |elemsize| |elemsize|
+		//				  └--------┘ └--------┘ └--------┘ └--------┘
+		//                                      ↑
+		//                                  变量 v 的地址
+		// 那么 ofs 应该等于 2(从0开始计数)
 		ofs = ((uintptr)v - (s->start<<PageShift)) / size;
 
 		switch(s->types.compression) {
 		case MTypes_Empty:
+			// 这里 ntypes 指的是该 span 中可容纳的相同 sizeclass 的对象数量.
+			//
 			ntypes = (s->npages << PageShift) / size;
 			nbytes3 = 8*sizeof(uintptr) + 1*ntypes;
-			data3 = runtime·mallocgc(nbytes3, 0, FlagNoProfiling|FlagNoScan|FlagNoInvokeGC);
+			data3 = runtime·mallocgc(
+				nbytes3, 0, FlagNoProfiling|FlagNoScan|FlagNoInvokeGC
+			);
 			s->types.compression = MTypes_Bytes;
 			s->types.data = (uintptr)data3;
 			((uintptr*)data3)[1] = typ;
@@ -848,8 +873,14 @@ runtime·settype_flush(M *mp)
 	mp->settype_bufsize = 0;
 }
 
-uintptr
-runtime·gettype(void *v)
+// 
+//
+// 	@param v: arena 区域中的某个地址.
+//
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> scanblock()
+// 	2. src/pkg/runtime/mgc0.c -> checkptr()
+uintptr runtime·gettype(void *v)
 {
 	MSpan *s;
 	uintptr t, ofs;
@@ -889,19 +920,17 @@ runtime·gettype(void *v)
 
 // Runtime stubs.
 
-void*
-runtime·mal(uintptr n)
+void* runtime·mal(uintptr n)
 {
 	return runtime·mallocgc(n, 0, 0);
 }
 
 #pragma textflag NOSPLIT
-void
-runtime·new(Type *typ, uint8 *ret)
+void runtime·new(Type *typ, uint8 *ret)
 {
 	// runtime·printf(
-	// 	"runtime·new() type info -- size: %d, align: %d, kind: %d, string: %s\n", 
-	// 	typ->size, typ->align, typ->kind, typ->string
+	// 	"runtime·new() type info -- kind: %D, kind: %D, size: %d, string: %s\n", 
+	// 	typ->kind, (uintptr)typ & (PtrSize-1), typ->size, typ->string->str
 	// );
 	ret = runtime·mallocgc(
 		typ->size, 
@@ -911,8 +940,7 @@ runtime·new(Type *typ, uint8 *ret)
 	FLUSH(&ret);
 }
 
-static void*
-cnew(Type *typ, intgo n, int32 objtyp)
+static void* cnew(Type *typ, intgo n, int32 objtyp)
 {
 	if((objtyp&(PtrSize-1)) != objtyp) {
 		runtime·throw("runtime: invalid objtyp");
@@ -933,8 +961,7 @@ cnew(Type *typ, intgo n, int32 objtyp)
 // 	1. src/pkg/runtime/hashmap.c -> runtime·makemap_c() 用于初始化 map 对象(如 make(map[*]*))
 //
 // same as runtime·new, but callable from C
-void*
-runtime·cnew(Type *typ)
+void* runtime·cnew(Type *typ)
 {
 	return cnew(typ, 1, TypeInfo_SingleObject);
 }
@@ -942,8 +969,7 @@ runtime·cnew(Type *typ)
 // caller: 
 // 	1. src/pkg/runtime/hashmap.c -> hash_insert() 
 // 	向 map 中第1次写入数据时被调用, 用于创建 map 的 buckets 成员对象.
-void*
-runtime·cnewarray(Type *typ, intgo n)
+void* runtime·cnewarray(Type *typ, intgo n)
 {
 	return cnew(typ, n, TypeInfo_Array);
 }

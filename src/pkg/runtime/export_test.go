@@ -48,7 +48,11 @@ type ParFor struct {
 	wait    bool
 }
 
+// 如下4个函数的原型都在 src/pkg/runtime/parfor.c 文件中定义.
+//
+// parforsetup2 原型在 src/pkg/runtime/parfor.c -> runtime·parforalloc2()
 func parforalloc2(nthrmax uint32) *ParFor
+// parforsetup2 原型在 src/pkg/runtime/parfor.c -> runtime·parforsetup2()
 func parforsetup2(desc *ParFor, nthr, n uint32, ctx *byte, wait bool, body func(*ParFor, uint32))
 func parfordo(desc *ParFor)
 func parforiters(desc *ParFor, tid uintptr) (uintptr, uintptr)

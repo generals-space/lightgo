@@ -901,8 +901,7 @@ dotypedef(DWDie *parent, char *name, DWDie *def)
 }
 
 // Define gotype, for composite ones recurse into constituents.
-static DWDie*
-defgotype(Sym *gotype)
+static DWDie* defgotype(Sym *gotype)
 {
 	DWDie *die, *fld;
 	Sym *s;
@@ -1074,7 +1073,7 @@ defgotype(Sym *gotype)
 		diag("dwarf: definition of unknown kind %d: %s", kind, gotype->name);
 		die = newdie(&dwtypes, DW_ABRV_TYPEDECL, name);
 		newrefattr(die, DW_AT_type, find_or_diag(&dwtypes, "<unspecified>"));
-	 }
+	}
 
 	return die;
 }
@@ -1280,8 +1279,7 @@ synthesizemaptypes(DWDie *die)
 static void
 synthesizechantypes(DWDie *die)
 {
-	DWDie *sudog, *waitq, *hchan,
-		*dws, *dww, *dwh, *elemtype;
+	DWDie *sudog, *waitq, *hchan, *dws, *dww, *dwh, *elemtype;
 	DWAttr *a;
 	int elemsize, sudogsize;
 

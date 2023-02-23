@@ -12,8 +12,7 @@
 //
 // adjust Gobuf as it if executed a call to fn with context ctxt
 // and then did an immediate gosave.
-void
-runtime·gostartcall(Gobuf *gobuf, void (*fn)(void), void *ctxt)
+void runtime·gostartcall(Gobuf *gobuf, void (*fn)(void), void *ctxt)
 {
 	uintptr *sp;
 

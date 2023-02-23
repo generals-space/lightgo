@@ -187,8 +187,7 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 //
 // caller: 
 // 	1. runtime·MHeap_Alloc() 只有这一处
-static MSpan*
-MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
+static MSpan* MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 {
 	uintptr n;
 	MSpan *s, *t;
@@ -298,8 +297,7 @@ HaveSpan:
 }
 
 // Allocate a span of exactly npage pages from the list of large spans.
-static MSpan*
-MHeap_AllocLarge(MHeap *h, uintptr npage)
+static MSpan* MHeap_AllocLarge(MHeap *h, uintptr npage)
 {
 	return BestFit(&h->large, npage, nil);
 }
@@ -307,13 +305,14 @@ MHeap_AllocLarge(MHeap *h, uintptr npage)
 // Search list for smallest span with >= npage pages.
 // If there are multiple smallest spans, take the one
 // with the earliest starting address.
-static MSpan*
-BestFit(MSpan *list, uintptr npage, MSpan *best)
+static MSpan* BestFit(MSpan *list, uintptr npage, MSpan *best)
 {
 	MSpan *s;
 
 	for(s=list->next; s != list; s=s->next) {
-		if(s->npages < npage) continue;
+		if(s->npages < npage) {
+			continue;
+		}
 
 		if(best == nil
 		|| s->npages < best->npages
@@ -404,12 +403,16 @@ static bool MHeap_Grow(MHeap *h, uintptr npage)
 	return true;
 }
 
+// 获取 arena 区域中 v 地址所表示的地址对应的 span 区域中的 mspan 对象.
 //
+// 关联下面的一个函数
+//
+// 	@param h: runtime·mheap
+// 	@param v: arena 区域中的某个指针(ta在 bitmap 区域一定有对应的描述字(word)信息)
 //
 // Look up the span at the given address.
 // Address is guaranteed to be in map and is guaranteed to be start or end of span.
-MSpan*
-runtime·MHeap_Lookup(MHeap *h, void *v)
+MSpan* runtime·MHeap_Lookup(MHeap *h, void *v)
 {
 	uintptr p;
 	
@@ -420,22 +423,34 @@ runtime·MHeap_Lookup(MHeap *h, void *v)
 	return h->spans[p >> PageShift];
 }
 
+// 获取 arena 区域中 v 地址所表示的地址对应的 span 区域中的 mspan 对象.
+//
+// 关联上面的一个函数
+//
+// 	@param h: runtime·mheap
+// 	@param v: arena 区域中的某个指针(ta在 bitmap 区域一定有对应的描述字(word)信息)
+//
+// caller:
+// 	1. src/pkg/runtime/malloc.goc -> runtime·mlookup()
+//
 // Look up the span at the given address.
-// Address is *not* guaranteed to be in map
-// and may be anywhere in the span.
-// Map entries for the middle of a span are only
-// valid for allocated spans.  Free spans may have
-// other garbage in their middles, so we have to
-// check for that.
-MSpan*
-runtime·MHeap_LookupMaybe(MHeap *h, void *v)
+// Address is *not* guaranteed to be in map and may be anywhere in the span.
+// Map entries for the middle of a span are only valid for allocated spans. 
+// Free spans may have other garbage in their middles,
+// so we have to check for that.
+MSpan* runtime·MHeap_LookupMaybe(MHeap *h, void *v)
 {
 	MSpan *s;
 	PageID p, q;
 
+	// 超出范围
 	if((byte*)v < h->arena_start || (byte*)v >= h->arena_used) {
 		return nil;
 	}
+	// 下面几行计算语句, 根据 v 对象地址, 查找其在 span 区域的索引映射, 详细解释可见:
+	// <!link!>: {eeaeb3fe-8dc4-44a3-8b9c-42919ae5ad4a}
+	//
+	// span 与 arena 区域是索引与页号的关系.
 	p = (uintptr)v>>PageShift;
 	q = p;
 	if(sizeof(void*) == 8) {
@@ -471,7 +486,7 @@ runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct)
 	runtime·unlock(h);
 }
 
-// MHeap_FreeLocked 将目录 span 回收, 归还到 heap.
+// 将目标 span 回收, 归还到 heap.
 static void MHeap_FreeLocked(MHeap *h, MSpan *s)
 {
 	uintptr *sp, *tp;
@@ -496,6 +511,9 @@ static void MHeap_FreeLocked(MHeap *h, MSpan *s)
 	s->unusedsince = runtime·nanotime();
 	s->npreleased = 0;
 
+	// 下面几行计算语句, 根据 v 对象地址, 查找其在 span 区域的索引映射, 详细解释可见:
+	// <!link!>: {eeaeb3fe-8dc4-44a3-8b9c-42919ae5ad4a}
+	//
 	// Coalesce with earlier, later spans.
 	p = s->start;
 	// 这里p是距arena_start偏移的页数啊..
@@ -703,8 +721,7 @@ runtime∕debug·freeOSMemory(void)
 // 	完成后还会释放.
 //
 // Initialize a new span with the given start and npages.
-void
-runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
+void runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 {
 	// runtime·printf(
 	// 	"start: %D, npages: %D\n", start, npages

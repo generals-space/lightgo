@@ -389,8 +389,7 @@ void	runtime·MCache_ReleaseAll(MCache *c);
 // MTypes_Words:
 //     The span contains multiple blocks.
 //     The data field points to an array of type [NumBlocks]uintptr,
-//     and each element of the array holds the type of the corresponding
-//     block.
+//     and each element of the array holds the type of the corresponding block.
 // MTypes_Bytes:
 //     The span contains at most seven different types of blocks.
 //     The data field points to the following structure:
@@ -402,6 +401,7 @@ void	runtime·MCache_ReleaseAll(MCache *c);
 enum
 {
 	// 默认值
+	// 初始化流程见 src/pkg/runtime/mheap.c -> runtime·MSpan_Init() 函数
 	MTypes_Empty = 0,
 	// 超过32k的大对象在分配到堆上后, 会打上这个标记
 	MTypes_Single = 1,
@@ -411,8 +411,24 @@ enum
 struct MTypes
 {
 	// 默认为 MTypes_Empty
+	// 初始化流程见 src/pkg/runtime/mheap.c -> runtime·MSpan_Init() 函数
 	byte	compression;
-	// gc标记, 如 FlagNoScan, FlagNoGC
+	// 每个 span 可以分配多个同一 sizeclass 大小的, 但是不同类型的小对象,
+	// 这些对象的类型信息都存放在当前这个 MTypes 对象中.
+	// MTypes.data 字段其实是一个"数组", 该 span 中的所有对象的信息都在这里,
+	// 存储的过程可见 src/pkg/runtime/malloc.goc -> runtime·settype_flush()
+	//
+	// data 其实应该是 src/pkg/runtime/type.h -> Type* 类型的指针.
+	//
+	// 但这里写了 uintptr, 是因为, c语言中, 指针地址结尾一般为 xxx0, xxx8, 
+	// 那么在指针信息的最后一个 byte, 后面3位其实是用不到的.
+	//
+	// runtime 就在 gc 流程中, 在这3个bit中存储了一些额外的信息...计算方法如下:
+	// 1. 获取 Type* 指针的原本地址: (Type*)(type & ~(uintptr)(PtrSize-1))
+	// 2. 获取末尾3 bit的信息: type & (PtrSize-1)
+	//
+	// gc标记, 如 FlagNoScan, FlagNoGC ???
+	// 好像也可以是某对象在 arena 区域中的地址
 	uintptr	data;
 };
 
@@ -625,13 +641,19 @@ void	runtime·walkfintab(void (*fn)(void*));
 
 enum
 {
+	// 开发者层面使用 new/make 等创建的对象, 都会在 type 指针的末尾添加此信息.
 	TypeInfo_SingleObject = 0,
+	// 貌似在创建 map 对象时, runtime hashmap 会在 type 指针末尾添加此信息.
 	TypeInfo_Array = 1,
+	// 在创建 channel 对象时, runtime 在 malloc channel 对象时, 在 type 指针末尾添加此信息
 	TypeInfo_Chan = 2,
 
+	// 这个值为1时, 在为对象分配空间时, 尾部会多出一个指针大小的空间, 用于存储 type 信息
+	// 见 src/pkg/runtime/malloc.goc -> runtime·mallocgc()
+	//
+	// ...目前还没看到 type 信息的类型列表.
+	//
 	// Enables type information at the end of blocks allocated from heap
-	// 这个值为1时, 在为对象分配空间时, 尾部会多出一个指针大小的空间, 用于存储type信息
-	// ...目前还没看到type信息的类型列表.
 	DebugTypeAtBlockEnd = 0,
 };
 

@@ -6,7 +6,7 @@
 
 // GC instruction opcodes.
 //
-// The opcode of an instruction is followed by zero or more
+// The opcode(操作码) of an instruction is followed by zero or more
 // arguments to the instruction.
 //
 // Meaning of arguments:
@@ -19,6 +19,15 @@
 //
 // NOTE: There is a copy of these in ../reflect/type.go.
 // They must be kept in sync.
+//
+//
+// 如下枚举值是gc行为的操作码, 在 src/pkg/runtime/mgc0.c -> scanblock() 中进行了处理.
+// 每种操作码接收的参数数量是不同的, 具体的操作码及参数对应关系, 可见
+// src/pkg/reflect/type.go -> appendGCProgram()
+// 
+// 比如 GC_PTR, 在 appendGCProgram() 中, `_GC_PTR`指令的 argcnt = 2(两个参数),
+// 那么 scanblock() 的 case 中, pc[0] 为 GC_PTR 自身, pc[1]和pc[2]就是这两个参数,
+// 之后指针后移3位, 进行下一个指令的解析.
 enum {
 	GC_END,         // End of object, loop or subroutine. Args: none
 	GC_PTR,         // A typed pointer. Args: (off, objgc)

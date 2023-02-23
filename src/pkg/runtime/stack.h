@@ -4,8 +4,7 @@
 
 /*
 Stack layout parameters.
-Included both by runtime (compiled via 6c) 
-and linkers (compiled via gcc).
+Included both by runtime (compiled via 6c) and linkers (compiled via gcc).
 
 The per-goroutine g->stackguard is set to point 
 StackGuard bytes above the bottom of the stack. 

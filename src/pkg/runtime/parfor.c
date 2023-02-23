@@ -10,6 +10,17 @@
 
 struct ParForThread
 {
+	// 在 runtime·parforsetup() 函数中通过 [begin,end) 计算得来.
+	// 然后在 runtime·parfordo 被取值, 然后还原成 [begin,end).
+	//
+	// [begin,end) 表示每个并行线程, 在任务列表中属于自己的任务.
+	// 假设 work.roots 数组有 6 个成员, 一共有3个线程共同完成标记任务, 即 nthr = 3, n = 6.
+	//
+	// 那么这3个线程将分别处理 roots 列表中属于自己的任务:
+	// 0: work.roots[0,2)
+	// 1: work.roots[2,4)
+	// 3: work.roots[4,6)
+	//
 	// the thread's iteration space [32lsb, 32msb)
 	uint64 pos;
 	// stats
@@ -21,8 +32,11 @@ struct ParForThread
 	byte pad[CacheLineSize];
 };
 
-ParFor*
-runtime·parforalloc(uint32 nthrmax)
+// 	@param nthrmax: 可执行 gc 的最大线程数 MaxGcproc
+//
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> gc()
+ParFor* runtime·parforalloc(uint32 nthrmax)
 {
 	ParFor *desc;
 
@@ -36,8 +50,7 @@ runtime·parforalloc(uint32 nthrmax)
 
 // For testing from Go
 // func parforalloc2(nthrmax uint32) *ParFor
-void
-runtime·parforalloc2(uint32 nthrmax, ParFor *desc)
+void runtime·parforalloc2(uint32 nthrmax, ParFor *desc)
 {
 	desc = runtime·parforalloc(nthrmax);
 	FLUSH(&desc);
@@ -48,15 +61,14 @@ runtime·parforalloc2(uint32 nthrmax, ParFor *desc)
 // 	@param nthr: (thread num) 取值为 src/pkg/runtime/mgc0.c -> work.nproc
 // 	表示并发执行的线程数
 // 	@param n: 应该是待执行的任务的数量, 分别对应 work.nroot 和 runtime·mheap.nspan,
-// 	因为 ta 们表示的是并发标记/清除所要遍历的对象的数量;
+// 	因为 ta 们表示的是并发标记/清除所要遍历的对象的数量(看一下主调函数立刻就会明白);
 // 	@param ctx: nil
 // 	@param body: 并发执行的方法名称, 分别为 markroot(), sweepspan()
 //
 // caller:
 // 	1. src/pkg/runtime/mgc0.c -> gc() 只有这一处
 // 	在完成了准备工作(STW), 真正执行 gc 前, 设置并发执行的函数, 包括标记(mark)和清除(sweep)
-void
-runtime·parforsetup(
+void runtime·parforsetup(
 	ParFor *desc, uint32 nthr, uint32 n, void *ctx, bool wait, 
 	void (*body)(ParFor*, uint32)
 )
@@ -81,6 +93,16 @@ runtime·parforsetup(
 	desc->nprocyield = 0;
 	desc->nosyield = 0;
 	desc->nsleep = 0;
+	// 这里是为各并行线程分配任务索引的, 以 work.roots 为例, 
+	// 假设 work.roots 数组有 6 个成员, 一共有3个线程共同完成标记任务, 即 nthr = 3, n = 6.
+	//
+	// 那么这3个线程将分别处理 roots 列表中属于自己的任务:
+	// 0: work.roots[0,2)
+	// 1: work.roots[2,4)
+	// 3: work.roots[4,6)
+	//
+	// i 表示当前线程在线程组中的序号.
+	// begin 对应每个线程分配到的索引起始点, 是闭区间, 而 end 则是结束点, 是开区间.
 	for(i=0; i<nthr; i++) {
 		begin = (uint64)n*i / nthr;
 		end = (uint64)n*(i+1) / nthr;
@@ -88,6 +110,7 @@ runtime·parforsetup(
 		if(((uintptr)pos & 7) != 0) {
 			runtime·throw("parforsetup: pos is not aligned");
 		}
+		// pos 在下面 runtime·parfordo() 函数中被取值并还原成 [begin,end)
 		*pos = (uint64)begin | (((uint64)end)<<32);
 	}
 }
@@ -100,10 +123,12 @@ runtime·parforsetup2(ParFor *desc, uint32 nthr, uint32 n, void *ctx, bool wait,
 	runtime·parforsetup(desc, nthr, n, ctx, wait, *(void(**)(ParFor*, uint32))body);
 }
 
+// 并行的执行 gc 过程中的某个流程, 如"标记", 或是"清除"
+//
 // 	@param desc: work.markfor(标记流程), 或是 work.sweepfor(清除流程)
 //
 // caller:
-// 	1. gc()
+// 	1. src/pkg/runtime/mgc0.c -> gc()
 void
 runtime·parfordo(ParFor *desc)
 {
@@ -125,16 +150,32 @@ runtime·parfordo(ParFor *desc)
 	// If single-threaded, just execute the for serially.
 	if(desc->nthr==1) {
 		for(i=0; i<desc->cnt; i++) {
+			// 执行 work.markfor(标记流程), 或是 work.sweepfor(清除流程)
 			desc->body(desc, i);
-		} 
+		}
 		return;
 	}
 
+	// body 可以有2个值, 都是在 gc 时的行为, 分别为
+	// 1. src/pkg/runtime/mgc0.c -> markroot() 标记
+	// 2. src/pkg/runtime/mgc0.c -> sweepspan() 清除
 	body = desc->body;
 	me = &desc->thr[tid];
 	mypos = &me->pos;
 	for(;;) {
 		for(;;) {
+			// pos 在上面 runtime·parforsetup() 函数中通过 [begin,end) 计算得来.
+			// 这里被取值并还原成 [begin,end)
+			//
+			// [begin,end) 表示每个并行线程, 在任务列表中属于自己的任务.
+			// 假设 work.roots 数组有 6 个成员, 一共有3个线程共同完成标记任务,
+			// 即 nthr = 3, n = 6.
+			//
+			// 那么这3个线程将分别处理 roots 列表中属于自己的任务:
+			// 0: work.roots[0,2)
+			// 1: work.roots[2,4)
+			// 3: work.roots[4,6)
+			//
 			// While there is local work,
 			// bump low index and execute the iteration.
 			pos = runtime·xadd64(mypos, 1);
@@ -145,6 +186,7 @@ runtime·parfordo(ParFor *desc)
 				body(desc, begin);
 				continue;
 			}
+			// 当前线程已经完成了属于自己的所有任务, 则结束循环.
 			break;
 		}
 
@@ -211,8 +253,9 @@ runtime·parfordo(ParFor *desc)
 			// If a caller asked not to wait for the others, exit now
 			// (assume that most work is already done at this point).
 			} else if (!desc->wait) {
-				if(!idle)
+				if(!idle) {
 					runtime·xadd(&desc->done, 1);
+				}
 				goto exit;
 			} else if (try < 6*desc->nthr) {
 				me->nosyield++;

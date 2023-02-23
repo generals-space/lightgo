@@ -109,9 +109,11 @@ stackcacherelease(void)
 
 // 分配大小为n的栈空间, 返回这段空间的起始地址.
 //
+// 其实最终也是在 arena 区域上分配的, 不过添加了 FlagNoGC 等标记, 不会被 gc 回收, 可以一直用.
+//
 // caller: 
-// 	1. stack.c -> runtime·newstack()
-// 	2. proc.c -> runtime·malg()
+// 	1. stack.c -> runtime·newstack() 当前 g 对象中的栈空间不足时调用, 进行扩容
+// 	2. proc.c -> runtime·malg() 创建一个新 g 对象时调用, 自动分配
 void*
 runtime·stackalloc(uint32 n)
 {
@@ -124,7 +126,9 @@ runtime·stackalloc(uint32 n)
 	// Doing so would cause a deadlock (issue 1547).
 	//
 	// 此函数只能在调度栈 g0 上调用, 普通 g 对象只能调用 mstackalloc()
-	if(g != m->g0) runtime·throw("stackalloc not on scheduler stack");
+	if(g != m->g0) {
+		runtime·throw("stackalloc not on scheduler stack");
+	} 
 
 	// Stacks are usually allocated with a fixed-size free-list allocator,
 	// but if we need a stack of non-standard size, we fall back on malloc
@@ -158,12 +162,11 @@ runtime·stackalloc(uint32 n)
 	);
 }
 
-// 调用 runtime·free 直接释放指定空间 v
+// 调用 runtime·free 直接释放指定空间 v 处的栈空间.
 //
 // caller: 
 // 	1. runtime·oldstack()
-void
-runtime·stackfree(void *v, uintptr n)
+void runtime·stackfree(void *v, uintptr n)
 {
 	uint32 pos;
 
@@ -269,8 +272,7 @@ uintptr runtime·maxstacksize = 1<<20;
 // Allocate a new stack big enough for m->moreframesize bytes, 
 // copy m->moreargsize bytes to the new frame,
 // and then act as though runtime·lessstack called the function at m->morepc.
-void
-runtime·newstack(void)
+void runtime·newstack(void)
 {
 	int32 framesize, argsize, oldstatus;
 	Stktop *top, *oldtop;
@@ -450,7 +452,9 @@ runtime·newstack(void)
 		dst = (uintptr*)sp;
 		dstend = dst + argsize/sizeof(*dst);
 		src = (uintptr*)top->argp;
-		while(dst < dstend) *dst++ = *src++;
+		while(dst < dstend) {
+			*dst++ = *src++;
+		}
 	}
 
 	// Continue as if lessstack had just called m->morepc
@@ -477,14 +481,12 @@ runtime·newstack(void)
 //
 // adjust Gobuf as if it executed a call to fn
 // and then did an immediate gosave.
-void
-runtime·gostartcallfn(Gobuf *gobuf, FuncVal *fv)
+void runtime·gostartcallfn(Gobuf *gobuf, FuncVal *fv)
 {
 	runtime·gostartcall(gobuf, fv->fn, fv);
 }
 
-void
-runtime∕debug·setMaxStack(intgo in, intgo out)
+void runtime∕debug·setMaxStack(intgo in, intgo out)
 {
 	out = runtime·maxstacksize;
 	runtime·maxstacksize = in;

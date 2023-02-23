@@ -17,8 +17,9 @@
 #define PTR_MASK ((1ull<<PTR_BITS)-1)
 #define CNT_MASK (0ull-1)
 
-void
-runtime·lfstackpush(uint64 *head, LFNode *node)
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> getempty()
+void runtime·lfstackpush(uint64 *head, LFNode *node)
 {
 	uint64 old, new;
 
@@ -32,33 +33,38 @@ runtime·lfstackpush(uint64 *head, LFNode *node)
 	for(;;) {
 		old = runtime·atomicload64(head);
 		node->next = (LFNode*)(uintptr)(old&PTR_MASK);
-		if(runtime·cas64(head, old, new))
+		if(runtime·cas64(head, old, new)) {
 			break;
+		}
 	}
 }
 
-LFNode*
-runtime·lfstackpop(uint64 *head)
+// caller:
+// 	1. src/pkg/runtime/mgc0.c -> getempty()
+// 	2. src/pkg/runtime/mgc0.c -> getfull()
+LFNode* runtime·lfstackpop(uint64 *head)
 {
 	LFNode *node, *node2;
 	uint64 old, new;
 
 	for(;;) {
 		old = runtime·atomicload64(head);
-		if(old == 0)
+		if(old == 0) {
 			return nil;
+		}
 		node = (LFNode*)(uintptr)(old&PTR_MASK);
 		node2 = runtime·atomicloadp(&node->next);
 		new = 0;
-		if(node2 != nil)
+		if(node2 != nil) {
 			new = (uint64)(uintptr)node2|(((uint64)node2->pushcnt&CNT_MASK)<<PTR_BITS);
-		if(runtime·cas64(head, old, new))
+		}
+		if(runtime·cas64(head, old, new)) {
 			return node;
+		}
 	}
 }
 
-void
-runtime·lfstackpop2(uint64 *head, LFNode *node)
+void runtime·lfstackpop2(uint64 *head, LFNode *node)
 {
 	node = runtime·lfstackpop(head);
 	FLUSH(&node);

@@ -261,8 +261,7 @@ static FuncVal initDone = { runtime·unlockOSThread };
 //     在 runtime·schedinit() 后进入此流程, 此时内存分配器与全局调度器已经初始化完成.
 //
 // The main goroutine.
-void
-runtime·main(void)
+void runtime·main(void)
 {
 	Defer d;
 
@@ -376,8 +375,7 @@ runtime·goroutineheader(G *gp)
 	runtime·printf("goroutine %D [%s]:\n", gp->goid, status);
 }
 
-void
-runtime·tracebackothers(G *me)
+void runtime·tracebackothers(G *me)
 {
 	G *gp;
 	int32 traceback;
@@ -833,8 +831,7 @@ runtime·starttheworld(void)
 //     创建新 m 对象时, 底层关联系统线程, 并通过 clone 系统调用执行本函数.
 //
 // Called to start an M.
-void
-runtime·mstart(void)
+void runtime·mstart(void)
 {
 	if(g != m->g0) {
 		runtime·throw("bad runtime·mstart");
@@ -1186,7 +1183,6 @@ unlockextra(M *mp)
 	runtime·atomicstorep(&runtime·extram, mp);
 }
 
-
 // 创建一个 m 对象, 绑定目标 p 对象, 并执行 fn.
 //
 // 	@param fn: 目标 m 在启动时要执行的函数. 可为 sysmon(), mhelpgc(), 也可以为 nil.
@@ -1205,8 +1201,7 @@ unlockextra(M *mp)
 // Create a new m. 
 // It will start off with a call to fn, or else the scheduler.
 // 
-static void
-newm(void(*fn)(void), P *p)
+static void newm(void(*fn)(void), P *p)
 {
 	M *mp;
 
@@ -1557,8 +1552,7 @@ gcstopm(void)
 //
 // Schedules gp to run on the current M.
 // Never returns.
-static void
-execute(G *gp)
+static void execute(G *gp)
 {
 	int32 hz;
 
@@ -1577,7 +1571,9 @@ execute(G *gp)
 
 	// Check whether the profiler needs to be turned on or off.
 	hz = runtime·sched.profilehz;
-	if(m->profilehz != hz) runtime·resetcpuprofiler(hz);
+	if(m->profilehz != hz) {
+		runtime·resetcpuprofiler(hz);
+	}
 
 	// 这是一段汇编代码
 	runtime·gogo(&gp->sched);
@@ -2068,8 +2064,7 @@ goexit0(G *gp)
 // 主要还是用于从系统调用返回时重新唤醒主调函数的吧, sp 用于定位局部变量
 // 注意: 这里的sched存放的主调函数信息其实是进行syscall的函数, 用于返回的.
 #pragma textflag NOSPLIT
-static void
-save(void *pc, uintptr sp)
+static void save(void *pc, uintptr sp)
 {
 	g->sched.pc = (uintptr)pc;
 	g->sched.sp = sp; 
@@ -2103,8 +2098,7 @@ save(void *pc, uintptr sp)
 // because entersyscall is going to return immediately after.
 //
 #pragma textflag NOSPLIT
-void
-·entersyscall(int32 dummy)
+void ·entersyscall(int32 dummy)
 {
 	// 禁止抢占. 因为在此函数中 g 将处于(或者说被修改为) Gsyscall 状态,
 	// 但可能会出现 g->sched 不一致的情况, 别让gc线程发现这里.
@@ -2199,8 +2193,7 @@ void
 // caller: 
 // 	1. lock_sema.c/lock_futex.c -> runtime·notetsleepg() 只有这一处.
 #pragma textflag NOSPLIT
-void
-·entersyscallblock(int32 dummy)
+void ·entersyscallblock(int32 dummy)
 {
 	P *p;
 
@@ -2475,8 +2468,7 @@ mstackalloc(G *gp)
 // 	1. runtime·newproc1(fn) 创建一个用于执行 fn 的 g 对象.
 //
 // Allocate a new g, with a stack big enough for stacksize bytes.
-G*
-runtime·malg(int32 stacksize)
+G* runtime·malg(int32 stacksize)
 {
 	G *newg;
 	byte *stk;
@@ -2493,8 +2485,9 @@ runtime·malg(int32 stacksize)
 	// runtime·allocm() 中调用时, 为 cgo/win 分配 g0 时, stacksize 会指定为-1.
 	if(stacksize >= 0) {
 		if(g == m->g0) {
-			// running on scheduler stack already.
 			// stk 是分配的栈空间的起始地址
+			//
+			// running on scheduler stack already.
 			stk = runtime·stackalloc(StackSystem + stacksize);
 		} else {
 			// have to call stackalloc on scheduler stack.
@@ -2561,8 +2554,7 @@ runtime·newproc(int32 siz, FuncVal* fn, ...)
 // at argp and returning nret bytes of results. 
 // callerpc is the address of the go statement that created this. 
 // The new g is put on the queue of g's waiting to run.
-G*
-runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
+G* runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
 {
 	byte *sp;
 	G *newg;
@@ -2623,7 +2615,9 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	newg->status = Grunnable;
 	newg->goid = runtime·xadd64(&runtime·sched.goidgen, 1);
 	newg->panicwrap = 0;
-	if(raceenabled) newg->racectx = runtime·racegostart((void*)callerpc);
+	if(raceenabled) {
+		newg->racectx = runtime·racegostart((void*)callerpc);
+	}
 	runqput(m->p, newg);
 
 	// 尝试唤醒某个 M 开始执⾏(有空闲 P, 没有处于⾃旋等待的 M)
@@ -2638,14 +2632,15 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	m->locks--;
 	// 重新开启抢占
 	// restore the preemption request in case we've cleared it in newstack
-	if(m->locks == 0 && g->preempt) g->stackguard0 = StackPreempt;
+	if(m->locks == 0 && g->preempt) {
+		g->stackguard0 = StackPreempt;
+	}
 	return newg;
 }
 
 // Put on gfree list.
 // If local list is too long, transfer a batch to the global list.
-static void
-gfput(P *p, G *gp)
+static void gfput(P *p, G *gp)
 {
 	if(gp->stackguard - StackGuard != gp->stack0) {
 		runtime·throw("invalid stack in gfput");
@@ -2674,8 +2669,7 @@ gfput(P *p, G *gp)
 //
 // Get from gfree list.
 // If local list is empty, grab a batch from global list.
-static G*
-gfget(P *p)
+static G* gfget(P *p)
 {
 	G *gp;
 
@@ -2710,8 +2704,7 @@ retry:
 // 	1. procresize() 调整 p 数量时, 调用此函数将多余的 p 对象中的任务空间回收掉.
 //
 // Purge all cached G's from gfree list to the global list.
-static void
-gfpurge(P *p)
+static void gfpurge(P *p)
 {
 	G *gp;
 	// 注意: p->gfree 是不需要加锁的.
@@ -2727,8 +2720,7 @@ gfpurge(P *p)
 	runtime·unlock(&runtime·sched.gflock);
 }
 
-void
-runtime·Breakpoint(void)
+void runtime·Breakpoint(void)
 {
 	runtime·breakpoint();
 }
@@ -2738,8 +2730,7 @@ runtime·Breakpoint(void)
 // 开发者可以在代码中主动触发, 将 g 对象放回全局队列, m 执行其他任务.
 //
 // 啥时候会用到???
-void
-runtime·Gosched(void)
+void runtime·Gosched(void)
 {
 	runtime·gosched();
 }

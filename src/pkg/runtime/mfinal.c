@@ -215,8 +215,7 @@ runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret, Type **fin
 // caller:
 // 	1. src/pkg/runtime/mgc0.c -> addroots() 只有这一处 
 // 	完成对 堆, 栈 部分的遍历后, 调用该函数.
-void
-runtime·walkfintab(void (*fn)(void*))
+void runtime·walkfintab(void (*fn)(void*))
 {
 	void **key;
 	void **ekey;
