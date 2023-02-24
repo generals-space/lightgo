@@ -88,8 +88,9 @@ anyinit(NodeList *n)
 	return 0;
 }
 
-void
-fninit(NodeList *n)
+// caller:
+// 	1. src/cmd/gc/lex.c -> main()
+void fninit(NodeList *n)
 {
 	int i;
 	Node *gatevar;

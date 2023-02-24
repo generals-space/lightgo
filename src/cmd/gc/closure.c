@@ -78,8 +78,9 @@ closurebody(NodeList *body)
 
 static Node* makeclosure(Node *func);
 
-void
-typecheckclosure(Node *func, int top)
+// caller:
+// 	1. src/cmd/gc/typecheck.c -> typecheck1() 只有这一处
+void typecheckclosure(Node *func, int top)
 {
 	Node *oldfn;
 	NodeList *l;

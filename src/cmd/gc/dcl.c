@@ -184,13 +184,12 @@ static int vargen;
 /*
  * declare individual names - var, typ, const
  */
-void
-declare(Node *n, int ctxt)
+void declare(Node *n, int ctxt)
 {
 	Sym *s;
 	int gen;
 	static int typegen;
-	
+
 	if(ctxt == PDISCARD)
 		return;
 
@@ -200,7 +199,8 @@ declare(Node *n, int ctxt)
 	n->lineno = parserline();
 	s = n->sym;
 
-	// kludgy: typecheckok means we're past parsing.  Eg genwrapper may declare out of package names later.
+	// kludgy: typecheckok means we're past parsing. 
+	// Eg genwrapper may declare out of package names later.
 	if(importpkg == nil && !typecheckok && s->pkg != localpkg)
 		yyerror("cannot declare name %S", s);
 

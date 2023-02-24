@@ -13,12 +13,13 @@
 static	void	outhist(Biobuf *b);
 static	void	dumpglobls(void);
 
-// 执行`6g main.go`时, 输出`main.6`文件
+// 执行`6g main.go`进行源码编译时, 输出`main.6`文件(OBJ文件)
+//
+// 注意: main.6 文件是可以打开的, 并不是完全的二进制文件.
 //
 // caller:
 // 	1. src/cmd/gc/lex.c -> main()
-void
-dumpobj(void)
+void dumpobj(void)
 {
 	NodeList *externs, *tmp;
 
@@ -39,16 +40,18 @@ dumpobj(void)
 	outhist(bout);
 
 	externs = nil;
-	if(externdcl != nil)
+	if(externdcl != nil) {
 		externs = externdcl->end;
+	}
 
 	dumpglobls();
 	dumptypestructs();
 
 	// Dump extra globals.
 	tmp = externdcl;
-	if(externs != nil)
+	if(externs != nil) {
 		externdcl = externs->next;
+	}
 	dumpglobls();
 	externdcl = tmp;
 
@@ -58,8 +61,9 @@ dumpobj(void)
 	Bterm(bout);
 }
 
-static void
-dumpglobls(void)
+// caller:
+// 	1. dumpobj() 只有这一处
+static void dumpglobls(void)
 {
 	Node *n;
 	NodeList *l;

@@ -49,25 +49,33 @@ enum
 	EscFuncTagged,
 };
 
-void
-escapes(NodeList *all)
+// escapes 逃逸分析.
+//
+// caller: 
+// 	1. src/cmd/gc/lex.c -> main()
+void escapes(NodeList *all)
 {
 	NodeList *l;
 
-	for(l=all; l; l=l->next)
+	for(l=all; l; l=l->next) {
 		l->n->walkgen = 0;
+	}
 
 	visitgen = 0;
-	for(l=all; l; l=l->next)
-		if(l->n->op == ODCLFUNC && l->n->curfn == N)
+	for(l=all; l; l=l->next) {
+		if(l->n->op == ODCLFUNC && l->n->curfn == N) {
 			visit(l->n);
+		}
+	}
 
-	for(l=all; l; l=l->next)
+	for(l=all; l; l=l->next) {
 		l->n->walkgen = 0;
+	}
 }
 
-static uint32
-visit(Node *n)
+// caller:
+// 1. escapes()
+static uint32 visit(Node *n)
 {
 	uint32 min, recursive;
 	NodeList *l, *block;
@@ -76,7 +84,7 @@ visit(Node *n)
 		// already visited
 		return n->walkgen;
 	}
-	
+
 	visitgen++;
 	n->walkgen = visitgen;
 	visitgen++;
@@ -100,8 +108,9 @@ visit(Node *n)
 		// Mark walkgen so that future visits return a large number
 		// so as not to affect the caller's min.
 		block = stack;
-		for(l=stack; l->n != n; l=l->next)
+		for(l=stack; l->n != n; l=l->next) {
 			l->n->walkgen = (uint32)~0U;
+		}
 		n->walkgen = (uint32)~0U;
 		stack = l->next;
 		l->next = nil;
@@ -255,8 +264,11 @@ parsetag(Strlit *note)
 	return EscReturn | (em << EscBits);
 }
 
-static void
-analyze(NodeList *all, int recursive)
+// 逃逸分析
+//
+// caller:
+// 	1. visit() 只有这一处
+static void analyze(NodeList *all, int recursive)
 {
 	NodeList *l;
 	EscState es, *e;
@@ -283,8 +295,9 @@ analyze(NodeList *all, int recursive)
 
 	// visit the upstream of each dst, mark address nodes with
 	// addrescapes, mark parameters unsafe
-	for(l = e->dsts; l; l=l->next)
+	for(l = e->dsts; l; l=l->next) {
 		escflood(e, l->n);
+	}
 
 	// for all top level functions, tag the typenodes corresponding to the param nodes
 	for(l=all; l; l=l->next)
@@ -963,6 +976,9 @@ escflows(EscState *e, Node *dst, Node *src)
 	dst->escflowsrc = list(dst->escflowsrc, src);
 }
 
+// caller:
+// 	1. analyze() 只有这一处
+//
 // Whenever we hit a reference node, the level goes up by one, and whenever
 // we hit an OADDR, the level goes down by one. as long as we're on a level > 0
 // finding an OADDR just means we're following the upstream of a dereference,
@@ -972,8 +988,7 @@ escflows(EscState *e, Node *dst, Node *src)
 // it's currfn/e->loopdepth are different from the flood's root.
 // Once an object has been moved to the heap, all of it's upstream should be considered
 // escaping to the global scope.
-static void
-escflood(EscState *e, Node *dst)
+static void escflood(EscState *e, Node *dst)
 {
 	NodeList *l;
 
@@ -1009,8 +1024,10 @@ escflood(EscState *e, Node *dst)
 // the level of complexity we want the escape analysis code to handle.
 #define MinLevel (-2)
 
-static void
-escwalk(EscState *e, int level, Node *dst, Node *src)
+// caller:
+// 	1. escflood() 只有这一处
+// 	2. escwalk() 自身递归调用
+static void escwalk(EscState *e, int level, Node *dst, Node *src)
 {
 	NodeList *ll;
 	int leaks, newlevel;
@@ -1129,7 +1146,7 @@ esctag(EscState *e, Node *func)
 
 	USED(e);
 	func->esc = EscFuncTagged;
-	
+
 	// External functions are assumed unsafe,
 	// unless //go:noescape is given before the declaration.
 	if(func->nbody == nil) {

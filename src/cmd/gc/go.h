@@ -318,7 +318,7 @@ struct	Node
 
 	// OPACK
 	Pkg*	pkg;
-	
+
 	// OARRAYLIT, OMAPLIT, OSTRUCTLIT.
 	InitPlan*	initplan;
 
@@ -343,7 +343,7 @@ struct	Node
 
 /*
  * Every node has a walkgen field.
- * If you want to do a traversal of a node graph that
+ * If you want to do a traversal(遍历) of a node graph that
  * might contain duplicates and want to avoid
  * visiting the same nodes twice, increment walkgen
  * before starting.  Then before processing a node, do
@@ -933,7 +933,9 @@ EXTERN	Mpint*	maxintval[NTYPE];
 EXTERN	Mpflt*	minfltval[NTYPE];
 EXTERN	Mpflt*	maxfltval[NTYPE];
 
+// 由 src/cmd/gc/y.tab.c -> yyparse() 完成初始化.
 EXTERN	NodeList*	xtop;
+// 由 src/cmd/gc/dcl.c -> declare() 完成初始化.
 EXTERN	NodeList*	externdcl;
 EXTERN	NodeList*	closures;
 EXTERN	NodeList*	exportlist;

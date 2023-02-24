@@ -179,8 +179,7 @@ doversion(void)
 
 // 这个函数是 6g 命令的入口.
 //
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int i;
 	NodeList *l;
@@ -217,7 +216,7 @@ main(int argc, char *argv[])
 	weaktypepkg = mkpkg(strlit("go.weak.type"));
 	weaktypepkg->name = "go.weak.type";
 	weaktypepkg->prefix = "go.weak.type";  // not go%2eweak%2etype
-	
+
 	typelinkpkg = mkpkg(strlit("go.typelink"));
 	typelinkpkg->name = "go.typelink";
 	typelinkpkg->prefix = "go.typelink"; // not go%2etypelink
@@ -279,8 +278,9 @@ main(int argc, char *argv[])
 
 	flagparse(&argc, &argv, usage);
 
-	if(argc < 1)
+	if(argc < 1) {
 		usage();
+	}
 
 	if(flag_race) {
 		racepkg = mkpkg(strlit("runtime/race"));
@@ -300,8 +300,9 @@ main(int argc, char *argv[])
 					break;
 				}
 			}
-			if(j == nelem(debugtab))
+			if(j == nelem(debugtab)) {
 				fatal("unknown debug information -d '%s'\n", f[i]);
+			}
 		}
 	}
 
@@ -309,8 +310,9 @@ main(int argc, char *argv[])
 	//	default: inlining on.  (debug['l'] == 1)
 	//	-l: inlining off  (debug['l'] == 0)
 	//	-ll, -lll: inlining on again, with extra debugging (debug['l'] > 1)
-	if(debug['l'] <= 1)
+	if(debug['l'] <= 1) {
 		debug['l'] = 1 - debug['l'];
+	}
 
 	if(thechar == '8') {
 		p = getgo386();
@@ -331,15 +333,18 @@ main(int argc, char *argv[])
 		windows = 1;
 
 		// Canonicalize path by converting \ to / (Windows accepts both).
-		for(p=pathname; *p; p++)
-			if(*p == '\\')
+		for(p=pathname; *p; p++) {
+			if(*p == '\\') {
 				*p = '/';
+			}
+		}
 	}
 
 	fmtinstallgo();
 	betypeinit();
-	if(widthptr == 0)
+	if(widthptr == 0) {
 		fatal("betypeinit failed");
+	}
 
 	lexinit();
 	typeinit();
@@ -368,27 +373,30 @@ main(int argc, char *argv[])
 		curio.last = 0;
 
 		// Skip initial BOM if present.
-		if(Bgetrune(curio.bin) != BOM)
+		if(Bgetrune(curio.bin) != BOM) {
 			Bungetrune(curio.bin);
+		}
 
 		block = 1;
 		iota = -1000000;
-
 		yyparse();
-		if(nsyntaxerrors != 0)
+		if(nsyntaxerrors != 0) {
 			errorexit();
+		}
 
 		linehist(nil, 0, 0);
-		if(curio.bin != nil)
+		if(curio.bin != nil) {
 			Bterm(curio.bin);
+		}
 	}
 	testdclstack();
 	mkpackage(localpkg->name);	// final import not used checks
 	lexfini();
 
 	typecheckok = 1;
-	if(debug['f'])
+	if(debug['f']) {
 		frame(1);
+	}
 
 	// Process top-level declarations in phases.
 
@@ -396,15 +404,22 @@ main(int argc, char *argv[])
 	//   This will gather all the information about types
 	//   and methods but doesn't depend on any of it.
 	defercheckwidth();
-	for(l=xtop; l; l=l->next)
-		if(l->n->op != ODCL && l->n->op != OAS)
+	// xtop 由上面的 yyparse() 函数完成初始化.
+	for(l=xtop; l; l=l->next) {
+		// 对非初始化/赋值类型的变量声明语句, 进行类型检查.
+		if(l->n->op != ODCL && l->n->op != OAS) {
 			typecheck(&l->n, Etop);
+		}
+	}
 
 	// Phase 2: Variable assignments.
 	//   To check interface assignments, depends on phase 1.
-	for(l=xtop; l; l=l->next)
-		if(l->n->op == ODCL || l->n->op == OAS)
+	for(l=xtop; l; l=l->next) {
+		// 对初始化/赋值类型的变量声明语句, 进行类型检查.
+		if(l->n->op == ODCL || l->n->op == OAS) {
 			typecheck(&l->n, Etop);
+		}
+	}
 	resumecheckwidth();
 
 	// Phase 3: Type check function bodies.
@@ -414,82 +429,95 @@ main(int argc, char *argv[])
 			saveerrors();
 			typechecklist(l->n->nbody, Etop);
 			checkreturn(l->n);
-			if(nerrors != 0)
+			if(nerrors != 0) {
 				l->n->nbody = nil;  // type errors; do not compile
+			}
 		}
 	}
 
 	curfn = nil;
 	
-	if(nsavederrors+nerrors)
+	if(nsavederrors+nerrors) {
 		errorexit();
+	}
 
 	// Phase 4: Inlining
 	//
-	// 禁用内联
-	//
+	// 如果禁用内联, 进入此块
 	if(debug['l'] > 1) {
 		// Typecheck imported function bodies if debug['l'] > 1,
 		// otherwise lazily when used or re-exported.
-		for(l=importlist; l; l=l->next)
+		for(l=importlist; l; l=l->next) {
 			if (l->n->inl) {
 				saveerrors();
 				typecheckinl(l->n);
 			}
-		
-		if(nsavederrors+nerrors)
+		}
+
+		if(nsavederrors+nerrors) {
 			errorexit();
+		}
 	}
-
+	// 如果允许内联, 则进入此块
 	if(debug['l']) {
-		// 如果允许内联, 则进入此块
-		
 		// Find functions that can be inlined and clone them before walk expands them.
-		for(l=xtop; l; l=l->next)
-			if(l->n->op == ODCLFUNC)
+		for(l=xtop; l; l=l->next) {
+			if(l->n->op == ODCLFUNC) {
 				caninl(l->n);
-		
+			}
+		}
+
 		// Expand inlineable calls in all functions
-		for(l=xtop; l; l=l->next)
-			if(l->n->op == ODCLFUNC)
+		for(l=xtop; l; l=l->next) {
+			if(l->n->op == ODCLFUNC) {
 				inlcalls(l->n);
+			}
+		}
 	}
 
-	
 	// Phase 5: Escape analysis.
 	//
 	// 禁用优化 - 逃逸分析
 	// 1. 指针变量
 	// 2. 大对象
 	//
-	if(!debug['N'])
+	if(!debug['N']) {
 		escapes(xtop);
-	
+	}
 	// Escape analysis moved escaped values off stack.
 	// Move large values off stack too.
 	movelarge(xtop);
 
 	// Phase 6: Compile top level functions.
-	for(l=xtop; l; l=l->next)
-		if(l->n->op == ODCLFUNC)
+	for(l=xtop; l; l=l->next) {
+		if(l->n->op == ODCLFUNC) {
 			funccompile(l->n, 0);
+		}
+	}
 
-	if(nsavederrors+nerrors == 0)
+	if(nsavederrors+nerrors == 0) {
 		fninit(xtop);
+	}
 
 	// Phase 7: Check external declarations.
-	for(l=externdcl; l; l=l->next)
-		if(l->n->op == ONAME)
+	//
+	// externdcl 由上面的 yyparse() 函数完成初始化.
+	for(l=externdcl; l; l=l->next) {
+		if(l->n->op == ONAME) {
 			typecheck(&l->n, Erv);
+		}
+	}
 
-	if(nerrors+nsavederrors)
+	if(nerrors+nsavederrors) {
 		errorexit();
+	}
 
-	// 实际输出 main.6 文件语句.
+	// 这里是实际输出 main.6 文件的地方.
 	dumpobj();
 
-	if(nerrors+nsavederrors)
+	if(nerrors+nsavederrors) {
 		errorexit();
+	}
 
 	flusherrors();
 	exits(0);

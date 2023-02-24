@@ -91,10 +91,12 @@ addrescapes(Node *n)
 			snprint(buf, sizeof buf, "&%S", n->sym);
 			n->heapaddr->sym = lookup(buf);
 			n->heapaddr->orig->sym = n->heapaddr->sym;
-			if(!debug['N'])
+			if(!debug['N']) {
 				n->esc = EscHeap;
-			if(debug['m'])
+			}
+			if(debug['m']) {
 				print("%L: moved to heap: %N\n", n->lineno, n);
+			}
 			curfn = oldfn;
 			break;
 		}

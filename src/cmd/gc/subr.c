@@ -255,8 +255,9 @@ fatal(char *fmt, ...)
 	errorexit();
 }
 
-void
-linehist(char *file, int32 off, int relative)
+// caller:
+// 	1. src/cmd/gc/lex.c -> main()
+void linehist(char *file, int32 off, int relative)
 {
 	Hist *h;
 	char *cp;
@@ -295,8 +296,7 @@ linehist(char *file, int32 off, int relative)
 	ehist = h;
 }
 
-int32
-setlineno(Node *n)
+int32 setlineno(Node *n)
 {
 	int32 lno;
 
@@ -387,8 +387,7 @@ restrictlookup(char *name, Pkg *pkg)
 
 // find all the exported symbols in package opkg
 // and make them available in the current package
-void
-importdot(Pkg *opkg, Node *pack)
+void importdot(Pkg *opkg, Node *pack)
 {
 	Sym *s, *s1;
 	uint32 h;

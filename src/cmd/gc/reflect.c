@@ -466,8 +466,7 @@ dgopkgpath(Sym *s, int ot, Pkg *pkg)
  * uncommonType
  * ../../pkg/runtime/type.go:/uncommonType
  */
-static int
-dextratype(Sym *sym, int off, Type *t, int ptroff)
+static int dextratype(Sym *sym, int off, Type *t, int ptroff)
 {
 	int ot, n;
 	Sym *s;
@@ -648,12 +647,13 @@ haspointers(Type *t)
 	return ret;
 }
 
-/*
- * commonType
- * ../../pkg/runtime/type.go:/commonType
- */
-static int
-dcommontype(Sym *s, int ot, Type *t)
+// 
+// commonType
+// ../../pkg/runtime/type.go:/commonType
+// 
+// caller:
+// 	1. dtypesym() 只有这一处
+static int dcommontype(Sym *s, int ot, Type *t)
 {
 	int i, alg, sizeofAlg;
 	Sym *sptr, *algsym;
@@ -843,8 +843,15 @@ weaktypesym(Type *t)
 	return s;
 }
 
-static Sym*
-dtypesym(Type *t)
+// 一个超...长的函数
+//
+// caller:
+// 	1. dumptypestructs() 唯一的主调函数.
+// 	2. dcommontype() 由 dtypesym -> dcommontype -> dtypesym 形式的嵌套调用,
+// 	所以不是起始的主调函数(dcommontype()的主调函数只有一个 dtypesym()).
+// 	3. dextratype() 与 dcommontype() 一样, 也是由 dtypesym 先调用.
+// 	4. dtypesym() 自身的递归调用
+static Sym* dtypesym(Type *t)
 {
 	int ot, xt, n, isddd, dupok;
 	Sym *s, *s1, *s2, *s3, *s4, *slink;
@@ -1067,8 +1074,10 @@ ok:
 	return s;
 }
 
-void
-dumptypestructs(void)
+// caller: 
+// 	1. src/cmd/gc/obj.c -> dumpobj() 只有这一处, 使用 6g 命令进行源码编译,
+// 	输出 main.6 OBJ文件时, 会调用本函数.
+void dumptypestructs(void)
 {
 	int i;
 	NodeList *l;
@@ -1079,20 +1088,23 @@ dumptypestructs(void)
 	// copy types from externdcl list to signatlist
 	for(l=externdcl; l; l=l->next) {
 		n = l->n;
-		if(n->op != OTYPE)
+		if(n->op != OTYPE) {
 			continue;
+		}
 		signatlist = list(signatlist, n);
 	}
 
 	// process signatlist
 	for(l=signatlist; l; l=l->next) {
 		n = l->n;
-		if(n->op != OTYPE)
+		if(n->op != OTYPE) {
 			continue;
+		}
 		t = n->type;
 		dtypesym(t);
-		if(t->sym)
+		if(t->sym) {
 			dtypesym(ptrto(t));
+		}
 	}
 
 	// generate import strings for imported packages
@@ -1128,8 +1140,7 @@ dumptypestructs(void)
 	}
 }
 
-static Sym*
-dalgsym(Type *t)
+static Sym* dalgsym(Type *t)
 {
 	int ot;
 	Sym *s, *hash, *eq;
@@ -1355,8 +1366,10 @@ dgcsym1(Sym *s, int ot, Type *t, vlong *off, int stack_size)
 	return ot;
 }
 
-static Sym*
-dgcsym(Type *t)
+// caller:
+// 	1. dcommontype()
+// 	2. dgcsym1() 嵌套调用
+static Sym* dgcsym(Type *t)
 {
 	int ot;
 	vlong off;

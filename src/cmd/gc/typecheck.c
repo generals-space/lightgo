@@ -41,8 +41,7 @@ static	NodeList*	typecheckdefstack;
 /*
  * resolve ONONAME to definition, if any.
  */
-static Node*
-resolve(Node *n)
+static Node* resolve(Node *n)
 {
 	Node *r;
 
@@ -55,8 +54,7 @@ resolve(Node *n)
 	return n;
 }
 
-void
-typechecklist(NodeList *l, int top)
+void typechecklist(NodeList *l, int top)
 {
 	for(; l; l=l->next)
 		typecheck(&l->n, top);
@@ -133,11 +131,10 @@ sprint_depchain(Fmt *fmt, NodeList *stack, Node *cur, Node *first)
 /*
  * type check node *np.
  * replaces *np with a new pointer in some cases.
- * returns the final value of *np as a convenience.
+ * returns the final value of *np as a convenience(为了方便起见).
  */
 static void typecheck1(Node **, int);
-Node*
-typecheck(Node **np, int top)
+Node* typecheck(Node **np, int top)
 {
 	Node *n;
 	int lno;
@@ -146,18 +143,21 @@ typecheck(Node **np, int top)
 	static NodeList *tcstack, *tcfree;
 
 	// cannot type check until all the source has been parsed
-	if(!typecheckok)
+	if(!typecheckok) {
 		fatal("early typecheck");
+	}
 
 	n = *np;
-	if(n == N)
+	if(n == N) {
 		return N;
-	
+	}
+
 	lno = setlineno(n);
 
 	// Skip over parens.
-	while(n->op == OPAREN)
+	while(n->op == OPAREN) {
 		n = n->left;
+	}
 
 	// Resolve definition of name and value of iota lazily.
 	n = resolve(n);
@@ -212,8 +212,9 @@ typecheck(Node **np, int top)
 	if(tcfree != nil) {
 		l = tcfree;
 		tcfree = l->next;
-	} else
+	} else {
 		l = mal(sizeof *l);
+	}
 	l->next = tcstack;
 	l->n = n;
 	tcstack = l;
@@ -222,8 +223,9 @@ typecheck(Node **np, int top)
 	*np = n;
 	n->typecheck = 1;
 
-	if(tcstack != l)
+	if(tcstack != l) {
 		fatal("typecheck stack out of sync");
+	}
 	tcstack = l->next;
 	l->next = tcfree;
 	tcfree = l;
