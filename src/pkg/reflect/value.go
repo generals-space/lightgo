@@ -41,6 +41,8 @@ func memmove(adst, asrc unsafe.Pointer, n uintptr) {
 	}
 }
 
+// reflect.Type 是一个接口, 而 reflect.Value 是一个结构体.
+//
 // Value is the reflection interface to a Go value.
 //
 // Not all methods apply to all kinds of values.  Restrictions,
@@ -209,6 +211,8 @@ func storeIword(p unsafe.Pointer, w iword, n uintptr) {
 	}
 }
 
+// Go 语言的 interface{} 类型在语言内部就是通过 emptyInterface{} 表示的.
+//
 // emptyInterface is the header for an interface{} value.
 type emptyInterface struct {
 	typ  *rtype
@@ -2513,6 +2517,9 @@ func maplen(m iword) int
 func call(fn, arg unsafe.Pointer, n uint32)
 func ifaceE2I(t *rtype, src interface{}, dst unsafe.Pointer)
 
+// caller:
+// 	1. ValueOf() 只有这一处
+//
 // Dummy annotation marking that the value x escapes,
 // for use in cases where the reflect code is so clever that
 // the compiler cannot follow.

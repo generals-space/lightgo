@@ -59,6 +59,8 @@ static FuncVal deadlineFn	= {(void(*)(void))deadline};
 static FuncVal readDeadlineFn	= {(void(*)(void))readDeadline};
 static FuncVal writeDeadlineFn	= {(void(*)(void))writeDeadline};
 
+// caller:
+// 	1. src/pkg/net/fd_poll_runtime.go -> pollDesc.Init() 只有这一处
 func runtime_pollServerInit() {
 	runtime·netpollinit();
 }
@@ -83,12 +85,15 @@ func runtime_pollOpen(fd uintptr) (pd *PollDesc, errno int) {
 }
 
 func runtime_pollClose(pd *PollDesc) {
-	if(!pd->closing)
+	if(!pd->closing) {
 		runtime·throw("runtime_pollClose: close w/o unblock");
-	if(pd->wg != nil && pd->wg != READY)
+	}
+	if(pd->wg != nil && pd->wg != READY) {
 		runtime·throw("runtime_pollClose: blocked write on closing descriptor");
-	if(pd->rg != nil && pd->rg != READY)
+	}
+	if(pd->rg != nil && pd->rg != READY) {
 		runtime·throw("runtime_pollClose: blocked read on closing descriptor");
+	}
 	runtime·netpollclose(pd->fd);
 	runtime·lock(&pollcache);
 	pd->link = pollcache.first;
@@ -115,8 +120,9 @@ func runtime_pollWait(pd *PollDesc, mode int) (err int) {
 	if(err == 0) {
 		while(!netpollblock(pd, mode)) {
 			err = checkerr(pd, mode);
-			if(err != 0)
+			if(err != 0) {
 				break;
+			}
 			// Can happen if timeout has fired and unblocked us,
 			// but before we had a chance to run, timeout has been reset.
 			// Pretend it has not happened and retry.
@@ -232,8 +238,7 @@ runtime·netpollfd(PollDesc *pd)
 // 	1. src/pkg/runtime/netpoll_epoll.c -> runtime·netpoll()
 //
 // make pd ready, newly runnable goroutines (if any) are enqueued info gpp list
-void
-runtime·netpollready(G **gpp, PollDesc *pd, int32 mode)
+void runtime·netpollready(G **gpp, PollDesc *pd, int32 mode)
 {
 	G *rg, *wg;
 

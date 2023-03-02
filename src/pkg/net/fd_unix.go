@@ -36,7 +36,10 @@ type netFD struct {
 func sysInit() {
 }
 
-func dial(network string, ra Addr, dialer func(time.Time) (Conn, error), deadline time.Time) (Conn, error) {
+func dial(
+	network string, ra Addr, 
+	dialer func(time.Time) (Conn, error), deadline time.Time,
+) (Conn, error) {
 	return dialer(deadline)
 }
 
@@ -44,6 +47,8 @@ func newFD(sysfd, family, sotype int, net string) (*netFD, error) {
 	return &netFD{sysfd: sysfd, family: family, sotype: sotype, net: net}, nil
 }
 
+// caller:
+// 	1. netFD.accept()
 func (fd *netFD) init() error {
 	if err := fd.pd.Init(fd); err != nil {
 		return err
@@ -242,7 +247,9 @@ func (fd *netFD) ReadFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 	return
 }
 
-func (fd *netFD) ReadMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.Sockaddr, err error) {
+func (fd *netFD) ReadMsg(
+	p []byte, oob []byte,
+) (n, oobn, flags int, sa syscall.Sockaddr, err error) {
 	if err := fd.readLock(); err != nil {
 		return 0, 0, 0, nil, err
 	}
@@ -338,7 +345,9 @@ func (fd *netFD) WriteTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	return
 }
 
-func (fd *netFD) WriteMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oobn int, err error) {
+func (fd *netFD) WriteMsg(
+	p []byte, oob []byte, sa syscall.Sockaddr,
+) (n int, oobn int, err error) {
 	if err := fd.writeLock(); err != nil {
 		return 0, 0, err
 	}

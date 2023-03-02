@@ -23,8 +23,9 @@ Typedef	typedefs[] =
 	0
 };
 
-void
-betypeinit(void)
+// caller:
+// 	1. src/cmd/gc/lex.c -> main() 只有这一处
+void betypeinit(void)
 {
 	widthptr = 8;
 	widthint = 8;

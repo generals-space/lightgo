@@ -91,18 +91,23 @@ static char* _typekind[] = {
 	[TIDEAL]	= "untyped number",
 };
 
-static char*
-typekind(Type *t)
+// 根据目标 type 对象的 etype 成员, 返回对应的类型名称, 如"struct", "array", "func"等.
+//
+// caller:
+// 	1. typecheck1() 只有这一处
+static char* typekind(Type *t)
 {
 	int et;
 	static char buf[50];
 	char *s;
 	
-	if(isslice(t))
+	if(isslice(t)) {
 		return "slice";
+	}
 	et = t->etype;
-	if(0 <= et && et < nelem(_typekind) && (s=_typekind[et]) != nil)
+	if(0 <= et && et < nelem(_typekind) && (s=_typekind[et]) != nil) {
 		return s;
+	}
 	snprint(buf, sizeof buf, "etype=%d", et);
 	return buf;
 }
@@ -303,8 +308,7 @@ indexlit(Node **np)
 	defaultlit(np, T);
 }
 
-static void
-typecheck1(Node **np, int top)
+static void typecheck1(Node **np, int top)
 {
 	int et, aop, op, ptr;
 	Node *n, *l, *r, *lo, *mid, *hi;
@@ -433,8 +437,9 @@ reswitch:
 			}
 		}
 		typecheck(&r, Etype);
-		if(r->type == T)
+		if(r->type == T) {
 			goto error;
+		}
 		t->type = r->type;
 		n->op = OTYPE;
 		n->type = t;
@@ -448,8 +453,9 @@ reswitch:
 		ok |= Etype;
 		l = typecheck(&n->left, Etype);
 		r = typecheck(&n->right, Etype);
-		if(l->type == T || r->type == T)
+		if(l->type == T || r->type == T) {
 			goto error;
+		}
 		n->op = OTYPE;
 		n->type = maptype(l->type, r->type);
 		n->left = N;
@@ -1057,9 +1063,11 @@ reswitch:
 	 */
 	case OCALL:
 		l = n->left;
+		// 首先判断是否为 unsafe 包中的 Sizeof, Alignof, Offsetof 函数.
 		if(l->op == ONAME && (r = unsafenmagic(n)) != N) {
-			if(n->isddd)
+			if(n->isddd) {
 				yyerror("invalid use of ... with builtin %N", l);
+			}
 			n = r;
 			goto reswitch;
 		}
@@ -1414,7 +1422,8 @@ reswitch:
 			break;
 		}
 		goto ret;
-
+	// make() 语句, 可以是 make slice, map 和 channel, 3种类型.
+	// 在做类型检查的时候, 需要将其继续细分为 OMAKESLICE, OMAKEMAP, OMAKECHAN.
 	case OMAKE:
 		ok |= Erv;
 		args = n->list;
@@ -1423,12 +1432,15 @@ reswitch:
 			goto error;
 		}
 		n->list = nil;
+		// make()的第1个参数`t`中, 包含目标类型信息, slice, map 或是 channel.
 		l = args->n;
 		args = args->next;
 		typecheck(&l, Etype);
-		if((t = l->type) == T)
+		if((t = l->type) == T) {
 			goto error;
+		}
 
+		// 根据 t->etype, 判断要 make 的究竟是 slice, map 还是 channel 类型.
 		switch(t->etype) {
 		default:
 		badmake:
@@ -1436,27 +1448,35 @@ reswitch:
 			goto error;
 
 		case TARRAY:
-			if(!isslice(t))
+			if(!isslice(t)) {
 				goto badmake;
+			}
+			// make([]int), 没有 len 和 cap 参数.
 			if(args == nil) {
 				yyerror("missing len argument to make(%T)", t);
 				goto error;
 			}
+			// len 参数
 			l = args->n;
 			args = args->next;
 			typecheck(&l, Erv);
 			r = N;
+			// 如果还有 cap 参数
 			if(args != nil) {
 				r = args->n;
 				args = args->next;
 				typecheck(&r, Erv);
 			}
-			if(l->type == T || (r && r->type == T))
+			if(l->type == T || (r && r->type == T)) {
 				goto error;
+			}
 			et = checkmake(t, "len", l) < 0;
 			et |= r && checkmake(t, "cap", r) < 0;
-			if(et)
+			if(et) {
 				goto error;
+			}
+			// 1. len 与 cap 需要是常量
+			// 2. cap 需要大于等于 len
 			if(isconst(l, CTINT) && r && isconst(r, CTINT) && mpcmpfixfix(l->val.u.xval, r->val.u.xval) > 0) {
 				yyerror("len larger than cap in make(%T)", t);
 				goto error;
@@ -1467,6 +1487,7 @@ reswitch:
 			break;
 
 		case TMAP:
+			// make(map[xxx]xxx) 可以不写参数
 			if(args != nil) {
 				l = args->n;
 				args = args->next;
@@ -1477,8 +1498,9 @@ reswitch:
 				if(checkmake(t, "size", l) < 0)
 					goto error;
 				n->left = l;
-			} else
+			} else {
 				n->left = nodintconst(0);
+			}
 			n->op = OMAKEMAP;
 			break;
 
@@ -1494,11 +1516,12 @@ reswitch:
 				if(checkmake(t, "buffer", l) < 0)
 					goto error;
 				n->left = l;
-			} else
+			} else {
 				n->left = nodintconst(0);
+			}
 			n->op = OMAKECHAN;
 			break;
-		}
+		} // switch{} 结束
 		if(args != nil) {
 			yyerror("too many arguments to make(%T)", t);
 			n->op = OMAKE;
@@ -3219,8 +3242,15 @@ ret:
 	return n;
 }
 
-static int
-checkmake(Type *t, char *arg, Node *n)
+// 对 make() 函数创建的 slice, map 或 channel 进行参数检查.
+// 对于 slice 是 len 和 cap, 对于 map 是 size, 对于 channel 则是 buffer.
+//
+// 	@param arg: len, cap, size, buffer 等参数的字符串描述信息.
+//
+// caller:
+// 	1. typecheck1() 只有这一处, 只在 make() 函数的类型检查时调用, 分别对 slice, map, 
+// 	channel 进行参数检查.
+static int checkmake(Type *t, char *arg, Node *n)
 {
 	if(n->op == OLITERAL) {
 		n->val = toint(n->val);

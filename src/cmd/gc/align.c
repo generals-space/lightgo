@@ -23,8 +23,7 @@ rnd(vlong o, vlong r)
 	return (o+r-1)&~(r-1);
 }
 
-static void
-offmod(Type *t)
+static void offmod(Type *t)
 {
 	Type *f;
 	int32 o;
@@ -42,43 +41,52 @@ offmod(Type *t)
 	}
 }
 
-static vlong
-widstruct(Type *errtype, Type *t, vlong o, int flag)
+// 计算 t 结构体类型的大小, 即 sizeof(struct{}) 的真正实现.
+//
+// 	@param t: 目标 struct 类型
+static vlong widstruct(Type *errtype, Type *t, vlong o, int flag)
 {
 	Type *f;
 	int64 w;
 	int32 maxalign;
-	
+
 	maxalign = flag;
-	if(maxalign < 1)
+	if(maxalign < 1) {
 		maxalign = 1;
+	}
 	for(f=t->type; f!=T; f=f->down) {
-		if(f->etype != TFIELD)
+		// 当前函数接受的参数只能是 struct{} 类型, 不能是其中的成员字段, 否则会报错.
+		if(f->etype != TFIELD) {
 			fatal("widstruct: not TFIELD: %lT", f);
+		}
 		if(f->type == T) {
 			// broken field, just skip it so that other valid fields
 			// get a width.
 			continue;
 		}
 		dowidth(f->type);
-		if(f->type->align > maxalign)
+		if(f->type->align > maxalign) {
 			maxalign = f->type->align;
-		if(f->type->width < 0)
+		}
+		if(f->type->width < 0) {
 			fatal("invalid width %lld", f->type->width);
+		}
 		w = f->type->width;
-		if(f->type->align > 0)
+		if(f->type->align > 0) {
 			o = rnd(o, f->type->align);
+		}
 		f->width = o;	// really offset for TFIELD
 		if(f->nname != N) {
-			// this same stackparam logic is in addrescapes
-			// in typecheck.c.  usually addrescapes runs after
-			// widstruct, in which case we could drop this,
+			// this same stackparam logic is in addrescapes in typecheck.c. 
+			// usually addrescapes runs after widstruct,
+			// in which case we could drop this,
 			// but function closure functions are the exception.
 			if(f->nname->stackparam) {
 				f->nname->stackparam->xoffset = o;
 				f->nname->xoffset = 0;
-			} else
+			} else {
 				f->nname->xoffset = o;
+			}
 		}
 		o += w;
 		if(o >= MAXWIDTH) {
@@ -87,40 +95,52 @@ widstruct(Type *errtype, Type *t, vlong o, int flag)
 		}
 	}
 	// final width is rounded
-	if(flag)
+	if(flag) {
 		o = rnd(o, maxalign);
+	}
 	t->align = maxalign;
 
 	// type width only includes back to first field's offset
-	if(t->type == T)
+	if(t->type == T) {
 		t->width = 0;
-	else
+	}
+	else {
 		t->width = o - t->type->width;
+	}
 	return o;
 }
 
-void
-dowidth(Type *t)
+// 计算目标类型的大小(unsafe.Sizeof() 的实现), 计算结果会存入 tr->width 字段中.
+//
+// 	@param t: 类型可以是 int8, int64, bool, struct{} 等.
+//
+// caller:
+// 	1. src/cmd/gc/unsafe.c -> unsafenmagic() 当作 sizeof() 使用, 计算某类型的大小
+void dowidth(Type *t)
 {
 	int32 et;
 	int64 w;
 	int lno;
 	Type *t1;
 
-	if(widthptr == 0)
+	if(widthptr == 0) {
 		fatal("dowidth without betypeinit");
+	}
 
-	if(t == T)
+	if(t == T) {
 		return;
+	}
 
-	if(t->width > 0)
+	if(t->width > 0) {
 		return;
+	}
 
 	if(t->width == -2) {
 		lno = lineno;
 		lineno = t->lineno;
-		if(!t->broke)
+		if(!t->broke) {
 			yyerror("invalid recursive type %T", t);
+		}
 		t->width = 0;
 		lineno = lno;
 		return;
@@ -144,8 +164,9 @@ dowidth(Type *t)
 
 	default:
 		/* simtype == 0 during bootstrap */
-		if(simtype[t->etype] != 0)
+		if(simtype[t->etype] != 0) {
 			et = simtype[t->etype];
+		}
 		break;
 	}
 
@@ -156,6 +177,7 @@ dowidth(Type *t)
 		break;
 
 	/* compiler-specific stuff */
+	// 如下3种类型大小为1(单位为字节)
 	case TINT8:
 	case TUINT8:
 	case TBOOL:		// bool is int8
@@ -210,8 +232,9 @@ dowidth(Type *t)
 	case TCHANARGS:
 		t1 = t->type;
 		dowidth(t->type);	// just in case
-		if(t1->type->width >= (1<<16))
+		if(t1->type->width >= (1<<16)) {
 			yyerror("channel element type too large (>64kB)");
+		}
 		t->width = 1;
 		break;
 	case TMAP:		// implemented as pointer
@@ -220,33 +243,38 @@ dowidth(Type *t)
 		checkwidth(t->down);
 		break;
 	case TFORW:		// should have been filled in
-		if(!t->broke)
+		if(!t->broke) {
 			yyerror("invalid recursive type %T", t);
+		}
 		w = 1;	// anything will do
 		break;
 	case TANY:
 		// dummy type; should be replaced before use.
-		if(!debug['A'])
+		if(!debug['A']) {
 			fatal("dowidth any");
+		}
 		w = 1;	// anything will do
 		break;
 	case TSTRING:
-		if(sizeof_String == 0)
+		if(sizeof_String == 0) {
 			fatal("early dowidth string");
+		}
 		w = sizeof_String;
 		t->align = widthptr;
 		break;
 	case TARRAY:
-		if(t->type == T)
+		if(t->type == T) {
 			break;
+		}
 		if(t->bound >= 0) {
 			uint64 cap;
 
 			dowidth(t->type);
 			if(t->type->width != 0) {
 				cap = (MAXWIDTH-1) / t->type->width;
-				if(t->bound > cap)
+				if(t->bound > cap) {
 					yyerror("type %lT larger than address space", t);
+				}
 			}
 			w = t->bound * t->type->width;
 			t->align = t->type->align;
@@ -262,13 +290,15 @@ dowidth(Type *t)
 				t->broke = 1;
 			}
 		}
-		else
+		else {
 			fatal("dowidth %T", t);	// probably [...]T
+		}
 		break;
 
 	case TSTRUCT:
-		if(t->funarg)
+		if(t->funarg) {
 			fatal("dowidth fn struct %T", t);
+		}
 		w = widstruct(t, t, 0, 1);
 		break;
 
@@ -291,27 +321,32 @@ dowidth(Type *t)
 		w = widstruct(t->type, *getinarg(t1), w, widthptr);
 		w = widstruct(t->type, *getoutarg(t1), w, widthptr);
 		t1->argwid = w;
-		if(w%widthptr)
+		if(w%widthptr) {
 			warn("bad type %T %d\n", t1, w);
+		}
 		t->align = 1;
 		break;
 	}
 
-	if(widthptr == 4 && w != (int32)w)
+	if(widthptr == 4 && w != (int32)w) {
 		yyerror("type %T too large", t);
+	}
 
 	t->width = w;
 	if(t->align == 0) {
-		if(w > 8 || (w&(w-1)) != 0)
+		if(w > 8 || (w&(w-1)) != 0) {
 			fatal("invalid alignment for %T", t);
+		}
 		t->align = w;
 	}
 	lineno = lno;
 
-	if(defercalc == 1)
+	if(defercalc == 1) {
 		resumecheckwidth();
-	else
+	}
+	else {
 		--defercalc;
+	}
 }
 
 /*

@@ -1626,8 +1626,7 @@ struct BitVector
 // 	1. scanbitvector() 只有这一处
 //
 // Scans an interface data value when the interface type indicates that it is a pointer.
-static void
-scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
+static void scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 {
 	Itab *tab;
 	Type *type;

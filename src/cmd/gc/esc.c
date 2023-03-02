@@ -44,7 +44,7 @@ static void analyze(NodeList*, int);
 enum
 {
 	EscFuncUnknown = 0,
-	EscFuncPlanned,
+	EscFuncPlanned, // 计划进行逃逸分析
 	EscFuncStarted,
 	EscFuncTagged,
 };
@@ -282,14 +282,18 @@ static void analyze(NodeList *all, int recursive)
 	e->theSink.escloopdepth = -1;
 	e->recursive = recursive;
 
-	for(l=all; l; l=l->next)
-		if(l->n->op == ODCLFUNC)
+	for(l=all; l; l=l->next) {
+		if(l->n->op == ODCLFUNC) {
 			l->n->esc = EscFuncPlanned;
+		}
+	}
 
 	// flow-analyze functions
-	for(l=all; l; l=l->next)
-		if(l->n->op == ODCLFUNC)
+	for(l=all; l; l=l->next) {
+		if(l->n->op == ODCLFUNC) {
 			escfunc(e, l->n);
+		}
+	}
 
 	// print("escapes: %d e->dsts, %d edges\n", e->dstcount, e->edgecount);
 
@@ -313,9 +317,9 @@ static void analyze(NodeList *all, int recursive)
 	}
 }
 
-
-static void
-escfunc(EscState *e, Node *func)
+// caller:
+// 	1. analyze() 只有这一处
+static void escfunc(EscState *e, Node *func)
 {
 	Node *savefn;
 	NodeList *ll;
@@ -323,8 +327,9 @@ escfunc(EscState *e, Node *func)
 
 //	print("escfunc %N %s\n", func->nname, e->recursive?"(recursive)":"");
 
-	if(func->esc != 1)
+	if(func->esc != 1) {
 		fatal("repeat escfunc %N", func->nname);
+	}
 	func->esc = EscFuncStarted;
 
 	saveld = e->loopdepth;
@@ -371,8 +376,7 @@ escfunc(EscState *e, Node *func)
 static Label looping;
 static Label nonlooping;
 
-static void
-escloopdepthlist(EscState *e, NodeList *l)
+static void escloopdepthlist(EscState *e, NodeList *l)
 {
 	for(; l; l=l->next)
 		escloopdepth(e, l->n);
@@ -424,8 +428,7 @@ esclist(EscState *e, NodeList *l)
 		esc(e, l->n);
 }
 
-static void
-esc(EscState *e, Node *n)
+static void esc(EscState *e, Node *n)
 {
 	int lno;
 	NodeList *ll, *lr;
@@ -1082,8 +1085,9 @@ static void escwalk(EscState *e, int level, Node *dst, Node *src)
 		if(leaks) {
 			src->esc = EscHeap;
 			addrescapes(src->left);
-			if(debug['m'])
+			if(debug['m']) {
 				warnl(src->lineno, "%hN escapes to heap", src);
+			}
 		}
 		newlevel = level;
 		if(level > MinLevel)
@@ -1105,8 +1109,9 @@ static void escwalk(EscState *e, int level, Node *dst, Node *src)
 	case OCALLPART:
 		if(leaks) {
 			src->esc = EscHeap;
-			if(debug['m'])
+			if(debug['m']) {
 				warnl(src->lineno, "%hN escapes to heap", src);
+			}
 		}
 		break;
 
@@ -1137,8 +1142,7 @@ recurse:
 	e->pdepth--;
 }
 
-static void
-esctag(EscState *e, Node *func)
+static void esctag(EscState *e, Node *func)
 {
 	Node *savefn;
 	NodeList *ll;

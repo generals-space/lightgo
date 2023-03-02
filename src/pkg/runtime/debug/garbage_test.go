@@ -28,13 +28,22 @@ func TestReadGCStats(t *testing.T) {
 	runtime.ReadMemStats(&mstats)
 
 	if stats.NumGC != int64(mstats.NumGC) {
-		t.Errorf("stats.NumGC = %d, but mstats.NumGC = %d", stats.NumGC, mstats.NumGC)
+		t.Errorf(
+			"stats.NumGC = %d, but mstats.NumGC = %d", 
+			stats.NumGC, mstats.NumGC,
+		)
 	}
 	if stats.PauseTotal != time.Duration(mstats.PauseTotalNs) {
-		t.Errorf("stats.PauseTotal = %d, but mstats.PauseTotalNs = %d", stats.PauseTotal, mstats.PauseTotalNs)
+		t.Errorf(
+			"stats.PauseTotal = %d, but mstats.PauseTotalNs = %d", 
+			stats.PauseTotal, mstats.PauseTotalNs,
+		)
 	}
 	if stats.LastGC.UnixNano() != int64(mstats.LastGC) {
-		t.Errorf("stats.LastGC.UnixNano = %d, but mstats.LastGC = %d", stats.LastGC.UnixNano(), mstats.LastGC)
+		t.Errorf(
+			"stats.LastGC.UnixNano = %d, but mstats.LastGC = %d", 
+			stats.LastGC.UnixNano(), mstats.LastGC,
+		)
 	}
 	n := int(mstats.NumGC)
 	if n > len(mstats.PauseNs) {
@@ -47,7 +56,10 @@ func TestReadGCStats(t *testing.T) {
 		for i := 0; i < n; i++ {
 			dt := stats.Pause[i]
 			if dt != time.Duration(mstats.PauseNs[off]) {
-				t.Errorf("stats.Pause[%d] = %d, want %d", i, dt, mstats.PauseNs[off])
+				t.Errorf(
+					"stats.Pause[%d] = %d, want %d", 
+					i, dt, mstats.PauseNs[off],
+				)
 			}
 			if max < dt {
 				max = dt
@@ -62,12 +74,18 @@ func TestReadGCStats(t *testing.T) {
 	q := stats.PauseQuantiles
 	nq := len(q)
 	if q[0] != min || q[nq-1] != max {
-		t.Errorf("stats.PauseQuantiles = [%d, ..., %d], want [%d, ..., %d]", q[0], q[nq-1], min, max)
+		t.Errorf(
+			"stats.PauseQuantiles = [%d, ..., %d], want [%d, ..., %d]", 
+			q[0], q[nq-1], min, max,
+		)
 	}
 
 	for i := 0; i < nq-1; i++ {
 		if q[i] > q[i+1] {
-			t.Errorf("stats.PauseQuantiles[%d]=%d > stats.PauseQuantiles[%d]=%d", i, q[i], i+1, q[i+1])
+			t.Errorf(
+				"stats.PauseQuantiles[%d]=%d > stats.PauseQuantiles[%d]=%d", 
+				i, q[i], i+1, q[i+1],
+			)
 		}
 	}
 }
@@ -86,7 +104,10 @@ func TestFreeOSMemory(t *testing.T) {
 	FreeOSMemory()
 	runtime.ReadMemStats(&ms2)
 	if ms1.HeapReleased >= ms2.HeapReleased {
-		t.Errorf("released before=%d; released after=%d; did not go up", ms1.HeapReleased, ms2.HeapReleased)
+		t.Errorf(
+			"released before=%d; released after=%d; did not go up", 
+			ms1.HeapReleased, ms2.HeapReleased,
+		)
 	}
 }
 

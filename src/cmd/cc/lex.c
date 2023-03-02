@@ -118,8 +118,7 @@ dodef(char *p)
 //
 // caller:
 // 	1. src/lib9/main.c -> main() 
-void
-main(int argc, char *argv[])
+void main(int argc, char *argv[])
 {
 	int c;
 

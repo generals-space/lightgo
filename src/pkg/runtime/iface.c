@@ -24,8 +24,9 @@ runtime·printeface(Eface e)
 static	Itab*	hash[1009];
 static	Lock	ifacelock;
 
-static Itab*
-itab(InterfaceType *inter, Type *type, int32 canfail)
+// caller:
+// 	1. runtime·typ2Itab()
+static Itab* itab(InterfaceType *inter, Type *type, int32 canfail)
 {
 	int32 locked;
 	int32 ni;
@@ -38,16 +39,18 @@ itab(InterfaceType *inter, Type *type, int32 canfail)
 	Type *itype;
 	Eface err;
 
-	if(inter->mhdr.len == 0)
+	if(inter->mhdr.len == 0) {
 		runtime·throw("internal error - misuse of itab");
+	}
 
 	locked = 0;
 
 	// easy case
 	x = type->x;
 	if(x == nil) {
-		if(canfail)
+		if(canfail) {
 			return nil;
+		}
 		iname = inter->m[0].name;
 		goto throw;
 	}
@@ -61,8 +64,9 @@ itab(InterfaceType *inter, Type *type, int32 canfail)
 	// look twice - once without lock, once with.
 	// common case will be no lock contention.
 	for(locked=0; locked<2; locked++) {
-		if(locked)
+		if(locked) {
 			runtime·lock(&ifacelock);
+		}
 		for(m=runtime·atomicloadp(&hash[h]); m!=nil; m=m->link) {
 			if(m->inter == inter && m->type == type) {
 				if(m->bad) {
@@ -78,15 +82,18 @@ itab(InterfaceType *inter, Type *type, int32 canfail)
 						goto search;
 					}
 				}
-				if(locked)
+				if(locked) {
 					runtime·unlock(&ifacelock);
+				}
 				return m;
 			}
 		}
 	}
 
 	ni = inter->mhdr.len;
-	m = runtime·persistentalloc(sizeof(*m) + ni*sizeof m->fun[0], 0, &mstats.other_sys);
+	m = runtime·persistentalloc(
+		sizeof(*m) + ni*sizeof m->fun[0], 0, &mstats.other_sys
+	);
 	m->inter = inter;
 	m->type = type;
 
@@ -109,21 +116,24 @@ search:
 				throw:
 					// didn't find method
 					runtime·newTypeAssertionError(
-						nil, type->string, inter->string,
-						iname, &err);
-					if(locked)
+						nil, type->string, inter->string, iname, &err
+					);
+					if(locked) {
 						runtime·unlock(&ifacelock);
+					}
 					runtime·panic(err);
 					return nil;	// not reached
 				}
 				m->bad = 1;
 				goto out;
 			}
-			if(t->mtyp == itype && t->name == iname && t->pkgPath == ipkgPath)
+			if(t->mtyp == itype && t->name == iname && t->pkgPath == ipkgPath) {
 				break;
+			}
 		}
-		if(m)
+		if(m) {
 			m->fun[i - inter->m] = t->ifn;
+		}
 	}
 
 out:
@@ -132,8 +142,9 @@ out:
 	m->link = hash[h];
 	runtime·atomicstorep(&hash[h], m);
 	runtime·unlock(&ifacelock);
-	if(m->bad)
+	if(m->bad) {
 		return nil;
+	}
 	return m;
 }
 
@@ -171,9 +182,14 @@ copyout(Type *t, void **src, void *dst)
 		alg->copy(size, dst, *src);
 }
 
+// 将确定的实例对象(一般为 struct 实例) 赋值给接口类型变量.
+//
+// [anchor] 调用到此处的示例, 请见 014.interface 中的 func01() 函数.
+//
+// caller:
+// 	无处调用, 一般用于 "接口类型 接口实例变量 = struct{}" 的场景, 进行接口类型赋值或检测.
 #pragma textflag NOSPLIT
-void
-runtime·typ2Itab(Type *t, InterfaceType *inter, Itab **cache, Itab *ret)
+void runtime·typ2Itab(Type *t, InterfaceType *inter, Itab **cache, Itab *ret)
 {
 	Itab *tab;
 
@@ -185,8 +201,7 @@ runtime·typ2Itab(Type *t, InterfaceType *inter, Itab **cache, Itab *ret)
 
 // func convT2I(typ *byte, typ2 *byte, cache **byte, elem any) (ret any)
 #pragma textflag NOSPLIT
-void
-runtime·convT2I(Type *t, InterfaceType *inter, Itab **cache, ...)
+void runtime·convT2I(Type *t, InterfaceType *inter, Itab **cache, ...)
 {
 	byte *elem;
 	Iface *ret;
@@ -207,8 +222,7 @@ runtime·convT2I(Type *t, InterfaceType *inter, Itab **cache, ...)
 
 // func convT2E(typ *byte, elem any) (ret any)
 #pragma textflag NOSPLIT
-void
-runtime·convT2E(Type *t, ...)
+void runtime·convT2E(Type *t, ...)
 {
 	byte *elem;
 	Eface *ret;
@@ -225,8 +239,7 @@ static void assertI2Tret(Type *t, Iface i, byte *ret);
 
 // func ifaceI2T(typ *byte, iface any) (ret any)
 #pragma textflag NOSPLIT
-void
-runtime·assertI2T(Type *t, Iface i, ...)
+void runtime·assertI2T(Type *t, Iface i, ...)
 {
 	byte *ret;
 
@@ -234,8 +247,7 @@ runtime·assertI2T(Type *t, Iface i, ...)
 	assertI2Tret(t, i, ret);
 }
 
-static void
-assertI2Tret(Type *t, Iface i, byte *ret)
+static void assertI2Tret(Type *t, Iface i, byte *ret)
 {
 	Itab *tab;
 	Eface err;
@@ -249,17 +261,20 @@ assertI2Tret(Type *t, Iface i, byte *ret)
 	}
 	if(tab->type != t) {
 		runtime·newTypeAssertionError(
-			tab->inter->string, tab->type->string, t->string,
-			nil, &err);
+			tab->inter->string, tab->type->string, t->string, nil, &err
+		);
 		runtime·panic(err);
 	}
 	copyout(t, &i.data, ret);
 }
 
+// [anchor] 运行到该 if 块内的示例, 请见 014.interface 中的 func03() 函数.
+//
+// 该函数打断点不太容易, 可以使用"b iface.c:行号"完成.
+//
 // func ifaceI2T2(typ *byte, iface any) (ret any, ok bool)
 #pragma textflag NOSPLIT
-void
-runtime·assertI2T2(Type *t, Iface i, ...)
+void runtime·assertI2T2(Type *t, Iface i, ...)
 {
 	byte *ret;
 	bool *ok;
@@ -299,30 +314,26 @@ runtime·assertE2T(Type *t, Eface e, ...)
 	assertE2Tret(t, e, ret);
 }
 
-static void
-assertE2Tret(Type *t, Eface e, byte *ret)
+static void assertE2Tret(Type *t, Eface e, byte *ret)
 {
 	Eface err;
 
 	if(e.type == nil) {
-		runtime·newTypeAssertionError(
-			nil, nil, t->string,
-			nil, &err);
+		runtime·newTypeAssertionError(nil, nil, t->string, nil, &err);
 		runtime·panic(err);
 	}
 	if(e.type != t) {
-		runtime·newTypeAssertionError(
-			nil, e.type->string, t->string,
-			nil, &err);
+		runtime·newTypeAssertionError(nil, e.type->string, t->string, nil, &err);
 		runtime·panic(err);
 	}
 	copyout(t, &e.data, ret);
 }
 
+// [anchor] 调用到此处的示例, 请见 014.interface 中的 func04() 函数.
+//
 // func ifaceE2T2(sigt *byte, iface any) (ret any, ok bool);
 #pragma textflag NOSPLIT
-void
-runtime·assertE2T2(Type *t, Eface e, ...)
+void runtime·assertE2T2(Type *t, Eface e, ...)
 {
 	byte *ret;
 	bool *ok;
@@ -373,9 +384,7 @@ runtime·assertI2E(InterfaceType* inter, Iface i, Eface ret)
 	tab = i.tab;
 	if(tab == nil) {
 		// explicit conversions require non-nil interface value.
-		runtime·newTypeAssertionError(
-			nil, nil, inter->string,
-			nil, &err);
+		runtime·newTypeAssertionError(nil, nil, inter->string, nil, &err);
 		runtime·panic(err);
 	}
 	ret.data = i.data;
@@ -384,8 +393,7 @@ runtime·assertI2E(InterfaceType* inter, Iface i, Eface ret)
 }
 
 // func ifaceI2E2(typ *byte, iface any) (ret any, ok bool)
-void
-runtime·assertI2E2(InterfaceType* inter, Iface i, Eface ret, bool ok)
+void runtime·assertI2E2(InterfaceType* inter, Iface i, Eface ret, bool ok)
 {
 	Itab *tab;
 
@@ -404,8 +412,7 @@ runtime·assertI2E2(InterfaceType* inter, Iface i, Eface ret, bool ok)
 }
 
 // func convI2I(typ *byte, elem any) (ret any)
-void
-runtime·convI2I(InterfaceType* inter, Iface i, Iface ret)
+void runtime·convI2I(InterfaceType* inter, Iface i, Iface ret)
 {
 	Itab *tab;
 
@@ -419,8 +426,7 @@ runtime·convI2I(InterfaceType* inter, Iface i, Iface ret)
 	FLUSH(&ret);
 }
 
-void
-runtime·ifaceI2I(InterfaceType *inter, Iface i, Iface *ret)
+void runtime·ifaceI2I(InterfaceType *inter, Iface i, Iface *ret)
 {
 	Itab *tab;
 	Eface err;
@@ -438,15 +444,13 @@ runtime·ifaceI2I(InterfaceType *inter, Iface i, Iface *ret)
 }
 
 // func ifaceI2I(sigi *byte, iface any) (ret any)
-void
-runtime·assertI2I(InterfaceType* inter, Iface i, Iface ret)
+void runtime·assertI2I(InterfaceType* inter, Iface i, Iface ret)
 {
 	runtime·ifaceI2I(inter, i, &ret);
 }
 
 // func ifaceI2I2(sigi *byte, iface any) (ret any, ok bool)
-void
-runtime·assertI2I2(InterfaceType *inter, Iface i, Iface ret, bool ok)
+void runtime·assertI2I2(InterfaceType *inter, Iface i, Iface ret, bool ok)
 {
 	Itab *tab;
 
@@ -464,8 +468,7 @@ runtime·assertI2I2(InterfaceType *inter, Iface i, Iface ret, bool ok)
 	FLUSH(&ok);
 }
 
-void
-runtime·ifaceE2I(InterfaceType *inter, Eface e, Iface *ret)
+void runtime·ifaceE2I(InterfaceType *inter, Eface e, Iface *ret)
 {
 	Type *t;
 	Eface err;
@@ -473,9 +476,7 @@ runtime·ifaceE2I(InterfaceType *inter, Eface e, Iface *ret)
 	t = e.type;
 	if(t == nil) {
 		// explicit conversions require non-nil interface value.
-		runtime·newTypeAssertionError(
-			nil, nil, inter->string,
-			nil, &err);
+		runtime·newTypeAssertionError(nil, nil, inter->string, nil, &err);
 		runtime·panic(err);
 	}
 	ret->data = e.data;
@@ -486,8 +487,9 @@ bool
 runtime·ifaceE2I2(InterfaceType *inter, Eface e, Iface *ret)
 {
 	ret->tab = itab(inter, e.type, 1);
-	if(ret->tab == nil)
+	if(ret->tab == nil) {
 		return false;
+	}
 	ret->data = e.data;
 	return true;
 }
@@ -634,10 +636,12 @@ runtime·ifaceeq_c(Iface i1, Iface i2)
 bool
 runtime·efaceeq_c(Eface e1, Eface e2)
 {
-	if(e1.type != e2.type)
+	if(e1.type != e2.type) {
 		return false;
-	if(e1.type == nil)
+	}
+	if(e1.type == nil) {
 		return true;
+	}
 	return ifaceeq1(e1.data, e2.data, e1.type);
 }
 
@@ -671,20 +675,19 @@ runtime·ifacethash(Iface i1, uint32 ret)
 }
 
 // efacethash(e1 any) (ret uint32)
-void
-runtime·efacethash(Eface e1, uint32 ret)
+void runtime·efacethash(Eface e1, uint32 ret)
 {
 	Type *t;
 
 	ret = 0;
 	t = e1.type;
-	if(t != nil)
+	if(t != nil) {
 		ret = t->hash;
+	}
 	FLUSH(&ret);
 }
 
-void
-reflect·unsafe_Typeof(Eface e, Eface ret)
+void reflect·unsafe_Typeof(Eface e, Eface ret)
 {
 	if(e.type == nil) {
 		ret.type = nil;
@@ -695,22 +698,19 @@ reflect·unsafe_Typeof(Eface e, Eface ret)
 	FLUSH(&ret);
 }
 
-void
-reflect·unsafe_New(Type *t, void *ret)
+void reflect·unsafe_New(Type *t, void *ret)
 {
 	ret = runtime·cnew(t);
 	FLUSH(&ret);
 }
 
-void
-reflect·unsafe_NewArray(Type *t, intgo n, void *ret)
+void reflect·unsafe_NewArray(Type *t, intgo n, void *ret)
 {
 	ret = runtime·cnewarray(t, n);
 	FLUSH(&ret);
 }
 
-void
-reflect·typelinks(Slice ret)
+void reflect·typelinks(Slice ret)
 {
 	extern Type *typelink[], *etypelink[];
 	static int32 first = 1;

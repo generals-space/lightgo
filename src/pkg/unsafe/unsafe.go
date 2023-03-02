@@ -7,9 +7,6 @@
 	step around the type safety of Go programs.
 	unsafe包包含了绕过go程序类型安全机制的操作.
 	step around: 绕过
-
-	但是这个文件好像什么也没定义啊...
-	另外, 调用unsafe包的, 没有.c文件, 所有的调用者都是.go文件.
 */
 package unsafe
 
@@ -31,8 +28,14 @@ type ArbitraryType int
 // arbitrary memory. It should be used with extreme care.
 type Pointer *ArbitraryType
 
-// Sizeof 没找到具体实现代码. 结果与 reflect 中 rtype.Size() 方法应该是相同的.
+// 如下函数是由 c 语言实现的, 且是在编译阶段完成, 而非运行时.
 //
+// 在 6g *.go 进行**类型检查**阶段时(src/cmd/gc/typecheck.c -> typecheck1()),
+// 如果发现当前 Node 对象是函数(见 typecheck1() 的 OCALL case),
+// 则先判断是否为 unsafe 包中的 Sizeof, Alignof, Offsetof 函数.
+// 具体实现见 src/cmd/gc/unsafe.c -> unsafenmagic()
+//
+
 // Sizeof returns the size in bytes occupied by the value v. 
 // The size is that of the "top level" of the value only. 
 // For instance, if v is a slice, it returns the size of the slice descriptor, 
@@ -45,6 +48,8 @@ func Sizeof(v ArbitraryType) uintptr
 // between the start of the struct and the start of the field.
 func Offsetof(v ArbitraryType) uintptr
 
+// Alignof 接受某个结构体的其中一个字段, 获取并返回该字段类型的宽度值(最大为8).
+//
 // Alignof returns the alignment of the value v.  It is the maximum value m such
 // that the address of a variable with the type of v will always be zero mod m.
 // If v is of the form structValue.field,

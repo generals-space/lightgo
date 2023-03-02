@@ -67,9 +67,11 @@ typedef	struct	FuncVal		FuncVal;
 typedef	struct	SigTab		SigTab;
 typedef	struct	MCache		MCache;
 typedef	struct	FixAlloc	FixAlloc;
+// Iface 与 Eface 有所不同, 前者表示包含方法的接口类型, 后者表示不包含方法的变量类型.
 typedef	struct	Iface		Iface;
 typedef	struct	Itab		Itab;
 typedef	struct	InterfaceType	InterfaceType;
+// Eface 与 Iface 有所不同, 后者表示包含方法的接口类型, 前者表示不包含方法的变量类型.
 typedef	struct	Eface		Eface;
 typedef	struct	Type		Type;
 typedef	struct	ChanType		ChanType;
@@ -213,11 +215,13 @@ struct FuncVal
 	void	(*fn)(void);
 	// variable-size, fn-specific data here
 };
+// Iface 与 Eface 有所不同, 前者表示包含方法的接口类型, 后者表示不包含方法的变量类型.
 struct Iface
 {
 	Itab*	tab;
 	void*	data;
 };
+// Eface 与 Iface 有所不同, 后者表示包含方法的接口类型, 前者表示不包含方法的变量类型.
 struct Eface
 {
 	Type*	type;
@@ -300,6 +304,7 @@ struct	G
 	// 用于存储当前 g 的执行现场数据.
 	// 包含所执行的函数的父级函数的信息(父级函数的pc(函数地址), sp(用于定位局部变量)等)
 	Gobuf	sched;
+
 	// 以下 syscallXXX 都只在 status == Gsyscall 状态下有效
 	// syscallstack = stackbase to use during gc
 	uintptr	syscallstack;
@@ -624,11 +629,14 @@ struct	Func
 // allocated in non-garbage-collected memory
 struct	Itab
 {
+	// 一般只有"接口(interface)"类型才需要该字段,
+	// inter 中存储着当前接口需要实现的方法, 是一个列表.
 	InterfaceType*	inter;
 	Type*	type;
 	Itab*	link;
 	int32	bad;
 	int32	unused;
+	// 当前接口所拥有的方法列表, 且是有序的,
 	void	(*fun[])(void);
 };
 
@@ -1241,11 +1249,11 @@ void	runtime·parfordo(ParFor *desc);
 /*
  * low level C-called
  */
+// 底层C调用, 即如下函数都是由汇编实现的
+//
 // for mmap, we only pass the lower 32 bits of file offset to the 
 // assembly routine; the higher bits (if required), 
 // should be provided by the assembly routine as 0.
-// 底层C调用
-// ...啥意思???
 uint8*	runtime·mmap(byte*, uintptr, int32, int32, int32, uint32);
 void	runtime·munmap(byte*, uintptr);
 void	runtime·madvise(byte*, uintptr, int32);
@@ -1279,6 +1287,7 @@ void	runtime·panicslice(void);
  * runtime c-called (but written in Go)
  */
 void	runtime·printany(Eface);
+// 函数定义在 src/pkg/runtime/error.go -> newTypeAssertionError()
 void	runtime·newTypeAssertionError(String*, String*, String*, String*, Eface*);
 void	runtime·newErrorString(String, Eface*);
 void	runtime·newErrorCString(int8*, Eface*);

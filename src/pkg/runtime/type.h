@@ -34,6 +34,9 @@ struct Type
 	// 3. [1]string
 	// ...等, 可以使用 %S 打印该字段
 	String *string;
+	// 一般只有 struct 类型才需要该字段(或是通过 type int NewInt 创建的别名类型),
+	// x中存储着当前类型实现的方法, 是一个列表, 且是有序的.
+	// 在 reflect 包中, Method(i) 函数查询的就是这个列表, i为该列表中的索引.
 	UncommonType *x;
 	Type *ptrto;
 };
@@ -48,6 +51,10 @@ struct Method
 	void (*tfn)(void);
 };
 
+// UncommonType 一般属于 struct 类型(或是通过 type int NewInt 创建的别名类型),
+// 这里存储着当前类型实现的方法, 是一个列表, 且是有序的.
+//
+// 见 src/pkg/reflect/type.go -> uncommonType{}, ta拥有一些属于自己的函数.
 struct UncommonType
 {
 	String *name;
@@ -56,6 +63,8 @@ struct UncommonType
 	Method m[];
 };
 
+// IMethod 是"接口(interface)类型"中的方法列表,
+// 与 Method{} 类型相比, 这里是只有声明没有实现的.
 struct IMethod
 {
 	String *name;
@@ -63,6 +72,8 @@ struct IMethod
 	Type *type;
 };
 
+// InterfaceType 一般只属于"接口(interface)"类型,
+// 这里存储着当前接口需要实现的方法, 是一个列表, 且是有序的.
 struct InterfaceType
 {
 	Type;

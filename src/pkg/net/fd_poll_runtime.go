@@ -27,6 +27,8 @@ type pollDesc struct {
 
 var serverInit sync.Once
 
+// caller:
+// 	1. src/pkg/net/fd_unix.go -> netFD.init()
 func (pd *pollDesc) Init(fd *netFD) error {
 	serverInit.Do(runtime_pollServerInit)
 	ctx, errno := runtime_pollOpen(uintptr(fd.sysfd))

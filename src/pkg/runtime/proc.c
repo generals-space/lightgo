@@ -84,14 +84,18 @@ struct Sched {
 	// 会有一个for无限循环, 判断 stopwait 是否等于0
 	Note	stopnote;
 	// sysmonwait 用于表示 sysmon 线程是否处于休眠状态.
-	// sysmon() 函数在监测到处于 gc 过程中, 或是所有 p 都空闲时, 会将自己挂起, 主动休眠.
-	// 直到有新的任务执行时, 才被唤醒.
+	//
+	// 只有 sysmon() 会将该字段设置为 1(true).
+	// 
+	// 在监测到处于 gc 过程中, 或是所有 p 都空闲时, 设置该值为 1, 
+	// 然后将自己挂起, 主动休眠. 直到有新的任务执行时, 才被唤醒.
 	uint32	sysmonwait;
 	Note	sysmonnote;
 	uint64	lastpoll; // 这个值是一个时间值, 纳秒nanotime()
 
-	// cpu profiling rate
 	// cpu数据采集的速率...hz是表示赫兹吗...
+	//
+	// cpu profiling rate
 	int32	profilehz;
 };
 
@@ -412,8 +416,7 @@ void runtime·tracebackothers(G *me)
 // caller:
 // 	1. mcommoninit()
 // 	2. runtime∕debug·setMaxThreads()
-static void
-checkmcount(void)
+static void checkmcount(void)
 {
 	// sched lock is held
 	if(runtime·sched.mcount > runtime·sched.maxmcount) {
@@ -428,8 +431,7 @@ checkmcount(void)
 // caller: 
 // 	1. runtime·schedinit() 进程启动, runtime 运行时初始化时被调用.
 // 	2. runtime·allocm()
-static void
-mcommoninit(M *mp)
+static void mcommoninit(M *mp)
 {
 	// If there is no mcache runtime·callers() will crash,
 	// and we are most likely in sysmon thread 
@@ -460,8 +462,7 @@ mcommoninit(M *mp)
 // 并将 gp 通过 runqput() 放到待执行队列中.
 //
 // Mark gp ready to run.
-void
-runtime·ready(G *gp)
+void runtime·ready(G *gp)
 {
 	// Mark runnable.
 	// disable preemption because it can be holding p in a local var
@@ -525,8 +526,7 @@ runtime·gcprocs(void)
 //
 // caller: 
 // 	1. runtime·starttheworld() 只有这一处
-static bool
-needaddgcproc(void)
+static bool needaddgcproc(void)
 {
 	int32 n;
 
@@ -550,16 +550,14 @@ needaddgcproc(void)
 
 // 从调度器中获取 nproc-1 个 m 对象, 为ta们分配 helpgc 的任务.
 //
-//
-// param nproc: 执行 gc 的协程数量.
+// 	@param nproc: 执行 gc 的协程数量.
 //
 // caller: 
 // 	1. mgc0.c -> gc() 只有这一处
 // 	当执行gc操作的协程数量大于1时调用此函数(此时处于 STW 阶段, 只有1个 M 在运行).
 // 	不过此时还没有开始, 要等 src/pkg/runtime/mgc0.c -> gchelperstart() 后,
 // 	才会正式执行 gc 任务.
-void
-runtime·helpgc(int32 nproc)
+void runtime·helpgc(int32 nproc)
 {
 	M *mp;
 	int32 n, pos;
@@ -595,8 +593,7 @@ runtime·helpgc(int32 nproc)
 // and can be called several times.
 // There is no reverse operation, used during crashing.
 // This function must not lock any mutexes.
-void
-runtime·freezetheworld(void)
+void runtime·freezetheworld(void)
 {
 	int32 i;
 
@@ -630,8 +627,7 @@ runtime·freezetheworld(void)
 // 	开始进行 gc 前, 先调用本函数进入 STW 阶段
 // 	2. src/pkg/runtime/mgc0.c -> runtime·ReadMemStats()
 // 	3. proc.c -> runtime·gomaxprocsfunc()
-void
-runtime·stoptheworld(void)
+void runtime·stoptheworld(void)
 {
 	int32 i;
 	uint32 s;
@@ -906,8 +902,7 @@ struct CgoThreadStart
 //
 // Allocate a new m unassociated with any thread.
 // Can use p for allocation context if needed.
-M*
-runtime·allocm(P *p)
+M* runtime·allocm(P *p)
 {
 	M *mp;
 	// The Go type M
@@ -994,8 +989,7 @@ static void unlockextra(M*);
 // When the callback is done with the m, it calls dropm to
 // put the m back on the list.
 #pragma textflag NOSPLIT
-void
-runtime·needm(byte x)
+void runtime·needm(byte x)
 {
 	M *mp;
 
@@ -1735,12 +1729,13 @@ resetspinning(void)
 		nmspinning = runtime·atomicload(&runtime·sched.nmspinning);
 	}
 
-	// M wakeup policy is deliberately somewhat conservative 
-	// (see nmspinning handling),
-	// so see if we need to wakeup another P here.
 	// m对象的wakeup策略是有意保守一些的,
 	// 所以这里需要确认是否有必要唤醒另一个p.
 	// ...啥意思???
+	//
+	// M wakeup policy is deliberately somewhat conservative 
+	// (see nmspinning handling),
+	// so see if we need to wakeup another P here.
 	if (nmspinning == 0 && runtime·atomicload(&runtime·sched.npidle) > 0) {
 		wakep();
 	}
@@ -1752,8 +1747,7 @@ resetspinning(void)
 //
 // Injects the list of runnable G's into the scheduler.
 // Can run concurrently with GC.
-static void
-injectglist(G *glist)
+static void injectglist(G *glist)
 {
 	int32 n;
 	G *gp;
@@ -2057,7 +2051,7 @@ goexit0(G *gp)
 // 设置当前 g 对象的 g->sched 信息, 即当前正在执行的函数的主调函数 pc 和 sp 等信息.
 //
 // caller: 
-// 	1. ·entersyscall() m 在执行 g 任务时, 陷入系统调用前会发所察觉, 调用此函数保存现场信息,
+// 	1. ·entersyscall() m 在执行 g 任务时, 陷入系统调用前会事先调用此函数保存现场信息,
 //     之后 m 会切换执行其他 g 任务(切换的是 p, 还是同一个 p 的其他本地任务).
 // 	2. ·entersyscallblock()
 //
@@ -2080,7 +2074,7 @@ static void save(void *pc, uintptr sp)
 // entersyscall 不能被分割栈, runtime·gosave() 必定会将
 // g->sched 赋值为调用方的栈段, 因为 entersyscall 将会马上返回.
 //
-// param dummy: 应该是主调函数的函数名称所在地址, 这是一个不确定的值.
+// 	@param dummy: 应该是主调函数的函数名称所在地址, 这是一个不确定的值.
 // 主要就设置了一个 p 的状态为 Psyscall, 解绑 m与p, 然后标记为当前 g 对象被抢占, 好像就没了?
 //
 // caller: 
@@ -2119,8 +2113,8 @@ void ·entersyscall(int32 dummy)
 	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
 
-	// 这里 if 语句的第一个条件是判断栈溢出的, 可参考 stack.c -> runtime·newstack() 
-	// 中的 overflow 检查.
+	// 这里 if 语句的第一个条件是判断栈溢出的, 可参考如下函数中的 overflow 检查:
+	// stack.c -> runtime·newstack() 
 	// 至于第二个条件, 由于 g->stackbase 本来就表示
 	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
@@ -2132,7 +2126,6 @@ void ·entersyscall(int32 dummy)
 	// 只有 sysmon() 这一个地方将 sysmonwait 设置为1, 
 	// 然后在 sysmonnote 陷入休眠(当没有任务需要监控的时候)
 	// 现在任务来了, 唤醒ta吧.
-	// ...sysmon 还能监控 syscall 的??? 没注意
 	if(runtime·atomicload(&runtime·sched.sysmonwait)) { 
 		runtime·lock(&runtime·sched);
 		if(runtime·atomicload(&runtime·sched.sysmonwait)) {
@@ -2144,9 +2137,9 @@ void ·entersyscall(int32 dummy)
 		save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 	}
 
-	// 这里的目的是? 
-	// 进入 syscall 应该是解绑m与g的关系吧, 解绑这俩做什么? 也没解绑 m->p 为 nil啊...
-	// 另外, 此时 m 的状态是?
+	// 这里 m 单方面解除了 p 与自己的绑定关系, 在系统调用期间, m->p 可能会被 sysmon 线程拿走.
+	// 但是 m 仍然保留了 p, 因为ta在 runtime·exitsyscall 中, 还"奢望"着自己从系统调用结束后,
+	// 还能继续使用这个 p.
 	m->mcache = nil;
 	m->p->m = nil;
 	runtime·atomicstore(&m->p->status, Psyscall);
@@ -2185,13 +2178,14 @@ void ·entersyscall(int32 dummy)
 	m->locks--;
 }
 
-// The same as runtime·entersyscall(), 
-// but with a hint that the syscall is blocking.
 // 与 runtime·entersyscall() 相同, 但这里的系统调用是阻塞的.
 // 没懂什么意思...??? handoff()这一行是阻塞的吗? 直到 syscall 完成?
 //
 // caller: 
 // 	1. lock_sema.c/lock_futex.c -> runtime·notetsleepg() 只有这一处.
+//
+// The same as runtime·entersyscall(), 
+// but with a hint that the syscall is blocking.
 #pragma textflag NOSPLIT
 void ·entersyscallblock(int32 dummy)
 {
@@ -2200,8 +2194,9 @@ void ·entersyscallblock(int32 dummy)
 	// see comment in entersyscall
 	m->locks++; 
 
-	// Leave SP around for GC and traceback.
 	// 保留SP用于GC和回溯
+	//
+	// Leave SP around for GC and traceback.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 
 	g->syscallsp = g->sched.sp;
@@ -2215,7 +2210,7 @@ void ·entersyscallblock(int32 dummy)
 		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscallblock");
 	}
-	// 直到这里, 仍与 ·entersyscall 保持一致, 区别在后半部分.
+	// 直到这里, 仍与 ·entersyscall 保持一致, 区别在下半部分.
 
 	p = releasep();
 	// 把 p 移交到新的 m
@@ -2223,7 +2218,7 @@ void ·entersyscallblock(int32 dummy)
 	// do not consider blocked scavenger for deadlock detection
 	if(g->isbackground) {
 		incidlelocked(1);
-	} 
+	}
 
 	// Resave for traceback during blocked call.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
@@ -2246,18 +2241,17 @@ void ·entersyscallblock(int32 dummy)
 // This is called only from the go syscall library, not
 // from the low-level system calls used by the runtime.
 #pragma textflag NOSPLIT
-void
-runtime·exitsyscall(void)
+void runtime·exitsyscall(void)
 {
 	m->locks++;  // see comment in entersyscall
 
 	// do not consider blocked scavenger for deadlock detection
 	if(g->isbackground) {
 		incidlelocked(-1);
-	} 
+	}
 
 	// exitsyscallfast 为 m 重新绑定 p 对象, 绑定成功则为true.
-	// 注意, 进入此if块后必定会 return
+	// 注意, 进入此 if 块后必定会 return
 	if(exitsyscallfast()) {
 		// There's a cpu for us, so we can run.
 		// 运行到这里, 表示 m 获取到了一个p(cpu)对象
@@ -2286,6 +2280,9 @@ runtime·exitsyscall(void)
 	m->locks--;
 
 	// 运行到这里, 说明当前 m 并没有成功绑定到一个p(毕竟 p 是有限且相对固定的)
+	// 自己没有 p 对象, 无法再继续 g 任务中系统调用之后的操作了.
+	// 但是 g 不能不运行, 于是将自己的 g 对象放回到全局队列, 自己则陷入休眠.
+	//
 	// Call the scheduler.
 	runtime·mcall(exitsyscall0);
 
@@ -2311,8 +2308,7 @@ runtime·exitsyscall(void)
 // 
 // return: 绑定成功返回true, 否则返回false.
 #pragma textflag NOSPLIT
-static bool
-exitsyscallfast(void)
+static bool exitsyscallfast(void)
 {
 	P *p;
 
@@ -2527,8 +2523,7 @@ G* runtime·malg(int32 stacksize)
 // they would not be copied if a stack split occurred. 
 // It's OK for this to call functions that split the stack. 这句啥意思???
 #pragma textflag NOSPLIT
-void
-runtime·newproc(int32 siz, FuncVal* fn, ...)
+void runtime·newproc(int32 siz, FuncVal* fn, ...)
 {
 	byte *argp;
 
@@ -3346,7 +3341,7 @@ checkdead(void)
 	runtime·throw("all goroutines are asleep - deadlock!");
 }
 
-// 监控线程.
+// 监控线程(无限循环, 直到进程结束).
 //
 // 1. 通过 netpoll 不断监测是否有 ready 的 g 对象, 如果有, 则将ta们放回到全局队列, 等待执行;
 // 2. 收回长时间处于 Psyscall 状态的 P
@@ -3358,8 +3353,7 @@ checkdead(void)
 // 	1. runtime·main() 在执行用户代码前, 启动独立线程执行此函数.
 //
 // 注意: 此函数并不是以 g 的形式执行(因此也不需要 p), 而是由 m 直接执行, 直接绑定一个系统线程.
-static void
-sysmon(void)
+static void sysmon(void)
 {
 	uint32 idle, delay;
 	int64 now, lastpoll, lasttrace;
@@ -3372,18 +3366,21 @@ sysmon(void)
 	// 无限循环, 无 break, 无 continue.
 	for(;;) {
 		if(idle == 0) {
-			// start with 20us sleep...
 			// 首次启动, 设置 delay 为 20
+			//
+			// start with 20us sleep...
 			delay = 20; 
 		} else if(idle > 50) {
-			// start doubling the sleep after 1ms...
 			// idle 每次循环就加1, 即 20us * 50 = 1ms 后,
 			// delay 的值每次循环就乘以2, 不过有上限
+			//
+			// start doubling the sleep after 1ms...
 			delay *= 2;
 		}
 
-		// up to 10ms
 		// delay 最大为 10ms
+		//
+		// up to 10ms
 		if(delay > 10*1000) {
 			delay = 10*1000;
 		} 
@@ -3423,13 +3420,21 @@ sysmon(void)
 				runtime·unlock(&runtime·sched);
 			}
 		}
-		// poll network if not polled for more than 10ms
+		////////////////////////////////////////////////////////////////////////
+		// 如下才是正式流程
+
 		// 如果距上次循环超过了 10ms
+		//
+		// poll network if not polled for more than 10ms
 		lastpoll = runtime·atomicload64(&runtime·sched.lastpoll);
 		now = runtime·nanotime();
 		// if 条件成立, 则表示到了下一次循环的时间了.
 		if(lastpoll != 0 && lastpoll + 10*1000*1000 < now) {
 			runtime·cas64(&runtime·sched.lastpoll, lastpoll, now);
+			// 非阻塞行为
+			// 看看是不是有陷入 recv/send 等网络系统调用的 g 任务, 已经因为网络IO事件而
+			// 被唤醒了, 获取ta们的信息, 并将他们放到任务队列, 继续执行.
+			//
 			// non-blocking
 			gp = runtime·netpoll(false); 
 			if(gp) {
@@ -3482,7 +3487,7 @@ static Pdesc pdesc[MaxGomaxprocs];
 // retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的 g 任务.
 // (防止某一个任务占用CPU太久影响其他任务的执行)
 //
-// 	param now: 为绝对时间 nanotime
+// 	@param now: 为绝对时间 nanotime
 //
 // 返回值 n 为
 // 注意对 running 状态的 p 的 g 任务的抢占并不计在 n 中, 因为抢占操作只是一个通知,
@@ -3490,8 +3495,7 @@ static Pdesc pdesc[MaxGomaxprocs];
 //
 // caller: 
 // 	1. sysmon() 只有这一处
-static uint32
-retake(int64 now)
+static uint32 retake(int64 now)
 {
 	uint32 i, s, n;
 	int64 t;
@@ -3578,8 +3582,7 @@ retake(int64 now)
 // It can fail to inform a goroutine if a processor just started running it.
 // No locks need to be held.
 // Returns true if preemption request was issued to at least one goroutine.
-static bool
-preemptall(void)
+static bool preemptall(void)
 {
 	P *p;
 	int32 i;
@@ -3623,8 +3626,7 @@ preemptall(void)
 // No lock needs to be held. 
 // Returns true if preemption request was issued.
 //
-static bool
-preemptone(P *p)
+static bool preemptone(P *p)
 {
 	M *mp;
 	G *gp;
@@ -3655,8 +3657,7 @@ preemptone(P *p)
 // caller:
 // 	1. sysmon()
 // 	2. src/pkg/runtime/panic.c -> runtime·startpanic()
-void
-runtime·schedtrace(bool detailed)
+void runtime·schedtrace(bool detailed)
 {
 	static int64 starttime;
 	int64 now;

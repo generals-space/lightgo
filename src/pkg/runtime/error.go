@@ -41,6 +41,11 @@ func (e *TypeAssertionError) Error() string {
 		": missing method " + e.missingMethod
 }
 
+// 被 c 代码当作 runtime·newTypeAssertionError() 函数调用.
+//
+// caller:
+// 	1. src/pkg/runtime/iface.c -> itab()
+//
 // For calling from C.
 func newTypeAssertionError(ps1, ps2, ps3 *string, pmeth *string, ret *interface{}) {
 	var s1, s2, s3, meth string

@@ -249,13 +249,16 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 // ns 纳秒时间长度
 // 在runtime.h底部介绍了 runtime·notetsleep() 与 runtime·notesleep() 相似
 // 但这两个明显实现方式不同...
-// caller: runtime·stoptheworld()
-bool
-runtime·notetsleep(Note *n, int64 ns)
+//
+// caller: 
+// 	1. runtime·stoptheworld()
+bool runtime·notetsleep(Note *n, int64 ns)
 {
 	bool res;
 	// g0是特殊的g对象, 在m中, g0可以拥有调度堆栈
-	if(g != m->g0 && !m->gcing) runtime·throw("notetsleep not on g0");
+	if(g != m->g0 && !m->gcing) {
+		runtime·throw("notetsleep not on g0");
+	}
 
 	res = notetsleep(n, ns, 0, 0);
 	return res;
@@ -263,12 +266,13 @@ runtime·notetsleep(Note *n, int64 ns)
 
 // same as runtime·notetsleep, but called on user g (not g0)
 // calls only nosplit functions between entersyscallblock/exitsyscall
-bool
-runtime·notetsleepg(Note *n, int64 ns)
+bool runtime·notetsleepg(Note *n, int64 ns)
 {
 	bool res;
 
-	if(g == m->g0) runtime·throw("notetsleepg on g0");
+	if(g == m->g0) {
+		runtime·throw("notetsleepg on g0");
+	}
 
 	runtime·entersyscallblock();
 	res = notetsleep(n, ns, 0, 0);

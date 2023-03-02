@@ -24,6 +24,8 @@ import (
 
 // Type 由 rtype{} 结构体实现
 //
+// reflect.Type 是一个接口, 而 reflect.Value 是一个结构体.
+//
 // Type is the representation of a Go type.
 //
 // Not all methods apply to all kinds of types. Restrictions,
@@ -89,6 +91,11 @@ type Type interface {
 	// Kind returns the specific kind of this type.
 	Kind() Kind
 
+	// Implements 判断当前类型 t 是否实现了目标接口 u
+	//
+	// 不管是接口类型还是普通实例类型, ta们拥有的方法(rtype.methods)都是经过字母排序的,
+	// 只要按顺序比较即可.
+	//
 	// Implements returns true if the type implements the interface type u.
 	Implements(u Type) bool
 
@@ -1132,10 +1139,17 @@ func fnv1(x uint32, list ...byte) uint32 {
 	return x
 }
 
+// Implements 判断当前类型 t 是否实现了目标接口 u
+//
+// 不管是接口类型还是普通实例类型, ta们拥有的方法(rtype.methods)都是经过字母排序的,
+// 只要按顺序比较即可.
+//
+// 	@param u: 必须是一个接口类型, 而非一个具体的变量/对象
 func (t *rtype) Implements(u Type) bool {
 	if u == nil {
 		panic("reflect: nil type passed to Type.Implements")
 	}
+	// u 必须是接口类型.
 	if u.Kind() != Interface {
 		panic("reflect: non-interface type passed to Type.Implements")
 	}
@@ -1158,16 +1172,25 @@ func (t *rtype) ConvertibleTo(u Type) bool {
 	return convertOp(uu, t) != nil
 }
 
+// Implements 判断普通变量/对象的类型 V 是否实现了目标接口类型 T.
+//
+// 不管是接口类型还是普通实例类型, ta们拥有的方法(rtype.methods)都是经过字母排序的,
+// 只要按顺序比较即可.
+//
 // implements returns true if the type V implements the interface type T.
 func implements(T, V *rtype) bool {
+	// T 必须是接口类型.
 	if T.Kind() != Interface {
 		return false
 	}
 	t := (*interfaceType)(unsafe.Pointer(T))
+	// 如果接口中不包含任何方法, 表示这是一个空接口, 任意类型都自动实现该接口, 直接返回 true.
 	if len(t.methods) == 0 {
 		return true
 	}
 
+	// 如果 V 也是接口类型
+	//
 	// The same algorithm applies in both cases, but the
 	// method tables for an interface type and a concrete type
 	// are different, so the code is duplicated.
@@ -1183,6 +1206,8 @@ func implements(T, V *rtype) bool {
 	if V.Kind() == Interface {
 		v := (*interfaceType)(unsafe.Pointer(V))
 		i := 0
+		// 不管是接口类型还是普通实例类型, ta们拥有的方法(rtype.methods)都是经过字母排序的,
+		// 只要按顺序比较即可.
 		for j := 0; j < len(v.methods); j++ {
 			tm := &t.methods[i]
 			vm := &v.methods[j]
@@ -1201,6 +1226,7 @@ func implements(T, V *rtype) bool {
 	}
 	i := 0
 	for j := 0; j < len(v.methods); j++ {
+		// 同上述的 for{} 循环.
 		tm := &t.methods[i]
 		vm := &v.methods[j]
 		if vm.name == tm.name && vm.pkgPath == tm.pkgPath && vm.mtyp == tm.typ {

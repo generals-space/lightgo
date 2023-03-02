@@ -1115,8 +1115,9 @@ idealkind(Node *n)
 	}
 }
 
-void
-defaultlit(Node **np, Type *t)
+// caller:
+// 	1. src/cmd/gc/typecheck.c -> typecheck1()
+void defaultlit(Node **np, Type *t)
 {
 	int lno;
 	int ctype;

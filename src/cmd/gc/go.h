@@ -114,6 +114,12 @@ struct	Mpcplx
 	Mpflt	imag;
 };
 
+// 一个 Node 对象中表示实际值的部分, 比如一个普通的整型值无法单独存在, 必须被包装成 Node 对象.
+// 而 Val 则表示该 Node 的数值信息.
+//
+// 可参考 src/cmd/gc/subr.c -> nodintconst(), nodxxx() 等函数,
+// 将常规的整型, 浮点型, 转换成 Node 对象的过程.
+// 一般用于为某些语句添加默认值, 如 make(map[xxx]xxx), 会生成值为 0 的 Node.
 typedef	struct	Val	Val;
 struct	Val
 {
@@ -122,7 +128,10 @@ struct	Val
 	{
 		short	reg;		// OREGISTER
 		short	bval;		// bool value CTBOOL
-		Mpint*	xval;		// int CTINT, rune CTRUNE
+		// 常规的整型数值
+		//
+		// int CTINT, rune CTRUNE
+		Mpint*	xval;
 		Mpflt*	fval;		// float CTFLT
 		Mpcplx*	cval;		// float CTCPLX
 		Strlit*	sval;		// string CTSTR
@@ -139,6 +148,9 @@ typedef	struct	Label	Label;
 
 struct	Type
 {
+	// etype 为实际表示变量类型的字段, 取值为当前源文件的 Txxx 枚举列表.
+	//
+	// 每个 etype 都有对应的字符串描述, 见 src/cmd/gc/typecheck.c -> typekind()
 	uchar	etype;
 	uchar	nointerface;
 	uchar	noalg;
@@ -158,6 +170,7 @@ struct	Type
 
 	Node*	nod;		// canonical OTYPE node
 	Type*	orig;		// original type (type literal or predefined type)
+	// type 对象自身的 lineno 没意义, 这里应该指的是当前 type 所属的 Node 对象的行号
 	int		lineno;
 
 	// TFUNC
@@ -177,15 +190,23 @@ struct	Type
 
 	// most nodes
 	Type*	type;   	// actual type for TFIELD, element type for TARRAY, TCHAN, TMAP, TPTRxx
-	vlong	width;  	// offset in TFIELD, width in all others
+	// 当前类型所占空间的大小, 单位为字节. 如 int8 的 width 为 1.
+	//
+	// offset in TFIELD, width in all others
+	vlong	width;
 
 	// TFIELD
+	// 当 etype == TFIELD, 
 	Type*	down;		// next struct field, also key type in TMAP
 	Type*	outer;		// outer struct
 	Strlit*	note;		// literal string annotation
 
 	// TARRAY
-	vlong	bound;		// negative is dynamic array
+	// 当 etype == TARRAY, 可以通过此字段区分其为动态数组(切片 slice)还是静态数组(array)
+	// bound < 0 时表示切片, >= 0 时表示静态数组.
+	//
+	// negative is dynamic array
+	vlong	bound;
 
 	// TMAP
 	Type*	bucket;		// internal type representing a hash bucket
@@ -199,6 +220,8 @@ struct	Type
 	
 	Node	*lastfn;	// for usefield
 };
+
+// T 是一个 Type* 类型的空指针, t == T 是一种判空的方式, 类似于 x == nil
 #define	T	((Type*)0)
 
 typedef struct InitEntry InitEntry;
@@ -234,6 +257,7 @@ enum
 	EscMask = (1<<EscBits) - 1,
 };
 
+// Node 在 src/cmd/gc/subr.c -> nod() 函数中初始化
 struct	Node
 {
 	// Tree structure.
@@ -294,6 +318,9 @@ struct	Node
 	NodeList*	inl;	// copy of the body for use in inlining
 	NodeList*	inldcl;	// copy of dcl for use in inlining
 
+	// 字面量, 比如一个变量的值(可以是整型, 浮点型等),
+	// 或是一个 make() 语句中, 表示 slice 的 len/cap 参数信息
+	//
 	// OLITERAL/OREGISTER
 	Val	val;
 
@@ -386,7 +413,10 @@ struct	Sym
 
 	// saved and restored by dcopy
 	Pkg*	pkg;
-	char*	name;		// variable name
+	// 变量名, 函数名等...
+	//
+	// variable name
+	char*	name;
 	Node*	def;		// definition: ONAME OTYPE OPACK or OLITERAL
 	Label*	label;	// corresponding label (ephemeral)
 	int32	block;		// blocknumber to catch redeclaration
@@ -467,7 +497,13 @@ enum
 	OCALLMETH,	// t.Method()
 	OCALLINTER,	// err.Error()
 	OCALLPART,	// t.Method (without ())
-	OCAP,	// cap
+	// golang原生: cap()函数
+	//
+	// cap, 即对切片/数组求 cap() 值的函数, 在编译期间就会特殊处理
+	OCAP,
+	// golang原生: close()函数
+	//
+	// close, 即对 channel 进行 close() 的函数, 在编译期间就会特殊处理
 	OCLOSE,	// close
 	OCLOSURE,	// f = func() { etc }
 	OCMPIFACE,	// err1 == err2
@@ -505,8 +541,15 @@ enum
 	OINDEXMAP,	// m[s]
 	OKEY,	// The x:3 in t{x:3, y:4}, the 1:2 in a[1:2], the 2:20 in [3]int{2:20}, etc.
 	OPARAM,	// The on-stack copy of a parameter or return value that escapes.
-	OLEN,	// len
-	OMAKE,	// make, typechecking may convert to a more specfic OMAKEXXX.
+	// golang原生: len()函数
+	//
+	// len, 即对切片/数组求 len() 值的函数, 在编译期间就会特殊处理
+	OLEN,
+	// make() 语句, 可以是 make slice, map 和 channel, 3种类型.
+	// 在做类型检查的时候, 需要将其继续细分为 OMAKESLICE, OMAKEMAP, OMAKECHAN.
+	//
+	// make, typechecking may convert to a more specfic OMAKEXXX.
+	OMAKE,
 	OMAKECHAN,	// make(chan int)
 	OMAKEMAP,	// make(map[string]int)
 	OMAKESLICE,	// make([]int, 0)
@@ -517,15 +560,19 @@ enum
 	ORSH,	// x >> u
 	OAND,	// x & y
 	OANDNOT,	// x &^ y
-	ONEW,	// new
+	// golang原生: new() 函数
+	ONEW,
 	ONOT,	// !b
 	OCOM,	// ^x
 	OPLUS,	// +x
 	OMINUS,	// -y
 	OOROR,	// b1 || b2
-	OPANIC,	// panic
-	OPRINT,	// print
-	OPRINTN,	// println
+	// golang原生: panic() 函数
+	OPANIC,
+	// golang原生: print() 函数
+	OPRINT,
+	// golang原生: println() 函数
+	OPRINTN,
 	OPAREN,	// (x)
 	OSEND,	// c <- x
 	OSLICE,	// v[1:2], typechecking may convert to a more specfic OSLICEXXX.
@@ -570,7 +617,9 @@ enum
 	OTSTRUCT,	// struct{}
 	OTINTER,	// interface{}
 	OTFUNC,	// func()
-	OTARRAY,	// []int, [8]int, [N]int or [...]int
+	// 切片类型
+	// []int, [8]int, [N]int or [...]int
+	OTARRAY,
 	OTPAREN,	// (T)
 
 	// misc
@@ -603,6 +652,7 @@ enum
 
 enum
 {
+	// 每个类型都有对应的字符串描述, 见 src/cmd/gc/typecheck.c -> typekind()的转换过程.
 	Txxx,			// 0
 
 	TINT8,	TUINT8,		// 1
@@ -622,6 +672,7 @@ enum
 	TPTR32, TPTR64,		// 17
 
 	TFUNC,			// 19
+	// 静态数组, 或动态数组(即切片)
 	TARRAY,
 	T_old_DARRAY,
 	TSTRUCT,		// 22
@@ -857,13 +908,17 @@ EXTERN	Dlist	dotlist[10];	// size is max depth of embeddeds
 EXTERN	Io	curio;
 EXTERN	Io	pushedio;
 EXTERN	int32	lexlineno;
+// 全局变量, 表示当前编译器的词法/语法分析到的 Node 对象所在的行号.
 EXTERN	int32	lineno;
 EXTERN	int32	prevlineno;
+// 全局变量, 表示当前正在进行词法/语法分析的源文件路径
 EXTERN	char*	pathname;
 EXTERN	Hist*	hist;
 EXTERN	Hist*	ehist;
 
+// 全局变量, 表示当前编译的源文件路径, 一般是 /xxx/main.go
 EXTERN	char*	infile;
+// 全局变量, 表示本次编译输出的文件路径, 一般为 main.6
 EXTERN	char*	outfile;
 EXTERN	Biobuf*	bout;
 EXTERN	int	nerrors;
@@ -900,12 +955,14 @@ EXTERN	char*	myimportpath;
 EXTERN	Idir*	idirs;
 EXTERN	char*	localimport;
 
+// 与 simtype 类型, 不过这里直接是 Type 数组, 每个成员都是一种类型的 Type 表示.
 EXTERN	Type*	types[NTYPE];
 EXTERN	Type*	idealstring;
 EXTERN	Type*	idealbool;
 EXTERN	Type*	bytetype;
 EXTERN	Type*	runetype;
 EXTERN	Type*	errortype;
+// simtype 数组中的成员都是 NTYPE 所在的枚举列表的成员类型
 EXTERN	uchar	simtype[NTYPE];
 EXTERN	uchar	isptr[NTYPE];
 EXTERN	uchar	isforw[NTYPE];

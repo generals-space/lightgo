@@ -53,8 +53,7 @@ static String end = { (uint8*)"end", 3 };
 //
 // caller: 
 // 	1. runtime·schedinit() 只有这一处调用
-void
-runtime·symtabinit(void)
+void runtime·symtabinit(void)
 {
 	int32 i, j;
 	Func *f1, *f2;

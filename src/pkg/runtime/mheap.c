@@ -646,8 +646,7 @@ static FuncVal forcegchelperv = {(void(*)(void))forcegchelper};
 // Release (part of) unused memory to OS.
 // Goroutine created at startup.
 // Loop forever.
-void
-runtime·MHeap_Scavenger(void)
+void runtime·MHeap_Scavenger(void)
 {
 	MHeap *h;
 	uint64 tick, now, forcegc, limit;

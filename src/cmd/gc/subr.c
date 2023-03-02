@@ -496,8 +496,8 @@ remal(void *p, int32 on, int32 n)
 	return p;
 }
 
-Node*
-nod(int op, Node *nleft, Node *nright)
+// nod 初始化一个空的 Node 对象
+Node* nod(int op, Node *nleft, Node *nright)
 {
 	Node *n;
 
@@ -669,8 +669,7 @@ algtype(Type *t)
 	return a;
 }
 
-Type*
-maptype(Type *key, Type *val)
+Type* maptype(Type *key, Type *val)
 {
 	Type *t;
 	Type *bad;
@@ -704,8 +703,10 @@ maptype(Type *key, Type *val)
 	return t;
 }
 
-Type*
-typ(int et)
+// 初始化一个 Type 对象, 其类型为 et.
+//
+// 	@param et: 取自 src/cmd/gc/go.h -> Txxx 所在的枚举列表中的值
+Type* typ(int et)
 {
 	Type *t;
 
@@ -717,12 +718,11 @@ typ(int et)
 	return t;
 }
 
-static int
-methcmp(const void *va, const void *vb)
+static int methcmp(const void *va, const void *vb)
 {
 	Type *a, *b;
 	int i;
-	
+
 	a = *(Type**)va;
 	b = *(Type**)vb;
 	if(a->sym == S && b->sym == S)
@@ -768,8 +768,15 @@ sortinter(Type *t)
 	return t;
 }
 
-Node*
-nodintconst(int64 v)
+// 将一个常规的整型数值, 包装成 Node 对象.
+//
+// 一般用于为某些语句添加默认值, 如 make(map[xxx]xxx), 会生成值为 0 的 Node.
+//
+// 下面还有几个相似的方法, 用于转换浮点型, nil等.
+//
+// caller:
+// 	1. src/cmd/gc/typecheck.c -> typecheck1()
+Node* nodintconst(int64 v)
 {
 	Node *c;
 
@@ -783,8 +790,7 @@ nodintconst(int64 v)
 	return c;
 }
 
-Node*
-nodfltconst(Mpflt* v)
+Node* nodfltconst(Mpflt* v)
 {
 	Node *c;
 
@@ -798,8 +804,7 @@ nodfltconst(Mpflt* v)
 	return c;
 }
 
-void
-nodconst(Node *n, Type *t, int64 v)
+void nodconst(Node *n, Type *t, int64 v)
 {
 	memset(n, 0, sizeof(*n));
 	n->op = OLITERAL;
@@ -810,12 +815,12 @@ nodconst(Node *n, Type *t, int64 v)
 	n->val.ctype = CTINT;
 	n->type = t;
 
-	if(isfloat[t->etype])
+	if(isfloat[t->etype]) {
 		fatal("nodconst: bad type %T", t);
+	}
 }
 
-Node*
-nodnil(void)
+Node* nodnil(void)
 {
 	Node *c;
 
@@ -935,20 +940,19 @@ isptrto(Type *t, int et)
 	return 1;
 }
 
-int
-istype(Type *t, int et)
+int istype(Type *t, int et)
 {
 	return t != T && t->etype == et;
 }
 
-int
-isfixedarray(Type *t)
+// 判断是否为"数组"类型, 区别于 slice 切片, 数组的长度是固定的.
+int isfixedarray(Type *t)
 {
 	return t != T && t->etype == TARRAY && t->bound >= 0;
 }
 
-int
-isslice(Type *t)
+// 判断是否为"切片"类型, 区别于 array 数组, 切片的长度是不固定的.
+int isslice(Type *t)
 {
 	return t != T && t->etype == TARRAY && t->bound < 0;
 }
@@ -1214,8 +1218,7 @@ eqtypenoname(Type *t1, Type *t2)
 // Is type src assignment compatible to type dst?
 // If so, return op code to use in conversion.
 // If not, return 0.
-int
-assignop(Type *src, Type *dst, char **why)
+int assignop(Type *src, Type *dst, char **why)
 {
 	Type *missing, *have;
 	int ptr;
@@ -1255,22 +1258,39 @@ assignop(Type *src, Type *dst, char **why)
 			return OCONVIFACE;
 
 		if(why != nil) {
-			if(isptrto(src, TINTER))
+			if(isptrto(src, TINTER)) {
 				*why = smprint(":\n\t%T is pointer to interface, not interface", src);
-			else if(have && have->sym == missing->sym)
-				*why = smprint(":\n\t%T does not implement %T (wrong type for %S method)\n"
+			}
+			else if(have && have->sym == missing->sym) {
+				*why = smprint(
+					":\n\t%T does not implement %T (wrong type for %S method)\n"
 					"\t\thave %S%hhT\n\t\twant %S%hhT", src, dst, missing->sym,
-					have->sym, have->type, missing->sym, missing->type);
-			else if(ptr)
-				*why = smprint(":\n\t%T does not implement %T (%S method has pointer receiver)",
-					src, dst, missing->sym);
-			else if(have)
-				*why = smprint(":\n\t%T does not implement %T (missing %S method)\n"
-					"\t\thave %S%hhT\n\t\twant %S%hhT", src, dst, missing->sym,
-					have->sym, have->type, missing->sym, missing->type);
-			else
-				*why = smprint(":\n\t%T does not implement %T (missing %S method)",
-					src, dst, missing->sym);
+					have->sym, have->type, missing->sym, missing->type
+				);
+			}
+			else if(ptr) {
+				*why = smprint(
+					":\n\t%T does not implement %T (%S method has pointer receiver)",
+					src, dst, missing->sym
+				);
+			}
+			else if(have) {
+				*why = smprint(
+					":\n\t%T does not implement %T (missing %S method)\n"
+					"\t\thave %S%hhT\n\t\twant %S%hhT", 
+					src, dst, missing->sym,
+					have->sym, have->type, missing->sym, missing->type
+				);
+			}
+			else {
+				// [anchor] 运行到该 if 块内的示例, 请见 014.interface 中的 func02() 函数.
+				//
+				// 这是个编译阶段的报错.
+				*why = smprint(
+					":\n\t%T does not implement %T (missing %S method)",
+					src, dst, missing->sym
+				);
+			}
 		}
 		return 0;
 	}

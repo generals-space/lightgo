@@ -406,7 +406,7 @@ int main(int argc, char *argv[])
 	defercheckwidth();
 	// xtop 由上面的 yyparse() 函数完成初始化.
 	for(l=xtop; l; l=l->next) {
-		// 对非初始化/赋值类型的变量声明语句, 进行类型检查.
+		// 对 const 常量, type struct xxx 类型别名, 以及函数名称和类型等语句, 进行类型检查.
 		if(l->n->op != ODCL && l->n->op != OAS) {
 			typecheck(&l->n, Etop);
 		}
