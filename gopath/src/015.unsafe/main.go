@@ -18,6 +18,11 @@ func main() {
         Gender: true,
         Title: "president",
     }
+    println(unsafe.Sizeof(p.Name)) // 16
+    println(unsafe.Sizeof(p.Age))  // 1
+    println(unsafe.Sizeof(p.Gender)) // 1
+    println(unsafe.Sizeof(p.Title)) // 16
+    println()
     println(unsafe.Offsetof(p.Name)) // 0
     println(unsafe.Offsetof(p.Age))  // 16
     println(unsafe.Offsetof(p.Gender)) // 17
