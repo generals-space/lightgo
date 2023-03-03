@@ -480,7 +480,9 @@ enum
 	OADDSTR,	// s + "foo"
 	OADDR,	// &x
 	OANDAND,	// b0 && b1
-	OAPPEND,	// append
+	// append()函数
+	// 
+	OAPPEND,
 	OARRAYBYTESTR,	// string(bytes)
 	OARRAYRUNESTR,	// string(runes)
 	OSTRARRAYBYTE,	// []byte(s)
@@ -497,14 +499,14 @@ enum
 	OCALLMETH,	// t.Method()
 	OCALLINTER,	// err.Error()
 	OCALLPART,	// t.Method (without ())
-	// golang原生: cap()函数
+	// cap()函数
 	//
 	// cap, 即对切片/数组求 cap() 值的函数, 在编译期间就会特殊处理
 	OCAP,
-	// golang原生: close()函数
+	// close()函数
 	//
 	// close, 即对 channel 进行 close() 的函数, 在编译期间就会特殊处理
-	OCLOSE,	// close
+	OCLOSE,
 	OCLOSURE,	// f = func() { etc }
 	OCMPIFACE,	// err1 == err2
 	OCMPSTR,	// s1 == s2
@@ -516,13 +518,15 @@ enum
 	OCONV,	// var i int; var u uint; i = int(u)
 	OCONVIFACE,	// I(t)
 	OCONVNOP,	// type Int int; var i int; var j Int; i = int(j)
-	OCOPY,	// copy
+	// copy()函数
+	OCOPY,
 	ODCL,	// var x int
 	ODCLFUNC,	// func f() or func (r) f()
 	ODCLFIELD,	// struct field, interface field, or func/method argument/return value.
 	ODCLCONST,	// const pi = 3.14
 	ODCLTYPE,	// type Int int
-	ODELETE,	// delete
+	// delete()函数
+	ODELETE,
 	ODOT,	// t.x
 	ODOTPTR,	// p.x that is implicitly (*p).x
 	ODOTMETH,	// t.Method
@@ -541,18 +545,29 @@ enum
 	OINDEXMAP,	// m[s]
 	OKEY,	// The x:3 in t{x:3, y:4}, the 1:2 in a[1:2], the 2:20 in [3]int{2:20}, etc.
 	OPARAM,	// The on-stack copy of a parameter or return value that escapes.
-	// golang原生: len()函数
+	// len()函数
 	//
 	// len, 即对切片/数组求 len() 值的函数, 在编译期间就会特殊处理
 	OLEN,
+	// make() 函数
+	// 	src/pkg/runtime/slice.c -> runtime·makeslice()
+	// 	src/pkg/runtime/chan.c -> runtime·makechan()
+	// 	src/pkg/runtime/hashmap.c -> runtime·makemap()
+	//
 	// make() 语句, 可以是 make slice, map 和 channel, 3种类型.
 	// 在做类型检查的时候, 需要将其继续细分为 OMAKESLICE, OMAKEMAP, OMAKECHAN.
 	//
 	// make, typechecking may convert to a more specfic OMAKEXXX.
 	OMAKE,
-	OMAKECHAN,	// make(chan int)
-	OMAKEMAP,	// make(map[string]int)
-	OMAKESLICE,	// make([]int, 0)
+	// make(chan int)
+	// 	src/pkg/runtime/chan.c -> runtime·makechan()
+	OMAKECHAN,
+	// make(map[string]int)
+	// 	src/pkg/runtime/hashmap.c -> runtime·makemap()
+	OMAKEMAP,
+	// make([]int, 0)
+	// 	src/pkg/runtime/slice.c -> runtime·makeslice()
+	OMAKESLICE,
 	OMUL,	// x * y
 	ODIV,	// x / y
 	OMOD,	// x % y
@@ -560,18 +575,18 @@ enum
 	ORSH,	// x >> u
 	OAND,	// x & y
 	OANDNOT,	// x &^ y
-	// golang原生: new() 函数
+	// new() 函数
 	ONEW,
 	ONOT,	// !b
 	OCOM,	// ^x
 	OPLUS,	// +x
 	OMINUS,	// -y
 	OOROR,	// b1 || b2
-	// golang原生: panic() 函数
+	// panic() 函数
 	OPANIC,
-	// golang原生: print() 函数
+	// print() 函数
 	OPRINT,
-	// golang原生: println() 函数
+	// println() 函数
 	OPRINTN,
 	OPAREN,	// (x)
 	OSEND,	// c <- x

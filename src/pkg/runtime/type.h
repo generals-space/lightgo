@@ -20,6 +20,7 @@ typedef struct PtrType PtrType;
 // Needs to be in sync with typekind.h/CommonSize
 struct Type
 {
+	// size 当前类型的大小, 比如 int 的大小为 8(单位为字节)
 	uintptr size;
 	uint32 hash;
 	uint8 _unused;

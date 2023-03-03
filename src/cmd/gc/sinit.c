@@ -819,8 +819,12 @@ slicelit(int ctxt, Node *n, Node *var, NodeList **init)
 	}
 }
 
-static void
-maplit(int ctxt, Node *n, Node *var, NodeList **init)
+// maplit lit -> literal 字面量, 即通过如下方式完成初始化(及赋值)
+// theMap := map[string]string{"key01": "val02"}
+//
+// caller:
+// 	1. anylit()
+static void maplit(int ctxt, Node *n, Node *var, NodeList **init)
 {
 	Node *r, *a;
 	NodeList *l;
@@ -845,13 +849,15 @@ ctxt = 0;
 	for(l=n->list; l; l=l->next) {
 		r = l->n;
 
-		if(r->op != OKEY)
+		if(r->op != OKEY) {
 			fatal("slicelit: rhs not OKEY: %N", r);
+		}
 		index = r->left;
 		value = r->right;
 
-		if(isliteral(index) && isliteral(value))
+		if(isliteral(index) && isliteral(value)) {
 			b++;
+		}
 	}
 
 	if(b != 0) {
@@ -889,8 +895,9 @@ ctxt = 0;
 		for(l=n->list; l; l=l->next) {
 			r = l->n;
 
-			if(r->op != OKEY)
+			if(r->op != OKEY) {
 				fatal("slicelit: rhs not OKEY: %N", r);
+			}
 			index = r->left;
 			value = r->right;
 
@@ -953,28 +960,31 @@ ctxt = 0;
 	for(l=n->list; l; l=l->next) {
 		r = l->n;
 
-		if(r->op != OKEY)
+		if(r->op != OKEY) {
 			fatal("slicelit: rhs not OKEY: %N", r);
+		}
 		index = r->left;
 		value = r->right;
 
-		if(isliteral(index) && isliteral(value))
+		if(isliteral(index) && isliteral(value)) {
 			continue;
+		}
 
 		// build list of var[c] = expr
 		a = nod(OINDEX, var, r->left);
 		a = nod(OAS, a, r->right);
 		typecheck(&a, Etop);
 		walkexpr(&a, init);
-		if(nerr != nerrors)
+		if(nerr != nerrors) {
 			break;
+		}
 
 		*init = list(*init, a);
 	}
 }
 
-void
-anylit(int ctxt, Node *n, Node *var, NodeList **init)
+// lit -> literal 字面量
+void anylit(int ctxt, Node *n, Node *var, NodeList **init)
 {
 	Type *t;
 	Node *a, *vstat, *r;
@@ -1041,15 +1051,15 @@ anylit(int ctxt, Node *n, Node *var, NodeList **init)
 		break;
 
 	case OARRAYLIT:
-		if(t->etype != TARRAY)
+		if(t->etype != TARRAY) {
 			fatal("anylit: not array");
+		}
 		if(t->bound < 0) {
 			slicelit(ctxt, n, var, init);
 			break;
 		}
 
 		if(simplename(var)) {
-
 			if(ctxt == 0) {
 				// lay out static data
 				vstat = staticname(t, ctxt);
@@ -1081,8 +1091,9 @@ anylit(int ctxt, Node *n, Node *var, NodeList **init)
 		break;
 
 	case OMAPLIT:
-		if(t->etype != TMAP)
+		if(t->etype != TMAP) {
 			fatal("anylit: not map");
+		}
 		maplit(ctxt, n, var, init);
 		break;
 	}
@@ -1116,8 +1127,9 @@ oaslit(Node *n, NodeList **init)
 	case OSTRUCTLIT:
 	case OARRAYLIT:
 	case OMAPLIT:
-		if(vmatch1(n->left, n->right))
+		if(vmatch1(n->left, n->right)) {
 			goto no;
+		}
 		anylit(ctxt, n->right, n->left, init);
 		break;
 	}
@@ -1129,21 +1141,21 @@ no:
 	return 0;
 }
 
-static int
-getlit(Node *lit)
+static int getlit(Node *lit)
 {
-	if(smallintconst(lit))
+	if(smallintconst(lit)) {
 		return mpgetfix(lit->val.u.xval);
+	}
 	return -1;
 }
 
-int
-stataddr(Node *nam, Node *n)
+int stataddr(Node *nam, Node *n)
 {
 	int l;
 
-	if(n == N)
+	if(n == N) {
 		goto no;
+	}
 
 	switch(n->op) {
 
@@ -1178,8 +1190,7 @@ no:
 	return 0;
 }
 
-int
-gen_as_init(Node *n)
+int gen_as_init(Node *n)
 {
 	Node *nr, *nl;
 	Node nam, nod1;
@@ -1301,15 +1312,15 @@ static int isvaluelit(Node*);
 static InitEntry* entry(InitPlan*);
 static void addvalue(InitPlan*, vlong, Node*, Node*);
 
-static void
-initplan(Node *n)
+static void initplan(Node *n)
 {
 	InitPlan *p;
 	Node *a;
 	NodeList *l;
 
-	if(n->initplan != nil)
+	if(n->initplan != nil) {
 		return;
+	}
 	p = mal(sizeof *p);
 	n->initplan = p;
 	switch(n->op) {
@@ -1318,8 +1329,9 @@ initplan(Node *n)
 	case OARRAYLIT:
 		for(l=n->list; l; l=l->next) {
 			a = l->n;
-			if(a->op != OKEY || !smallintconst(a->left))
+			if(a->op != OKEY || !smallintconst(a->left)) {
 				fatal("initplan arraylit");
+			}
 			addvalue(p, n->type->type->width*mpgetfix(a->left->val.u.xval), N, a->right);
 		}
 		break;
@@ -1334,16 +1346,16 @@ initplan(Node *n)
 	case OMAPLIT:
 		for(l=n->list; l; l=l->next) {
 			a = l->n;
-			if(a->op != OKEY)
+			if(a->op != OKEY) {
 				fatal("initplan maplit");
+			}
 			addvalue(p, -1, a->left, a->right);
 		}
 		break;
 	}
 }
 
-static void
-addvalue(InitPlan *p, vlong xoffset, Node *key, Node *n)
+static void addvalue(InitPlan *p, vlong xoffset, Node *key, Node *n)
 {
 	int i;
 	InitPlan *q;

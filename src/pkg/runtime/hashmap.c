@@ -106,25 +106,32 @@ struct Hmap
 	uintgo  count;
 	// 状态标识
 	uint32  flags;
-	// 由于计算 hash 值的 seed, 是一个随机整数.
+	// 用于计算 hash 值的 seed, 是一个随机整数, 在创建哈希表时确定.
 	// map 中存储的 key 都是以该值计算 hash 值的.
 	//
 	// hash seed
 	uint32  hash0;
-	uint8   B;            // log_2 of # of buckets (can hold up to LOAD * 2^B items)
+	// len(buckets) == bucketsize == 2^B
+	//
+	// ta能决定当前 map 中 bucket 的数量.
+	//
+	// log_2 of # of buckets (can hold up to LOAD * 2^B items)
+	uint8   B;
 	// 当前 map 对象 key 的大小, 一般为 string, int 这样的变量类型大小
 	//
 	// key size in bytes
 	uint8   keysize;
-	// 当前 map 对象 value 的大小, 与 key 相似, 同样是类型大小, 不过 value 还可能是 struct 类型.
+	// 当前 map 对象 value 的大小, 与 key 相似, 同样是类型大小,
+	// 不过 value 还可能是 struct 类型.
 	//
 	// value size in bytes
 	uint8   valuesize;
-	uint16  bucketsize;   // bucket size in bytes
+	// bucket size in bytes
+	uint16  bucketsize;
 
 	// buckets 是一个数组, 是真正存放 key/value 数据的地方.
 	//
-	// 其中每个 bucket 成员都存储着某一 hash 值的 k/v 对,
+	// 其中每个 bucket 成员都存储着某一 hash 值的一个或多个 k/v 对,
 	// map 操作中, 会先根据 hash0 成员与目标 key 生成一个 hash 值, 并根据这个 hash 值,
 	// 计算出 buckets 数组中的索引, 确定该 key 存放在哪一个 bucket 成员中.
 	//
@@ -136,8 +143,11 @@ struct Hmap
 	//
 	// array of 2^B Buckets. may be nil if count==0.
 	byte    *buckets;
-	byte    *oldbuckets;  // previous bucket array of half the size, non-nil only when growing
-	uintptr nevacuate;    // progress counter for evacuation (buckets less than this have been evacuated)
+	// previous bucket array of half the size, non-nil only when growing
+	byte    *oldbuckets;
+	// progress counter for evacuation
+	// (buckets less than this have been evacuated)
+	uintptr nevacuate;
 };
 
 // possible flags
@@ -155,13 +165,15 @@ enum
 
 enum
 {
-	docheck = 0,  // check invariants before and after every op.  Slow!!!
-	debug = 0,    // print every operation
-	checkgc = 0 || docheck,  // check interaction of mallocgc() with the garbage collector
+	// check invariants before and after every op.  Slow!!!
+	docheck = 0,
+	// print every operation
+	debug = 0,
+	// check interaction of mallocgc() with the garbage collector
+	checkgc = 0 || docheck,
 };
 
-static void
-check(MapType *t, Hmap *h)
+static void check(MapType *t, Hmap *h)
 {
 	uintptr bucket, oldbucket;
 	Bucket *b;
@@ -235,8 +247,7 @@ check(MapType *t, Hmap *h)
 // caller:
 // 	1. runtime·makemap_c() 只有这一处, 在使用 make() 创建 map 对象时被调用.
 //
-static void
-hash_init(MapType *t, Hmap *h, uint32 hint)
+static void hash_init(MapType *t, Hmap *h, uint32 hint)
 {
 	uint8 B;
 	byte *buckets;
@@ -258,23 +269,32 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 	}
 	bucketsize = offsetof(Bucket, data[0]) + (keysize + valuesize) * BUCKETSIZE;
 
-	// invariants we depend on.  We should probably check these at compile time
-	// somewhere, but for now we'll do it here.
-	if(t->key->align > BUCKETSIZE)
+	// invariants we depend on. 
+	// We should probably check these at compile time somewhere,
+	// but for now we'll do it here.
+	if(t->key->align > BUCKETSIZE) {
 		runtime·throw("key align too big");
-	if(t->elem->align > BUCKETSIZE)
+	}
+	if(t->elem->align > BUCKETSIZE) {
 		runtime·throw("value align too big");
-	if(t->key->size % t->key->align != 0)
+	}
+	if(t->key->size % t->key->align != 0) {
 		runtime·throw("key size not a multiple of key align");
-	if(t->elem->size % t->elem->align != 0)
+	}
+	if(t->elem->size % t->elem->align != 0) {
 		runtime·throw("value size not a multiple of value align");
-	if(BUCKETSIZE < 8)
+	}
+	if(BUCKETSIZE < 8) {
 		runtime·throw("bucketsize too small for proper alignment");
-	if(sizeof(void*) == 4 && t->key->align > 4)
+	}
+	if(sizeof(void*) == 4 && t->key->align > 4) {
 		runtime·throw("need padding in bucket (key)");
-	if(sizeof(void*) == 4 && t->elem->align > 4)
+	}
+	if(sizeof(void*) == 4 && t->elem->align > 4) {
 		runtime·throw("need padding in bucket (value)");
-
+	}
+	// 根据传入的 hint 计算出需要的最小需要的桶的数量
+	//
 	// find size parameter which will hold the requested # of elements
 	B = 0;
 	while(hint > BUCKETSIZE && hint > LOAD * ((uintptr)1 << B)) {
@@ -312,8 +332,7 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 // Moves entries in oldbuckets[i] to buckets[i] and buckets[i+2^k].
 // We leave the original bucket intact, except for the evacuated marks,
 // so that iterators can still iterate through the old buckets.
-static void
-evacuate(MapType *t, Hmap *h, uintptr oldbucket)
+static void evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 {
 	Bucket *b;
 	Bucket *nextb;
@@ -453,8 +472,7 @@ evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 		check(t, h);
 }
 
-static void
-grow_work(MapType *t, Hmap *h, uintptr bucket)
+static void grow_work(MapType *t, Hmap *h, uintptr bucket)
 {
 	uintptr noldbuckets;
 
@@ -469,8 +487,7 @@ grow_work(MapType *t, Hmap *h, uintptr bucket)
 		evacuate(t, h, h->nevacuate);
 }
 
-static void
-hash_grow(MapType *t, Hmap *h)
+static void hash_grow(MapType *t, Hmap *h)
 {
 	byte *old_buckets;
 	byte *new_buckets;
@@ -480,7 +497,8 @@ hash_grow(MapType *t, Hmap *h)
 	if(h->oldbuckets != nil)
 		runtime·throw("evacuation not done in time");
 	old_buckets = h->buckets;
-	// NOTE: this could be a big malloc, but since we don't need zeroing it is probably fast.
+	// NOTE: this could be a big malloc,
+	// but since we don't need zeroing it is probably fast.
 	if(checkgc) mstats.next_gc = mstats.heap_alloc;
 	new_buckets = runtime·cnewarray(t->bucket, (uintptr)1 << (h->B + 1));
 	flags = (h->flags & ~(Iterator | OldIterator));
@@ -502,8 +520,7 @@ hash_grow(MapType *t, Hmap *h)
 
 // returns ptr to value associated with key *keyp, or nil if none.
 // if it returns non-nil, updates *keyp to point to the currently stored key.
-static byte*
-hash_lookup(MapType *t, Hmap *h, byte **keyp)
+static byte* hash_lookup(MapType *t, Hmap *h, byte **keyp)
 {
 	void *key;
 	uintptr hash;
@@ -629,8 +646,7 @@ static uint8 empty_value[MAXVALUESIZE];
 //
 // caller:
 // 	1. runtime·mapassign() 只有这一处
-static void
-hash_insert(MapType *t, Hmap *h, void *key, void *value)
+static void hash_insert(MapType *t, Hmap *h, void *key, void *value)
 {
 	uintptr hash;
 	uintptr bucket;
@@ -756,8 +772,7 @@ again:
 	}
 }
 
-static void
-hash_remove(MapType *t, Hmap *h, void *key)
+static void hash_remove(MapType *t, Hmap *h, void *key)
 {
 	uintptr hash;
 	uintptr bucket;
@@ -849,13 +864,13 @@ struct hash_iter
 // bucket: the current bucket ID
 // b: the current Bucket in the chain
 // i: the next offset to check in the current bucket
-static void
-hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
+static void hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 {
 	uint32 old;
 
 	if(sizeof(struct hash_iter) / sizeof(uintptr) != 11) {
-		runtime·throw("hash_iter size incorrect"); // see ../../cmd/gc/range.c
+		// see ../../cmd/gc/range.c
+		runtime·throw("hash_iter size incorrect"); 
 	}
 	it->t = t;
 	it->h = h;
@@ -890,8 +905,7 @@ hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 
 // initializes it->key and it->value to the next key/value pair
 // in the iteration, or nil if we've reached the end.
-static void
-hash_next(struct hash_iter *it)
+static void hash_next(struct hash_iter *it)
 {
 	Hmap *h;
 	MapType *t;
@@ -1018,8 +1032,7 @@ next:
 /// interfaces to go runtime
 //
 
-void
-reflect·ismapkey(Type *typ, bool ret)
+void reflect·ismapkey(Type *typ, bool ret)
 {
 	ret = typ != nil && typ->alg->hash != runtime·nohash;
 	FLUSH(&ret);
@@ -1028,8 +1041,10 @@ reflect·ismapkey(Type *typ, bool ret)
 // runtime·makemap_c ...
 //
 // 	@param hint: make(map[string]string, hint)的第2个参数, 表示该 map 对象的容量
-Hmap*
-runtime·makemap_c(MapType *typ, int64 hint)
+//
+// caller:
+// 	1. runtime·makemap()
+Hmap* runtime·makemap_c(MapType *typ, int64 hint)
 {
 	Hmap *h;
 	Type *key;
@@ -1069,8 +1084,7 @@ runtime·makemap_c(MapType *typ, int64 hint)
 // 	@param hint: make(map[string]string, hint)的第2个参数, 表示 map 对象的容量
 //
 // makemap(key, val *Type, hint int64) (hmap *map[any]any);
-void
-runtime·makemap(MapType *typ, int64 hint, Hmap *ret)
+void runtime·makemap(MapType *typ, int64 hint, Hmap *ret)
 {
 	ret = runtime·makemap_c(typ, hint);
 	FLUSH(&ret);
@@ -1087,8 +1101,7 @@ reflect·makemap(MapType *t, Hmap *ret)
 
 // 这里不是获取 map 中某个 key 的操作, 真正的 get 函数在
 // src/pkg/runtime/hashmap_fast.c -> HASH_LOOKUP1()
-void
-runtime·mapaccess(MapType *t, Hmap *h, byte *ak, byte *av, bool *pres)
+void runtime·mapaccess(MapType *t, Hmap *h, byte *ak, byte *av, bool *pres)
 {
 	byte *res;
 	Type *elem;
@@ -1111,10 +1124,11 @@ runtime·mapaccess(MapType *t, Hmap *h, byte *ak, byte *av, bool *pres)
 	}
 }
 
+// v := map[key], 区别于 runtime·mapaccess2
+//
 // mapaccess1(hmap *map[any]any, key any) (val any);
 #pragma textflag NOSPLIT
-void
-runtime·mapaccess1(MapType *t, Hmap *h, ...)
+void runtime·mapaccess1(MapType *t, Hmap *h, ...)
 {
 	byte *ak, *av;
 	byte *res;
@@ -1144,10 +1158,11 @@ runtime·mapaccess1(MapType *t, Hmap *h, ...)
 	}
 }
 
+// v, ok := map[key], 区别于 runtime·mapaccess1
+//
 // mapaccess2(hmap *map[any]any, key any) (val any, pres bool);
 #pragma textflag NOSPLIT
-void
-runtime·mapaccess2(MapType *t, Hmap *h, ...)
+void runtime·mapaccess2(MapType *t, Hmap *h, ...)
 {
 	byte *ak, *av, *ap;
 
@@ -1177,8 +1192,7 @@ runtime·mapaccess2(MapType *t, Hmap *h, ...)
 //	func mapaccess(t type, h map, key iword) (val iword, pres bool)
 // where an iword is the same word an interface value would use:
 // the actual data if it fits, or else a pointer to the data.
-void
-reflect·mapaccess(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
+void reflect·mapaccess(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
 {
 	byte *ak, *av;
 
@@ -1207,8 +1221,7 @@ reflect·mapaccess(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
 // 	@param h: 目标 map 的存储地址
 // 	@param ak: arguement key, set map 时, key 的名称(的地址)
 // 	@param av: arguement value, set map 时, value 的值(的地址)
-void
-runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
+void runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
 {
 	if(h == nil) {
 		runtime·panicstring("assignment to entry in nil map");
@@ -1241,8 +1254,7 @@ runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
 //
 // mapassign1(mapType *type, hmap *map[any]any, key any, val any);
 #pragma textflag NOSPLIT
-void
-runtime·mapassign1(MapType *t, Hmap *h, ...)
+void runtime·mapassign1(MapType *t, Hmap *h, ...)
 {
 	byte *ak, *av;
 
@@ -1264,8 +1276,7 @@ runtime·mapassign1(MapType *t, Hmap *h, ...)
 
 // mapdelete(mapType *type, hmap *map[any]any, key any)
 #pragma textflag NOSPLIT
-void
-runtime·mapdelete(MapType *t, Hmap *h, ...)
+void runtime·mapdelete(MapType *t, Hmap *h, ...)
 {
 	byte *ak;
 
@@ -1292,8 +1303,7 @@ runtime·mapdelete(MapType *t, Hmap *h, ...)
 //	func mapassign(t type h map, key, val iword, pres bool)
 // where an iword is the same word an interface value would use:
 // the actual data if it fits, or else a pointer to the data.
-void
-reflect·mapassign(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
+void reflect·mapassign(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
 {
 	byte *ak, *av;
 
@@ -1315,8 +1325,7 @@ reflect·mapassign(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres)
 }
 
 // mapiterinit(mapType *type, hmap *map[any]any, hiter *any);
-void
-runtime·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
+void runtime·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
 {
 	if(h == nil || h->count == 0) {
 		it->key = nil;
@@ -1339,8 +1348,7 @@ runtime·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
 
 // For reflect:
 //	func mapiterinit(h map) (it iter)
-void
-reflect·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
+void reflect·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
 {
 	it = runtime·mal(sizeof *it);
 	FLUSH(&it);
@@ -1348,8 +1356,7 @@ reflect·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
 }
 
 // mapiternext(hiter *any);
-void
-runtime·mapiternext(struct hash_iter *it)
+void runtime·mapiternext(struct hash_iter *it)
 {
 	if(raceenabled) {
 		runtime·racereadpc(it->h, runtime·getcallerpc(&it), runtime·mapiternext);
@@ -1367,16 +1374,14 @@ runtime·mapiternext(struct hash_iter *it)
 
 // For reflect:
 //	func mapiternext(it iter)
-void
-reflect·mapiternext(struct hash_iter *it)
+void reflect·mapiternext(struct hash_iter *it)
 {
 	runtime·mapiternext(it);
 }
 
 // mapiter1(hiter *any) (key any);
 #pragma textflag NOSPLIT
-void
-runtime·mapiter1(struct hash_iter *it, ...)
+void runtime·mapiter1(struct hash_iter *it, ...)
 {
 	byte *ak, *res;
 	Type *key;
@@ -1400,8 +1405,7 @@ runtime·mapiter1(struct hash_iter *it, ...)
 	}
 }
 
-bool
-runtime·mapiterkey(struct hash_iter *it, void *ak)
+bool runtime·mapiterkey(struct hash_iter *it, void *ak)
 {
 	byte *res;
 	Type *key;
@@ -1418,8 +1422,7 @@ runtime·mapiterkey(struct hash_iter *it, void *ak)
 //	func mapiterkey(h map) (key iword, ok bool)
 // where an iword is the same word an interface value would use:
 // the actual data if it fits, or else a pointer to the data.
-void
-reflect·mapiterkey(struct hash_iter *it, uintptr key, bool ok)
+void reflect·mapiterkey(struct hash_iter *it, uintptr key, bool ok)
 {
 	byte *res;
 	Type *tkey;
@@ -1442,11 +1445,11 @@ reflect·mapiterkey(struct hash_iter *it, uintptr key, bool ok)
 // For reflect:
 //	func maplen(h map) (len int)
 // Like len(m) in the actual language, we treat the nil map as length 0.
-void
-reflect·maplen(Hmap *h, intgo len)
+void reflect·maplen(Hmap *h, intgo len)
 {
-	if(h == nil)
+	if(h == nil) {
 		len = 0;
+	}
 	else {
 		len = h->count;
 		if(raceenabled)
@@ -1457,8 +1460,7 @@ reflect·maplen(Hmap *h, intgo len)
 
 // mapiter2(hiter *any) (key any, val any);
 #pragma textflag NOSPLIT
-void
-runtime·mapiter2(struct hash_iter *it, ...)
+void runtime·mapiter2(struct hash_iter *it, ...)
 {
 	byte *ak, *av, *res;
 	MapType *t;

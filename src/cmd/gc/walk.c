@@ -30,8 +30,7 @@ static	void	walkdiv(Node**, NodeList**);
 static	int	bounded(Node*, int64);
 static	Mpint	mpzero;
 
-void
-walk(Node *fn)
+void walk(Node *fn)
 {
 	char s[50];
 	NodeList *l;
@@ -47,7 +46,8 @@ walk(Node *fn)
 	lno = lineno;
 
 	// Final typecheck for any unused variables.
-	// It's hard to be on the heap when not-used, but best to be consistent about &~PHEAP here and below.
+	// It's hard to be on the heap when not-used,
+	// but best to be consistent about &~PHEAP here and below.
 	for(l=fn->dcl; l; l=l->next)
 		if(l->n->op == ONAME && (l->n->class&~PHEAP) == PAUTO)
 			typecheck(&l->n, Erv | Easgn);
@@ -61,8 +61,9 @@ walk(Node *fn)
 		if(l->n->op != ONAME || (l->n->class&~PHEAP) != PAUTO || l->n->sym->name[0] == '&' || l->n->used)
 			continue;
 		if(l->n->defn && l->n->defn->op == OTYPESW) {
-			if(l->n->defn->left->used)
+			if(l->n->defn->left->used) {
 				continue;
+			}
 			lineno = l->n->defn->left->lineno;
 			yyerror("%S declared and not used", l->n->sym);
 			l->n->defn->left->used = 1; // suppress repeats
@@ -73,8 +74,9 @@ walk(Node *fn)
 	}	
 
 	lineno = lno;
-	if(nerrors != 0)
+	if(nerrors != 0) {
 		return;
+	}
 	walkstmtlist(curfn->nbody);
 	if(debug['W']) {
 		snprint(s, sizeof(s), "after walk %S", curfn->nname->sym);
@@ -87,16 +89,14 @@ walk(Node *fn)
 	}
 }
 
-
-void
-walkstmtlist(NodeList *l)
+void walkstmtlist(NodeList *l)
 {
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		walkstmt(&l->n);
+	}
 }
 
-static int
-samelist(NodeList *a, NodeList *b)
+static int samelist(NodeList *a, NodeList *b)
 {
 	for(; a && b; a=a->next, b=b->next)
 		if(a->n != b->n)
@@ -104,8 +104,7 @@ samelist(NodeList *a, NodeList *b)
 	return a == b;
 }
 
-static int
-paramoutheap(Node *fn)
+static int paramoutheap(Node *fn)
 {
 	NodeList *l;
 
@@ -123,8 +122,7 @@ paramoutheap(Node *fn)
 	return 0;
 }
 
-void
-walkstmt(Node **np)
+void walkstmt(Node **np)
 {
 	NodeList *init;
 	NodeList *ll, *rl;
@@ -311,7 +309,6 @@ walkstmt(Node **np)
 	
 	*np = n;
 }
-
 
 /*
  * walk the whole tree of the body of an
@@ -659,7 +656,8 @@ walkexpr(Node **np, NodeList **init)
 		walkexpr(&r->left, init);
 		t = r->left->type;
 		p = nil;
-		if(t->type->width <= 128) { // Check ../../pkg/runtime/hashmap.c:MAXVALUESIZE before changing.
+		// Check ../../pkg/runtime/hashmap.c:MAXVALUESIZE before changing.
+		if(t->type->width <= 128) { 
 			switch(simsimtype(t->down)) {
 			case TINT32:
 			case TUINT32:
@@ -1114,7 +1112,8 @@ walkexpr(Node **np, NodeList **init)
 
 		walkexpr(&n->left, init);
 		// cgen_slice can't handle string literals as source
-		// TODO the OINDEX case is a bug elsewhere that needs to be traced.  it causes a crash on ([2][]int{ ... })[1][lo:hi]
+		// TODO the OINDEX case is a bug elsewhere that needs to be traced. 
+		// it causes a crash on ([2][]int{ ... })[1][lo:hi]
 		if((n->op == OSLICESTR && n->left->op == OLITERAL) || (n->left->op == OINDEX))
 			n->left = copyexpr(n->left, n->left->type, init);
 		else
@@ -1132,8 +1131,10 @@ walkexpr(Node **np, NodeList **init)
 			goto ret;
 
 		walkexpr(&n->left, init);
-		// TODO the OINDEX case is a bug elsewhere that needs to be traced.  it causes a crash on ([2][]int{ ... })[1][lo:hi]
-		// TODO the comment on the previous line was copied from case OSLICE. it might not even be true.
+		// TODO the OINDEX case is a bug elsewhere that needs to be traced. 
+		// it causes a crash on ([2][]int{ ... })[1][lo:hi]
+		// TODO the comment on the previous line was copied from case OSLICE.
+		// it might not even be true.
 		if(n->left->op == OINDEX)
 			n->left = copyexpr(n->left, n->left->type, init);
 		else
@@ -1231,23 +1232,29 @@ walkexpr(Node **np, NodeList **init)
 		goto ret;
 	
 	case OAPPEND:
-		if(n->isddd)
-			n = appendslice(n, init); // also works for append(slice, string).
-		else
+		if(n->isddd) {
+			// also works for append(slice, string).
+			n = appendslice(n, init); 
+		}
+		else {
 			n = append(n, init);
+		}
 		goto ret;
 
 	case OCOPY:
 		if(flag_race) {
-			if(n->right->type->etype == TSTRING)
+			if(n->right->type->etype == TSTRING) {
 				fn = syslook("slicestringcopy", 1);
-			else
+			}
+			else {
 				fn = syslook("copy", 1);
+			}
 			argtype(fn, n->left->type);
 			argtype(fn, n->right->type);
-			n = mkcall1(fn, n->type, init,
-					n->left, n->right,
-					nodintconst(n->left->type->type->width));
+			n = mkcall1(
+				fn, n->type, init, n->left, n->right,
+				nodintconst(n->left->type->type->width)
+			);
 			goto ret;
 		}
 		n = copyany(n, init);
@@ -1450,7 +1457,10 @@ ascompatee(int op, NodeList *nl, NodeList *nr, NodeList **init)
 
 	// cannot happen: caller checked that lists had same length
 	if(ll || lr)
-		yyerror("error in shape across %+H %O %+H / %d %d [%s]", nl, op, nr, count(nl), count(nr), curfn->nname->sym->name);
+		yyerror(
+			"error in shape across %+H %O %+H / %d %d [%s]", 
+			nl, op, nr, count(nl), count(nr), curfn->nname->sym->name
+		);
 	return nn;
 }
 
@@ -1522,11 +1532,14 @@ ascompatet(int op, NodeList *nl, Type **nr, int fp, NodeList **init)
 	}
 
 	if(ll != nil || r != T)
-		yyerror("ascompatet: assignment count mismatch: %d = %d",
-			count(nl), structcount(*nr));
+		yyerror(
+			"ascompatet: assignment count mismatch: %d = %d",
+			count(nl), structcount(*nr)
+		);
 
-	if(ucount)
+	if(ucount) {
 		fatal("ascompatet: too many function calls evaluating parameters");
+	}
 	return concat(nn, mm);
 }
 
@@ -1564,8 +1577,7 @@ mkdotargslice(NodeList *lr0, NodeList *nn, Type *l, int fp, NodeList **init, int
 /*
  * helpers for shape errors
  */
-static char*
-dumptypes(Type **nl, char *what)
+static char* dumptypes(Type **nl, char *what)
 {
 	int first;
 	Type *l;
@@ -2541,8 +2553,7 @@ addstr(Node *n, NodeList **init)
 //   s
 //
 // l2 is allowed to be a string.
-static Node*
-appendslice(Node *n, NodeList **init)
+static Node* appendslice(Node *n, NodeList **init)
 {
 	NodeList *l;
 	Node *l1, *l2, *nt, *nif, *fn;
@@ -2554,8 +2565,9 @@ appendslice(Node *n, NodeList **init)
 	// walkexprlistsafe will leave OINDEX (s[n]) alone if both s
 	// and n are name or literal, but those may index the slice we're
 	// modifying here.  Fix explicitly.
-	for(l=n->list; l; l=l->next)
+	for(l=n->list; l; l=l->next) {
 		l->n = cheapexpr(l->n, init);
+	}
 
 	l1 = n->list->n;
 	l2 = n->list->next->n;
@@ -2644,8 +2656,7 @@ appendslice(Node *n, NodeList **init)
 //     ...
 //   }
 //   s
-static Node*
-append(Node *n, NodeList **init)
+static Node* append(Node *n, NodeList **init)
 {
 	NodeList *l, *a;
 	Node *nsrc, *ns, *nn, *na, *nx, *fn;
@@ -2656,8 +2667,9 @@ append(Node *n, NodeList **init)
 	// walkexprlistsafe will leave OINDEX (s[n]) alone if both s
 	// and n are name or literal, but those may index the slice we're
 	// modifying here.  Fix explicitly.
-	for(l=n->list; l; l=l->next)
+	for(l=n->list; l; l=l->next) {
 		l->n = cheapexpr(l->n, init);
+	}
 
 	nsrc = n->list->n;
 	argc = count(n->list) - 1;
@@ -2716,8 +2728,7 @@ append(Node *n, NodeList **init)
 //
 // Also works if b is a string.
 //
-static Node*
-copyany(Node *n, NodeList **init)
+static Node* copyany(Node *n, NodeList **init)
 {
 	Node *nl, *nr, *nfrm, *nto, *nif, *nlen, *nwid, *fn;
 	NodeList *l;
@@ -2760,8 +2771,7 @@ copyany(Node *n, NodeList **init)
 
 // Generate frontend part for OSLICE[3][ARR|STR]
 // 
-static	Node*
-sliceany(Node* n, NodeList **init)
+static	Node* sliceany(Node* n, NodeList **init)
 {
 	int bounded, slice3;
 	Node *src, *lb, *hb, *cb, *bound, *chk, *chk0, *chk1, *chk2;
@@ -2944,8 +2954,7 @@ sliceany(Node* n, NodeList **init)
 	return n;
 }
 
-static Node*
-eqfor(Type *t)
+static Node* eqfor(Type *t)
 {
 	int a;
 	Node *n;
@@ -2980,20 +2989,19 @@ eqfor(Type *t)
 	return n;
 }
 
-static int
-countfield(Type *t)
+static int countfield(Type *t)
 {
 	Type *t1;
 	int n;
 	
 	n = 0;
-	for(t1=t->type; t1!=T; t1=t1->down)
+	for(t1=t->type; t1!=T; t1=t1->down) {
 		n++;
+	}
 	return n;
 }
 
-static void
-walkcompare(Node **np, NodeList **init)
+static void walkcompare(Node **np, NodeList **init)
 {
 	Node *n, *l, *r, *fn, *call, *a, *li, *ri, *expr;
 	int andor, i;
@@ -3139,8 +3147,7 @@ hard:
 	return;
 }
 
-static int
-samecheap(Node *a, Node *b)
+static int samecheap(Node *a, Node *b)
 {
 	Node *ar, *br;
 	while(a != N && b != N && a->op == b->op) {
@@ -3169,8 +3176,7 @@ samecheap(Node *a, Node *b)
 	return 0;
 }
 
-static void
-walkrotate(Node **np)
+static void walkrotate(Node **np)
 {
 	int w, sl, sr, s;
 	Node *l, *r;
@@ -3231,8 +3237,9 @@ walkmul(Node **np, NodeList **init)
 	int pow, neg, w;
 	
 	n = *np;
-	if(!isint[n->type->etype])
+	if(!isint[n->type->etype]) {
 		return;
+	}
 
 	if(n->right->op == OLITERAL) {
 		nl = n->left;
@@ -3240,8 +3247,9 @@ walkmul(Node **np, NodeList **init)
 	} else if(n->left->op == OLITERAL) {
 		nl = n->right;
 		nr = n->left;
-	} else
+	} else {
 		return;
+	}
 
 	neg = 0;
 
@@ -3254,8 +3262,9 @@ walkmul(Node **np, NodeList **init)
 
 	// nr is a constant.
 	pow = powtwo(nr);
-	if(pow < 0)
+	if(pow < 0) {
 		return;
+	}
 	if(pow >= 1000) {
 		// negative power of 2, like -16
 		neg = 1;
@@ -3289,8 +3298,7 @@ ret:
  * walkdiv rewrites division by a constant as less expensive
  * operations.
  */
-static void
-walkdiv(Node **np, NodeList **init)
+static void walkdiv(Node **np, NodeList **init)
 {
 	Node *n, *nl, *nr, *nc;
 	Node *n1, *n2, *n3, *n4;
@@ -3528,8 +3536,7 @@ ret:
 }
 
 // return 1 if integer n must be in range [0, max), 0 otherwise
-static int
-bounded(Node *n, int64 max)
+static int bounded(Node *n, int64 max)
 {
 	int64 v;
 	int32 bits;

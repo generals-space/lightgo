@@ -879,38 +879,58 @@ reswitch:
 		case TSTRING:
 		case TARRAY:
 			indexlit(&n->right);
-			if(t->etype == TSTRING)
+			if(t->etype == TSTRING) {
 				n->type = types[TUINT8];
-			else
+			}
+			else {
 				n->type = t->type;
+			}
 			why = "string";
 			if(t->etype == TARRAY) {
-				if(isfixedarray(t))
+				if(isfixedarray(t)) {
 					why = "array";
-				else
+				}
+				else {
 					why = "slice";
+				}
 			}
+			// 数组/切片/字符串的索引, 必须是整型数值, 否则报错
 			if(n->right->type != T && !isint[n->right->type->etype]) {
 				yyerror("non-integer %s index %N", why, n->right);
 				break;
 			}
+			// 如果索引值是整型数值, 那么在编译期就可以确认其合法性
+			// (如果是变量就不行了, 比如 array[i]).
 			if(isconst(n->right, CTINT)) {
-				if(mpgetfix(n->right->val.u.xval) < 0)
+				if(mpgetfix(n->right->val.u.xval) < 0) {
+					// 数组/切片/字符串的索引, 必须大于等于0(不可为负值), 否则报错
 					yyerror("invalid %s index %N (index must be non-negative)", why, n->right);
-				else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound)
-					yyerror("invalid array index %N (out of bounds for %d-element array)", n->right, t->bound);
-				else if(isconst(n->left, CTSTR) && mpgetfix(n->right->val.u.xval) >= n->left->val.u.sval->len)
-					yyerror("invalid string index %N (out of bounds for %d-byte string)", n->right, n->left->val.u.sval->len);
-				else if(mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0)
+				}
+				else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound) {
+					// 数组/切片/字符串的索引, 访问越界.
+					yyerror(
+						"invalid array index %N (out of bounds for %d-element array)", 
+						n->right, t->bound
+					);
+				}
+				else if(isconst(n->left, CTSTR) && mpgetfix(n->right->val.u.xval) >= n->left->val.u.sval->len) {
+					yyerror(
+						"invalid string index %N (out of bounds for %d-byte string)", 
+						n->right, n->left->val.u.sval->len
+					);
+				}
+				else if(mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0) {
 					yyerror("invalid %s index %N (index too large)", why, n->right);
+				}
 			}
 			break;
 
 		case TMAP:
 			n->etype = 0;
 			defaultlit(&n->right, t->down);
-			if(n->right->type != T)
+			if(n->right->type != T) {
 				n->right = assignconv(n->right, t->down, "map index");
+			}
 			n->type = t->type;
 			n->op = OINDEXMAP;
 			break;
@@ -1802,8 +1822,7 @@ out:
 	*np = n;
 }
 
-static int
-checksliceindex(Node *r, Type *tp)
+static int checksliceindex(Node *r, Type *tp)
 {
 	Type *t;
 

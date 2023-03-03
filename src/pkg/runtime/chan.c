@@ -64,8 +64,7 @@ reflect·makechan(ChanType *t, uint64 size, Hchan *c)
 // param hint: channel 容量.
 //
 // makechan(t *ChanType, hint int64) (hchan *chan any);
-void
-runtime·makechan(ChanType *t, int64 hint, Hchan *ret)
+void runtime·makechan(ChanType *t, int64 hint, Hchan *ret)
 {
 	ret = runtime·makechan_c(t, hint);
 	FLUSH(&ret);

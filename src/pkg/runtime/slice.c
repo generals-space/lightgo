@@ -20,21 +20,23 @@ static	void	growslice1(SliceType*, Slice, intgo, Slice *);
 	void	runtime·copy(Slice to, Slice fm, uintptr width, intgo ret);
 
 // golang原生: make([]string) 函数
+//
 // see also unsafe·NewArray
 // makeslice(typ *Type, len, cap int64) (ary []any);
-void
-runtime·makeslice(SliceType *t, int64 len, int64 cap, Slice ret)
+void runtime·makeslice(SliceType *t, int64 len, int64 cap, Slice ret)
 {
 	// NOTE: The len > MaxMem/elemsize check here is not strictly necessary,
 	// but it produces a 'len out of range' error instead of a 'cap out of range' error
 	// when someone does make([]T, bignumber). 'cap out of range' is true too,
 	// but since the cap is only being supplied implicitly, saying len is clearer.
 	// See issue 4085.
-	if(len < 0 || (intgo)len != len || t->elem->size > 0 && len > MaxMem / t->elem->size)
+	if(len < 0 || (intgo)len != len || t->elem->size > 0 && len > MaxMem / t->elem->size) {
 		runtime·panicstring("makeslice: len out of range");
+	}
 
-	if(cap < len || (intgo)cap != cap || t->elem->size > 0 && cap > MaxMem / t->elem->size)
+	if(cap < len || (intgo)cap != cap || t->elem->size > 0 && cap > MaxMem / t->elem->size) {
 		runtime·panicstring("makeslice: cap out of range");
+	}
 
 	makeslice1(t, len, cap, &ret);
 
@@ -49,8 +51,7 @@ runtime·makeslice(SliceType *t, int64 len, int64 cap, Slice ret)
 // you can't tell that they all have the same base pointer.
 uintptr runtime·zerobase;
 
-static void
-makeslice1(SliceType *t, intgo len, intgo cap, Slice *ret)
+static void makeslice1(SliceType *t, intgo len, intgo cap, Slice *ret)
 {
 	ret->len = len;
 	ret->cap = cap;
@@ -58,8 +59,7 @@ makeslice1(SliceType *t, intgo len, intgo cap, Slice *ret)
 }
 
 // growslice(type *Type, x, []T, n int64) []T
-void
-runtime·growslice(SliceType *t, Slice old, int64 n, Slice ret)
+void runtime·growslice(SliceType *t, Slice old, int64 n, Slice ret)
 {
 	int64 cap;
 	void *pc;
@@ -89,8 +89,7 @@ runtime·growslice(SliceType *t, Slice old, int64 n, Slice ret)
 	}
 }
 
-static void
-growslice1(SliceType *t, Slice x, intgo newcap, Slice *ret)
+static void growslice1(SliceType *t, Slice x, intgo newcap, Slice *ret)
 {
 	intgo m;
 
@@ -114,10 +113,11 @@ growslice1(SliceType *t, Slice x, intgo newcap, Slice *ret)
 	runtime·memmove(ret->array, x.array, ret->len * t->elem->size);
 }
 
+// golang原生: copy()函数
+//
 // copy(to any, fr any, wid uintptr) int
 #pragma textflag NOSPLIT
-void
-runtime·copy(Slice to, Slice fm, uintptr width, intgo ret)
+void runtime·copy(Slice to, Slice fm, uintptr width, intgo ret)
 {
 	void *pc;
 
@@ -159,8 +159,7 @@ out:
 }
 
 #pragma textflag NOSPLIT
-void
-runtime·slicestringcopy(Slice to, String fm, intgo ret)
+void runtime·slicestringcopy(Slice to, String fm, intgo ret)
 {
 	void *pc;
 
@@ -184,8 +183,7 @@ out:
 	FLUSH(&ret);
 }
 
-void
-runtime·printslice(Slice a)
+void runtime·printslice(Slice a)
 {
 	runtime·prints("[");
 	runtime·printint(a.len);
