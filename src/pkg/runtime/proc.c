@@ -106,7 +106,7 @@ struct Sched {
 enum { MaxGomaxprocs = 1<<8 };
 
 Sched	runtime·sched;
-// 表示 runtime 中 p 的实际数量, 取值范围在 [1, MaxGomaxprocs(256, 固定值)]
+// 表示 runtime 中 p 的**实际数量**, 取值范围在 [1, MaxGomaxprocs(256, 固定值)]
 //
 // 所有的 p 都存在于 runtime·allp 数组中. 该数组长度为 MaxGomaxprocs, 但实际可能不会占满.
 //
@@ -485,12 +485,11 @@ void runtime·ready(G *gp)
 	} 
 }
 
-// 确定并⾏回收的 goroutine 数量 = min(GOMAXPROCS, ncpu, MaxGcproc)
+// 确定参与并⾏回收的 goroutine 数量 = min(GOMAXPROCS, ncpu, MaxGcproc)
 //
 // caller: 
 // 	1. mgc0.c -> gc() 只有这一处
-int32
-runtime·gcprocs(void)
+int32 runtime·gcprocs(void)
 {
 	int32 n;
 
@@ -503,18 +502,19 @@ runtime·gcprocs(void)
 	n = runtime·gomaxprocs;
 	if(n > runtime·ncpu) {
 		n = runtime·ncpu;
-	} 
+	}
 	if(n > MaxGcproc) {
 		n = MaxGcproc;
-	} 
+	}
 
-	// one M is currently running
-	// 在被调用时, 只有1个m处于运行状态, 其他都是 midle
+	// 在被调用时, 只有1个m处于运行状态, 其他都是 midle.
 	// 如果 n > nmidle+1, 其实是超出了当前创建了的m的总量.
 	// 最多是让所有m都去执行gc嘛.
+	//
+	// one M is currently running
 	if(n > runtime·sched.nmidle+1) {
 		n = runtime·sched.nmidle+1;
-	} 
+	}
 	runtime·unlock(&runtime·sched);
 	return n;
 }
@@ -1183,8 +1183,8 @@ unlockextra(M *mp)
 // 	@param p: 新 m 需要绑定的 p 对象.
 //
 // 当 fn 是 sysmon(), mhelpgc() 函数时, p 为 nil, 这两个函数不需要绑定 p 就可以执行.
-// 只有 fn = nil 时, 新 m 才是为了运行开发者级别的协程任务的. 而在这种场景下, 
-// 必然是因为 m 不够了, p 存在空闲了, 才需要新增一个 m 出来, 
+// 只有 fn = nil 时, 新 m 才是为了运行开发者级别的协程任务的.
+// 而在这种场景下, 必然是因为 m 不够了, p 存在空闲了, 才需要新增一个 m 出来.
 //
 // caller:
 // 	1. runtime·main() runtime 初始化完成后, 启动主协程 g0, 

@@ -6,6 +6,7 @@
 // Edit the documentation in other files and rerun mkdoc.sh to generate this one.
 
 /*
+################################################################################
 Go is a tool for managing Go source code.
 
 Usage:
@@ -41,7 +42,7 @@ Additional help topics:
 
 Use "go help [topic]" for more information about that topic.
 
-
+################################################################################
 Compile packages and dependencies
 
 Usage:
@@ -117,7 +118,7 @@ run 'go help c'.
 
 See also: go install, go get, go clean.
 
-
+################################################################################
 Remove object files
 
 Usage:
@@ -162,7 +163,7 @@ The -x flag causes clean to print remove commands as it executes them.
 
 For more about specifying packages, see 'go help packages'.
 
-
+################################################################################
 Print Go environment information
 
 Usage:
@@ -212,7 +213,7 @@ To run gofmt with specific options, run gofmt itself.
 
 See also: go fix, go vet.
 
-
+################################################################################
 Download and install packages and dependencies
 
 Usage:
@@ -251,7 +252,7 @@ download, see 'go help importpath'.
 
 See also: go build, go install, go clean.
 
-
+################################################################################
 Compile and install packages and dependencies
 
 Usage:
@@ -352,7 +353,7 @@ required by the race detector.
 
 For more about specifying packages, see 'go help packages'.
 
-
+################################################################################
 Compile and run Go program
 
 Usage:
@@ -421,7 +422,7 @@ For more about specifying packages, see 'go help packages'.
 
 See also: go build, go vet.
 
-
+################################################################################
 Run specified go tool
 
 Usage:
@@ -436,7 +437,7 @@ executed but not execute it.
 
 For more about each tool command, see 'go tool command -h'.
 
-
+################################################################################
 Print Go version
 
 Usage:
@@ -445,7 +446,7 @@ Usage:
 
 Version prints the Go version, as reported by runtime.Version.
 
-
+################################################################################
 Run go tool vet on packages
 
 Usage:
@@ -464,7 +465,7 @@ The -x flag prints commands as they are executed.
 
 See also: go fmt, go fix.
 
-
+################################################################################
 Calling between Go and C
 
 There are two different ways to call between Go and C/C++ code.
@@ -483,7 +484,7 @@ files to the C compiler, and any .cc, .cpp, .cxx files to the C++
 compiler.  The CC or CXX environment variables may be set to determine
 the C or C++ compiler, respectively, to use.
 
-
+################################################################################
 GOPATH environment variable
 
 The Go path is used to resolve import statements.
@@ -543,7 +544,7 @@ Go searches each directory listed in GOPATH to find source code,
 but new packages are always downloaded into the first directory
 in the list.
 
-
+################################################################################
 Import path syntax
 
 An import path (see 'go help packages') denotes a package
@@ -687,7 +688,7 @@ The go command attempts to download the version of the
 package appropriate for the Go release being used.
 Run 'go help install' for more.
 
-
+################################################################################
 Description of package lists
 
 Many commands apply to a set of packages:
@@ -743,7 +744,7 @@ in those files and ignoring any other files in the directory.
 
 File names that begin with "." or "_" are ignored by the go tool.
 
-
+################################################################################
 Description of testing flags
 
 The 'go test' command takes both flags that apply to 'go test' itself
@@ -873,7 +874,7 @@ leave the test binary in pkg.test for use when analyzing the profiles.
 
 Flags not recognized by 'go test' must be placed after any specified packages.
 
-
+################################################################################
 Description of testing functions
 
 The 'go test' command expects to find test, benchmark, and example functions

@@ -581,6 +581,10 @@ func makeCutsetFunc(cutset string) func(rune) bool {
 	return func(r rune) bool { return IndexRune(cutset, r) >= 0 }
 }
 
+// Trim 移除目标字符串左右两侧的"指定字符"
+//
+// 	@param cutset: 一般在清除两侧空格时, 该值需要为" "
+//
 // Trim returns a slice of the string s with all leading and
 // trailing Unicode code points contained in cutset removed.
 func Trim(s string, cutset string) string {
@@ -632,6 +636,8 @@ func TrimSuffix(s, suffix string) string {
 	return s
 }
 
+// 	@param n: 如果 n < 0, 则将替换 s 中全部的 old 子串, 没有数量限制
+//
 // Replace returns a copy of the string s with the first n
 // non-overlapping instances of old replaced by new.
 // If n < 0, there is no limit on the number of replacements.
