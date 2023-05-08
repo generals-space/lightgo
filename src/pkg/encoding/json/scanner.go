@@ -15,6 +15,8 @@ package json
 
 import "strconv"
 
+// checkValid 判断 data 中的数据是否为合法的 json 字符串, 如非法, 则返回错误信息.
+//
 // checkValid verifies that data is valid JSON-encoded data.
 // scan is passed in for use by checkValid to avoid an allocation.
 func checkValid(data []byte, scan *scanner) error {
@@ -25,6 +27,7 @@ func checkValid(data []byte, scan *scanner) error {
 			return scan.err
 		}
 	}
+	// 如果 data 是非法的 json 字符串, 会在这里返回错误.
 	if scan.eof() == scanError {
 		return scan.err
 	}
@@ -74,6 +77,9 @@ func (e *SyntaxError) Error() string { return e.msg }
 // to recognize the end of numbers: is 123 a whole value or
 // the beginning of 12345e+6?).
 type scanner struct {
+	// step 成员为 stateBeginValue() 函数.
+	// 在 scanner.reset() 方法中被赋值.
+	//
 	// The step is a func to be called to execute the next transition.
 	// Also tried using an integer constant and a single func
 	// with a switch, but using the func directly was 10% faster

@@ -123,6 +123,10 @@ func (e *InvalidUnmarshalError) Error() string {
 	return "json: Unmarshal(nil " + e.Type.String() + ")"
 }
 
+// 	@param v: 待解析到的目标对象, 必须为指针类型.
+//
+// caller: 
+// 	1. Unmarshal()
 func (d *decodeState) unmarshal(v interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -134,11 +138,14 @@ func (d *decodeState) unmarshal(v interface{}) (err error) {
 	}()
 
 	rv := reflect.ValueOf(v)
+	// 目标对象必须为指针类型
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		return &InvalidUnmarshalError{reflect.TypeOf(v)}
 	}
 
 	d.scan.reset()
+	// 啥意思???
+	//
 	// We decode rv not rv.Elem because the Unmarshaler interface
 	// test must be applied at the top level of the value.
 	d.value(rv)
@@ -219,6 +226,9 @@ func (d *decodeState) next() []byte {
 	return item
 }
 
+// caller:
+// 	1. decodeState.value()
+//
 // scanWhile processes bytes in d.data[d.off:] until it
 // receives a scan code not equal to op.
 // It updates d.off and returns the new scan code.
@@ -240,6 +250,10 @@ func (d *decodeState) scanWhile(op int) int {
 	return newOp
 }
 
+// value: 该函数正式开始解析(Unmarshal)流程.
+//
+// 	@param v: 待解析到的目标对象, 必须为指针类型.
+//
 // value decodes a JSON value from d.data[d.off:] into the value.
 // it updates d.off to point past the decoded value.
 func (d *decodeState) value(v reflect.Value) {
@@ -272,22 +286,26 @@ func (d *decodeState) value(v reflect.Value) {
 
 		return
 	}
-
+	// 这里 switch{} 是一个循环操作, 循环解析 data 中的数据,
+	// 直到 data 中的数据解析完成.
 	switch op := d.scanWhile(scanSkipSpace); op {
 	default:
 		d.error(errPhase)
 
+	// 如果读取到 '[' 字符
 	case scanBeginArray:
 		d.array(v)
-
+	// 如果读取到 '{' 字符
 	case scanBeginObject:
 		d.object(v)
-
+	// 如果读取到 't(rue)', 'f(alse)', 'n(ull)', '"'双引号 等字符
 	case scanBeginLiteral:
 		d.literal(v)
 	}
 }
 
+// 	@param v: Unmarshal()待解析到的目标对象, 必须为指针类型.
+//
 // indirect walks down v allocating pointers as needed,
 // until it gets to a non-pointer.
 // if it encounters an Unmarshaler, indirect stops and returns that.
@@ -328,6 +346,8 @@ func (d *decodeState) indirect(v reflect.Value, decodingNull bool) (Unmarshaler,
 				return nil, u, reflect.Value{}
 			}
 		}
+		// 注意: 这一句很重要, 否则 Set() 时无法向 Value 对象写入数据,
+		// mustBeAssignable() 阶段会报错.
 		v = v.Elem()
 	}
 	return nil, nil, v
@@ -439,6 +459,13 @@ func (d *decodeState) array(v reflect.Value) {
 	}
 }
 
+// object 当 Unmarmal() 流程解析到 '{' 字符时, 调用该函数解析 object 类型数据.
+//
+// 	@param v: 待解析到的目标对象, 必须为指针类型.
+//
+// caller:
+// 	1. decodeState.value() 只有这一处
+//
 // object consumes an object from d.data[d.off-1:], decoding into the value v.
 // the first byte of the object ('{') has been read already.
 func (d *decodeState) object(v reflect.Value) {

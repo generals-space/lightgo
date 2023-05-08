@@ -522,7 +522,11 @@ func parseField(v reflect.Value, bytes []byte, initOffset int, params fieldParam
 			err = SyntaxError{"data truncated"}
 			return
 		}
-		result := RawValue{t.class, t.tag, t.isCompound, bytes[offset : offset+t.length], bytes[initOffset : offset+t.length]}
+		result := RawValue{
+			t.class, t.tag, t.isCompound, 
+			bytes[offset : offset+t.length], 
+			bytes[initOffset : offset+t.length],
+		}
 		offset += t.length
 		v.Set(reflect.ValueOf(result))
 		return

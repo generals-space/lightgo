@@ -592,6 +592,10 @@ func (t *rtype) IsVariadic() bool {
 	return tt.dotdotdot
 }
 
+// Elem 返回目标对象的引用类型(而不是指针类型).
+// 比如, 如果 t 是 *[]int, 那么 t.Elem() 将为 []int, 对于 struct 类型也是如此.
+//
+// 如果 t 本身就是引用类型, 那就直接返回, 不会发生其他事.
 func (t *rtype) Elem() Type {
 	switch t.Kind() {
 	case Array:
@@ -645,14 +649,6 @@ func (t *rtype) FieldByNameFunc(match func(string) bool) (StructField, bool) {
 	return tt.FieldByNameFunc(match)
 }
 
-func (t *rtype) In(i int) Type {
-	if t.Kind() != Func {
-		panic("reflect: In of non-func type")
-	}
-	tt := (*funcType)(unsafe.Pointer(t))
-	return toType(tt.in[i])
-}
-
 func (t *rtype) Key() Type {
 	if t.Kind() != Map {
 		panic("reflect: Key of non-map type")
@@ -669,6 +665,11 @@ func (t *rtype) Len() int {
 	return int(tt.len)
 }
 
+// NumField 返回当前**结构体类型**中的**成员属性**的数量.
+//
+// 类似的还有 NumMethod(), 返回**成员属性**的数量.
+//
+// 注意: 目标类型对象必须是**结构体**, 否则会 panic.
 func (t *rtype) NumField() int {
 	if t.Kind() != Struct {
 		panic("reflect: NumField of non-struct type")
@@ -677,6 +678,10 @@ func (t *rtype) NumField() int {
 	return len(tt.fields)
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Func 函数类型相关
+
+// NumIn 返回当前**函数类型**的入参数量.
 func (t *rtype) NumIn() int {
 	if t.Kind() != Func {
 		panic("reflect: NumIn of non-func type")
@@ -685,6 +690,7 @@ func (t *rtype) NumIn() int {
 	return len(tt.in)
 }
 
+// NumOut 返回当前**函数类型**的返回值数量.
 func (t *rtype) NumOut() int {
 	if t.Kind() != Func {
 		panic("reflect: NumOut of non-func type")
@@ -693,6 +699,16 @@ func (t *rtype) NumOut() int {
 	return len(tt.out)
 }
 
+// In 返回当前**函数类型**的第i个入参的类型.
+func (t *rtype) In(i int) Type {
+	if t.Kind() != Func {
+		panic("reflect: In of non-func type")
+	}
+	tt := (*funcType)(unsafe.Pointer(t))
+	return toType(tt.in[i])
+}
+
+// Out 返回当前**函数类型**的第i个返回值的类型.
 func (t *rtype) Out(i int) Type {
 	if t.Kind() != Func {
 		panic("reflect: Out of non-func type")
@@ -700,6 +716,7 @@ func (t *rtype) Out(i int) Type {
 	tt := (*funcType)(unsafe.Pointer(t))
 	return toType(tt.out[i])
 }
+////////////////////////////////////////////////////////////////////////////////
 
 func (d ChanDir) String() string {
 	switch d {
@@ -728,8 +745,16 @@ func (t *interfaceType) Method(i int) (m Method) {
 	return
 }
 
+// NumMethod 返回当前**结构体类型**中的**成员方法**的数量. 
+//
+// 类似的还有 NumField(), 返回**成员属性**的数量.
+//
+// 注意: 目标类型对象必须是**结构体**, 否则会 panic.
+//
 // NumMethod returns the number of interface methods in the type's method set.
-func (t *interfaceType) NumMethod() int { return len(t.methods) }
+func (t *interfaceType) NumMethod() int { 
+	return len(t.methods) 
+}
 
 // MethodByName method with the given name in the type's method set.
 func (t *interfaceType) MethodByName(name string) (m Method, ok bool) {
@@ -745,6 +770,9 @@ func (t *interfaceType) MethodByName(name string) (m Method, ok bool) {
 	}
 	return
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// 结构体类型相关
 
 // A StructField describes a single field in a struct.
 type StructField struct {
@@ -1015,7 +1043,10 @@ func (t *structType) FieldByName(name string) (f StructField, present bool) {
 	}
 	return t.FieldByNameFunc(func(s string) bool { return s == name })
 }
+////////////////////////////////////////////////////////////////////////////////
 
+// TypeOf Type 对象打印出来如 int, string, main.Object, *main.Object 等.
+//
 // TypeOf returns the reflection Type of the value in the interface{}.
 // TypeOf(nil) returns nil.
 func TypeOf(i interface{}) Type {
@@ -1176,6 +1207,9 @@ func (t *rtype) ConvertibleTo(u Type) bool {
 //
 // 不管是接口类型还是普通实例类型, ta们拥有的方法(rtype.methods)都是经过字母排序的,
 // 只要按顺序比较即可.
+//
+// caller:
+// 	1. rtype.Implements()
 //
 // implements returns true if the type V implements the interface type T.
 func implements(T, V *rtype) bool {
@@ -1728,6 +1762,8 @@ var sliceEmptyGCProg = sliceEmptyGC{
 	end:   _GC_END,
 }
 
+// SliceOf 返回目标类型对应的数组类型.
+//
 // SliceOf returns the slice type with element type t.
 // For example, if t represents int, SliceOf(t) represents []int.
 func SliceOf(t Type) Type {

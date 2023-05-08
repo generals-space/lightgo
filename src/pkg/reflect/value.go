@@ -64,6 +64,11 @@ type Value struct {
 	// typ holds the type of the value represented by a Value.
 	typ *rtype
 
+	// 当前 Value 对象中, 实际存储数据的指针.
+	// 该 val 指针可以被转换为其实际的类型, 如 (*int64)(v.val)
+	//
+	// Value 对象中有 SetXXX 函数族, 可以对 val 成员赋值.
+	//
 	// val holds the 1-word representation of the value.
 	// If flag's flagIndir bit is set, then val is a pointer to the data.
 	// Otherwise val is a word holding the actual data.
@@ -93,9 +98,12 @@ type Value struct {
 	// in r's type's method table.
 }
 
+// flag 是 Value{} 类型的成员属性
+//
 type flag uintptr
 
 const (
+	// flagRO 指的应该是 struct 中小写开头的非导出字段
 	flagRO flag = 1 << iota
 	flagIndir
 	flagAddr
@@ -257,6 +265,11 @@ func (f flag) mustBeExported() {
 	}
 }
 
+// mustBeAssignable ...
+//
+// caller:
+// 	1. Value.SetXXX() 函数族, 主调的 Value 对象必须预先调用 Elem() 方法.
+//
 // mustBeAssignable panics if f records that the value is not assignable,
 // which is to say that either it was obtained using an unexported field
 // or it is not addressable.
@@ -268,6 +281,7 @@ func (f flag) mustBeAssignable() {
 	if f&flagRO != 0 {
 		panic("reflect: " + methodName() + " using value obtained using unexported field")
 	}
+	// 如果这里报错, 很有可能是主调的 Value 对象没有预先调用 Elem() 方法.
 	if f&flagAddr == 0 {
 		panic("reflect: " + methodName() + " using unaddressable value")
 	}
@@ -1069,6 +1083,8 @@ func (v Value) IsValid() bool {
 	return v.flag != 0
 }
 
+// Kind 返回的值应该与该 Value 对象对应的 Type 对象的 Kind() 值相同.
+//
 // Kind returns v's Kind.
 // If v is the zero Value (IsValid returns false), Kind returns Invalid.
 func (v Value) Kind() Kind {
@@ -1376,6 +1392,8 @@ func (v Value) send(x Value, nb bool) (selected bool) {
 	return chansend(v.typ, v.iword(), x.iword(), nb)
 }
 
+// 注意: 主调的 Value 对象必须预先调用 Elem() 方法.
+//
 // Set assigns x to the value v.
 // It panics if CanSet returns false.
 // As in Go, x's value must be assignable to v's type.
@@ -2108,6 +2126,8 @@ func Indirect(v Value) Value {
 	return v.Elem()
 }
 
+// ValueOf Value 对象打印出来如 1, "this is a string", {general}, &{general} 等.
+//
 // ValueOf returns a new Value initialized to the concrete value
 // stored in the interface i.  ValueOf(nil) returns the zero Value.
 func ValueOf(i interface{}) Value {
