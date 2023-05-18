@@ -61,6 +61,8 @@ func hashstr(sep string) (uint32, uint32) {
 	return hash, pow
 }
 
+// Count 计算目标 sep 子串在目标字符串 s 中出现的次数.
+//
 // Count counts the number of non-overlapping instances of sep in s.
 func Count(s, sep string) int {
 	n := 0
@@ -85,6 +87,8 @@ func Count(s, sep string) int {
 		}
 		return 0
 	}
+
+	// ...啥情况才会运行到这里???
 	hashsep, pow := hashstr(sep)
 	h := uint32(0)
 	for i := 0; i < len(sep); i++ {
@@ -636,6 +640,10 @@ func TrimSuffix(s, suffix string) string {
 	return s
 }
 
+// Replace 替换目标字符串 s 中的指针字符(将 old 替换为 new).
+//
+// 注意: 非原地替换, 而是创建了一个新字符串.
+//
 // 	@param n: 如果 n < 0, 则将替换 s 中全部的 old 子串, 没有数量限制
 //
 // Replace returns a copy of the string s with the first n
@@ -648,11 +656,14 @@ func Replace(s, old, new string, n int) string {
 
 	// Compute number of replacements.
 	if m := Count(s, old); m == 0 {
+		// 如果 s 中没有目标 old 子串, 也就不用替换了, 直接返回.
 		return s // avoid allocation
 	} else if n < 0 || m < n {
 		n = m
 	}
 
+	// 为新字符串创建缓冲区.
+	//
 	// Apply replacements to buffer.
 	t := make([]byte, len(s)+n*(len(new)-len(old)))
 	w := 0
