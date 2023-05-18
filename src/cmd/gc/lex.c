@@ -273,8 +273,10 @@ int main(int argc, char *argv[])
 	flagcount("w", "debug type checking", &debug['w']);
 	flagcount("x", "debug lexer", &debug['x']);
 	flagcount("y", "debug declarations in canned imports (with -d)", &debug['y']);
-	if(thechar == '6')
+	flagcount("nostrict", "disable strict mode for unused variable and package", &nostrictmode);
+	if(thechar == '6') {
 		flagcount("largemodel", "generate code that assumes a large memory model", &flag_largemodel);
+	}
 
 	flagparse(&argc, &argv, usage);
 
@@ -617,15 +619,15 @@ islocalname(Strlit *name)
 	return 0;
 }
 
-static int
-findpkg(Strlit *name)
+static int findpkg(Strlit *name)
 {
 	Idir *p;
 	char *q, *suffix, *suffixsep;
 
 	if(islocalname(name)) {
-		if(safemode)
+		if(safemode) {
 			return 0;
+		}
 		// try .a before .6.  important for building libraries:
 		// if there is an array.6 in the array.a library,
 		// want to find all of array.a, not just array.6.
@@ -2330,11 +2332,18 @@ yytinit(void)
 	}		
 }
 
-static void
-pkgnotused(int lineno, Strlit *path, char *name)
+// pkgnotused import导入了包但未被使用则报错.
+//
+// 	@param lineno: 导入但未被使用的 package 所在行号
+// 	@param path: 导入但未被使用的 package 路径, 如"github.com/golang/sys/unix"
+// 	@param name: package 被导入时可能会指定的别名, 如 import(gounix "github.com/golang/sys/unix")
+//
+// caller:
+// 	1. mkpackage() 只有这一处
+static void pkgnotused(int lineno, Strlit *path, char *name)
 {
 	char *elem;
-	
+
 	// If the package was imported with a name other than the final
 	// import path element, show it explicitly in the error message.
 	// Note that this handles both renamed imports and imports of
@@ -2342,18 +2351,29 @@ pkgnotused(int lineno, Strlit *path, char *name)
 	// Note that this uses / always, even on Windows, because Go import
 	// paths always use forward slashes.
 	elem = strrchr(path->s, '/');
-	if(elem != nil)
+	if(elem != nil) {
 		elem++;
-	else
+	}
+	else {
 		elem = path->s;
-	if(name == nil || strcmp(elem, name) == 0)
-		yyerrorl(lineno, "imported and not used: \"%Z\"", path);
-	else
-		yyerrorl(lineno, "imported and not used: \"%Z\" as %s", path, name);
+	}
+	if(name == nil || strcmp(elem, name) == 0) {
+		if (!nostrictmode) {
+			yyerrorl(lineno, "imported and not used: \"%Z\"", path);
+		} else {
+			print("%d imported and not used: \"%Z\"\n", lineno, path);
+		}
+	}
+	else {
+		if (!nostrictmode) {
+			yyerrorl(lineno, "imported and not used: \"%Z\" as %s", path, name);
+		} else {
+			print("%d imported and not used: \"%Z\" as %s\n", lineno, path, name);
+		}
+	}
 }
 
-void
-mkpackage(char* pkgname)
+void mkpackage(char* pkgname)
 {
 	Sym *s;
 	int32 h;
@@ -2376,8 +2396,9 @@ mkpackage(char* pkgname)
 					// leave s->block set to cause redeclaration
 					// errors if a conflicting top-level name is
 					// introduced by a different file.
-					if(!s->def->used && !nsyntaxerrors)
+					if(!s->def->used && !nsyntaxerrors) {
 						pkgnotused(s->def->lineno, s->def->pkg->path, s->name);
+					}
 					s->def = N;
 					continue;
 				}

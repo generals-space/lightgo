@@ -877,6 +877,8 @@ func (b *builder) build(a *action) (err error) {
 	// Prepare Go import path list.
 	inc := b.includeArgs("-I", a.deps)
 
+	////////////////////////////////////////////////////////////////////////////
+	// 编译开始
 	// Compile Go.
 	if len(gofiles) > 0 {
 		ofile, out, err := buildToolchain.gc(b, a.p, obj, inc, gofiles)
@@ -1428,6 +1430,7 @@ func mkAbs(dir, f string) string {
 	return filepath.Join(dir, f)
 }
 
+// toolchain 由 gcToolchain{} 结构体实现
 type toolchain interface {
 	// gc runs the compiler in a specific directory on a set of files
 	// and returns the name of the generated output file.
@@ -1494,6 +1497,11 @@ func (noToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) error
 	return noCompiler()
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//
+
+// gcToolchain 实现了 toolchain 接口.
+//
 // The Go toolchain.
 type gcToolchain struct{}
 
@@ -1505,7 +1513,17 @@ func (gcToolchain) linker() string {
 	return tool(archChar + "l")
 }
 
-func (gcToolchain) gc(b *builder, p *Package, obj string, importArgs []string, gofiles []string) (ofile string, output []byte, err error) {
+// gc 调用 6g 工具进行编译.
+//
+// 	@param gofiles: go build/run 执行的 .go 文件列表.
+//
+// 	@return ofile: 6g 工具生成的编译中间文件路径.
+//
+// caller:
+// 	1. builder.build()
+func (gcToolchain) gc(
+	b *builder, p *Package, obj string, importArgs []string, gofiles []string,
+) (ofile string, output []byte, err error) {
 	out := "_go_." + archChar
 	ofile = obj + out
 	gcargs := []string{"-p", p.ImportPath}
@@ -1532,12 +1550,13 @@ func (gcToolchain) gc(b *builder, p *Package, obj string, importArgs []string, g
 	if buildContext.InstallSuffix != "" {
 		gcargs = append(gcargs, "-installsuffix", buildContext.InstallSuffix)
 	}
-
+	// tool 获取名为 toolName 的编译工具所在的路径并返回, 这里并未执行.
+	// 注意: 6g 只是编译, 而不是链接, 这里的 ofile 只生成编译的中间文件.
 	args := stringList(tool(archChar+"g"), "-o", ofile, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
 	for _, f := range gofiles {
 		args = append(args, mkAbs(p.Dir, f))
 	}
-
+	// 执行上述命令, 调用编译工具.
 	output, err = b.runOut(p.Dir, p.ImportPath, nil, args)
 	return ofile, output, err
 }
@@ -1636,7 +1655,7 @@ func (gcToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) error
 	args := stringList(tool(archChar+"c"), "-F", "-V", "-w", "-I", objdir, "-I", inc, "-o", ofile, buildCcflags, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, cfile)
 	return b.run(p.Dir, p.ImportPath, nil, args)
 }
-
+////////////////////////////////////////////////////////////////////////////////
 // The Gccgo toolchain.
 type gccgoToolchain struct{}
 

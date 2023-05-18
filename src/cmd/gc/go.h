@@ -291,6 +291,9 @@ struct	Node
 	uchar	local;
 	uchar	dodata;
 	uchar	initorder;
+	// used 表示当前 Node 元素是否被引用, 大于1为是, 0为否.
+	// 在 src/cmd/gc/walk.c -> walk() 编译阶段, 会根据该成员属性,
+	// 判断是否抛出"declared and not used"错误
 	uchar	used;
 	uchar	isddd;
 	uchar	readonly;
@@ -314,7 +317,10 @@ struct	Node
 	NodeList*	enter;
 	NodeList*	exit;
 	NodeList*	cvars;	// closure params
-	NodeList*	dcl;	// autodcl for this func/closure
+	// dcl: declare 的缩写
+	//
+	// autodcl for this func/closure
+	NodeList*	dcl;
 	NodeList*	inl;	// copy of the body for use in inlining
 	NodeList*	inldcl;	// copy of dcl for use in inlining
 
@@ -352,9 +358,14 @@ struct	Node
 	// Escape analysis.
 	NodeList* escflowsrc;	// flow(this, src)
 	NodeList* escretval;	// on OCALLxxx, list of dummy return values
-	int	escloopdepth;	// -1: global, 0: return variables, 1:function top level, increased inside function for every loop or label to mark scopes
+	// -1: global, 0: return variables, 
+	// 1:function top level, increased inside function for every loop or label to mark scopes
+	int	escloopdepth;
 
-	Sym*	sym;		// various
+	// sym 可以代表一个变量名
+	//
+	// various
+	Sym*	sym;
 	int32	vargen;		// unique name for OTYPE/ONAME
 	int32	lineno;
 	int32	endlineno;
@@ -750,7 +761,14 @@ enum
 
 	PDISCARD,	// discard during parse of duplicate import
 
-	PHEAP = 1<<7,	// an extra bit to identify an escaped variable
+	// 标记一个变量是否发生了内存逃逸(被分配到了堆上)
+	// 一个拥有该标记的 Node 对象, 必然是一个局部变量.
+	//
+	// 貌似只有一处真正进行了赋值(其他地方都是该该标记进行判断, 并未发生写入操作)
+	// src/cmd/gc/gen.c -> addrescapes() 的"case PAUTO"块.
+	//
+	// an extra bit to identify an escaped variable
+	PHEAP = 1<<7,
 };
 
 enum
@@ -940,6 +958,7 @@ EXTERN	int	nerrors;
 EXTERN	int	nsavederrors;
 EXTERN	int	nsyntaxerrors;
 EXTERN	int	safemode;
+EXTERN	int	nostrictmode;
 EXTERN	char	namebuf[NSYMB];
 EXTERN	char	lexbuf[NSYMB];
 EXTERN	char	litbuf[NSYMB];
@@ -1029,6 +1048,7 @@ EXTERN	int32	blockgen;		// max block number
 EXTERN	int32	block;			// current block number
 EXTERN	int	hasdefer;		// flag that curfn has defer statetment
 
+// 全局变量, 表示当前编译器正在处理的函数(作用域)
 EXTERN	Node*	curfn;
 
 EXTERN	int	widthptr;

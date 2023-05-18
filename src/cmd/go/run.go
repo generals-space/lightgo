@@ -82,6 +82,7 @@ func runRun(cmd *Command, args []string) {
 	}
 	p.exeName = src[:len(src)-len(".go")] // name temporary executable for first go file
 	a1 := b.action(modeBuild, modeBuild, p)
+	cmdArgs = append(cmdArgs, "-nostrict")
 	a := &action{f: (*builder).runProgram, args: cmdArgs, deps: []*action{a1}}
 	b.do(a)
 }

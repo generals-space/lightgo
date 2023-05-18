@@ -13,8 +13,7 @@
  * package and also uncallable, the name,
  * normally "pkg.init", is altered to "pkg.init·1".
  */
-Sym*
-renameinit(void)
+Sym* renameinit(void)
 {
 	static int initgen;
 
