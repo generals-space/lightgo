@@ -88,7 +88,7 @@ void walk(Node *fn)
 			if(!nostrictmode) {
 				yyerror("%S declared and not used", l->n->sym);
 			} else {
-				print("%S declared and not used\n", l->n->sym);
+				mywarn("%S declared and not used\n", l->n->sym);
 			}
 			l->n->defn->left->used = 1; // suppress repeats
 		} else {
@@ -96,7 +96,7 @@ void walk(Node *fn)
 			if (!nostrictmode) {
 				yyerror("%S declared and not used", l->n->sym);
 			} else {
-				print("%S declared and not used\n", l->n->sym);
+				mywarn("%S declared and not used\n", l->n->sym);
 			}
 		}
 	}

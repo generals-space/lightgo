@@ -2361,14 +2361,14 @@ static void pkgnotused(int lineno, Strlit *path, char *name)
 		if (!nostrictmode) {
 			yyerrorl(lineno, "imported and not used: \"%Z\"", path);
 		} else {
-			print("%d imported and not used: \"%Z\"\n", lineno, path);
+			mywarn("imported and not used: \"%Z\"\n", path);
 		}
 	}
 	else {
 		if (!nostrictmode) {
 			yyerrorl(lineno, "imported and not used: \"%Z\" as %s", path, name);
 		} else {
-			print("%d imported and not used: \"%Z\" as %s\n", lineno, path, name);
+			mywarn("imported and not used: \"%Z\" as %s\n", path, name);
 		}
 	}
 }

@@ -1487,6 +1487,7 @@ void	umagic(Magic *m);
 void	warn(char *fmt, ...);
 void	warnl(int line, char *fmt, ...);
 void	yyerror(char *fmt, ...);
+void	mywarn(char*, ...);
 void	yyerrorl(int line, char *fmt, ...);
 
 /*
