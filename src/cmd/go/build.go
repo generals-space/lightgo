@@ -122,7 +122,8 @@ var buildGcflags []string    // -gcflags flag
 var buildCcflags []string    // -ccflags flag
 var buildLdflags []string    // -ldflags flag
 var buildGccgoflags []string // -gccgoflags flag
-var buildRace bool           // -race flag
+var buildRace       bool     // -race flag
+var buildNoStrict   bool     // -nostrict flag
 
 var buildContext = build.Default
 var buildToolchain toolchain = noToolchain{}
@@ -175,6 +176,7 @@ func addBuildFlags(cmd *Command) {
 	cmd.Flag.Var((*stringsFlag)(&buildContext.BuildTags), "tags", "")
 	cmd.Flag.Var(buildCompiler{}, "compiler", "")
 	cmd.Flag.BoolVar(&buildRace, "race", false, "")
+	cmd.Flag.BoolVar(&buildNoStrict, "nostrict", false, "disable strict mode for unused variable and package")
 }
 
 func addBuildFlagsNX(cmd *Command) {
@@ -379,7 +381,14 @@ type action struct {
 	args       []string      // additional args for runProgram
 	testOutput *bytes.Buffer // test output buffer
 
-	f          func(*builder, *action) error // the action itself (nil = no-op)
+	// go run 时, 该函数为 src/cmd/go/run.go -> builder.runProgram()
+	// 在 src/cmd/go/run.go -> runRun() 末尾被赋值
+	//
+	// go build 时, 该函数为 builder.build()
+	// 在 builder.action() 的"case modeBuild"块中被赋值
+	//
+	// the action itself (nil = no-op)
+	f          func(*builder, *action) error
 	ignoreFail bool                          // whether to run f even if dependencies fail
 
 	// Generated files, directories.
@@ -401,6 +410,9 @@ type cacheKey struct {
 	p    *Package
 }
 
+// buildMode 构建的两种模式, 一般 go run/build 的模式是 modeBuild, ta们的入口必须是 main 包,
+// 而 go install 的模式是 modeInstall, 不需要 main 包.
+//
 // buildMode specifies the build mode:
 // are we just building things or also installing the results?
 type buildMode int
@@ -516,6 +528,11 @@ func goFilesPackage(gofiles []string) *Package {
 	return pkg
 }
 
+// action ...
+//
+// caller:
+// 	1. src/cmd/go/run.go -> runRun()
+//
 // action returns the action for applying the given operation (mode) to the package.
 // depMode is the action to use when building dependencies.
 func (b *builder) action(mode buildMode, depMode buildMode, p *Package) *action {
@@ -749,6 +766,11 @@ func hasString(strings []string, s string) bool {
 	return false
 }
 
+// 在 builder.action() 的"case modeBuild"块中被赋值到 action.f 成员
+//
+// caller:
+// 	1. builder.do() -> handle() 作为 a.f() 方法被调用.
+//
 // build is the action for building a single package or command.
 func (b *builder) build(a *action) (err error) {
 	// Return an error if the package has CXX files but it's not using
@@ -757,8 +779,10 @@ func (b *builder) build(a *action) (err error) {
 	// using cgo, they will get compiled with the plan9 C compiler and
 	// linked with the rest of the package).
 	if len(a.p.CXXFiles) > 0 && !a.p.usesCgo() && !a.p.usesSwig() {
-		return fmt.Errorf("can't build package %s because it contains C++ files (%s) but it's not using cgo nor SWIG",
-			a.p.ImportPath, strings.Join(a.p.CXXFiles, ","))
+		return fmt.Errorf(
+			"can't build package %s because it contains C++ files (%s) but it's not using cgo nor SWIG",
+			a.p.ImportPath, strings.Join(a.p.CXXFiles, ","),
+		)
 	}
 	defer func() {
 		if err != nil && err != errPrintedOutput {
@@ -780,7 +804,10 @@ func (b *builder) build(a *action) (err error) {
 
 	if a.p.Standard && a.p.ImportPath == "runtime" && buildContext.Compiler == "gc" &&
 		!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
-		return fmt.Errorf("%s/%s must be bootstrapped using make%v", buildContext.GOOS, buildContext.GOARCH, defaultSuffix())
+		return fmt.Errorf(
+			"%s/%s must be bootstrapped using make%v", 
+			buildContext.GOOS, buildContext.GOARCH, defaultSuffix(),
+		)
 	}
 
 	// Make build directory.
@@ -1299,6 +1326,13 @@ func (b *builder) processOutput(out []byte) string {
 	return messages
 }
 
+// runOut 通过 exec 执行目标命令并返回结果.
+//
+// 	@param dir: 为目标命令设置的 cwd 值
+// 	@param desc:
+// 	@param env: 为目标命令设置的环境变量
+// 	@param cmdargs: 目标命令, 包含命令名及参数
+//
 // runOut runs the command given by cmdline in the directory dir.
 // It returns the command output and any errors that occurred.
 func (b *builder) runOut(dir string, desc string, env []string, cmdargs ...interface{}) ([]byte, error) {
@@ -1549,6 +1583,9 @@ func (gcToolchain) gc(
 	}
 	if buildContext.InstallSuffix != "" {
 		gcargs = append(gcargs, "-installsuffix", buildContext.InstallSuffix)
+	}
+	if buildNoStrict {
+		gcargs = append(gcargs, "-nostrict")
 	}
 	// tool 获取名为 toolName 的编译工具所在的路径并返回, 这里并未执行.
 	// 注意: 6g 只是编译, 而不是链接, 这里的 ofile 只生成编译的中间文件.
