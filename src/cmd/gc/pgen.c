@@ -18,8 +18,7 @@ static void allocauto(Prog* p);
 static void dumpgcargs(Node*, Sym*);
 static Bvec* dumpgclocals(Node*, Sym*);
 
-void
-compile(Node *fn)
+void compile(Node *fn)
 {
 	Bvec *bv;
 	Plist *pl;
@@ -76,6 +75,7 @@ compile(Node *fn)
 		goto ret;
 	
 	hasdefer = 0;
+	// 对 curfn 中可能存在的已声明但未使用的变量进行最终类型检查
 	walk(curfn);
 	if(nerrors != 0)
 		goto ret;

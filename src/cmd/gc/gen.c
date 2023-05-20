@@ -28,13 +28,15 @@ sysfunc(char *name)
 	return n;
 }
 
-/*
- * the address of n has been taken and might be used after
- * the current function returns.  mark any local vars
- * as needing to move to the heap.
- */
-void
-addrescapes(Node *n)
+// addrescapes 为目标 Node 对象可能发生的内存逃逸添加标记.
+//
+// 注意: 主调函数只是知晓目标 Node 之后可能将会被其他函数引用, 但是只有局部变量才会发生逃逸.
+// 其他像是本身就是指针类型的, 就不必额外处理.
+//
+// the address of n has been taken and might be used after the current function returns.
+// mark any local vars as needing to move to the heap.
+//
+void addrescapes(Node *n)
 {
 	char buf[100];
 	Node *oldfn;
@@ -73,12 +75,14 @@ addrescapes(Node *n)
 			n->stackparam = nod(OPARAM, n, N);
 			n->stackparam->type = n->type;
 			n->stackparam->addable = 1;
-			if(n->xoffset == BADWIDTH)
+			if(n->xoffset == BADWIDTH) {
 				fatal("addrescapes before param assignment");
+			}
 			n->stackparam->xoffset = n->xoffset;
 			// fallthrough
 
 		case PAUTO:
+			// 当前 Node 是局部变量, 标记其发生了内存逃逸.
 			n->class |= PHEAP;
 			n->addable = 0;
 			n->ullman = 2;
@@ -113,8 +117,9 @@ addrescapes(Node *n)
 		// In &x[0], if x is a slice, then x does not
 		// escape--the pointer inside x does, but that
 		// is always a heap pointer anyway.
-		if(!isslice(n->left->type))
+		if(!isslice(n->left->type)) {
 			addrescapes(n->left);
+		}
 		break;
 	}
 }

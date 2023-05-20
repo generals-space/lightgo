@@ -35,14 +35,18 @@ func printStderr(args ...interface{}) (int, error) {
 }
 
 func runRun(cmd *Command, args []string) {
+	buildNoStrict = true
 	raceInit()
 	var b builder
 	b.init()
 	b.print = printStderr
+	// i 表示 go run 命令中的 .go 文件数量
 	i := 0
 	for i < len(args) && strings.HasSuffix(args[i], ".go") {
 		i++
 	}
+	// files 为命令行参数中的 .go 文件列表
+	// cmdArgs 则为常规的参数选项
 	files, cmdArgs := args[:i], args[i:]
 	if len(files) == 0 {
 		fatalf("go run: no go files listed")
@@ -54,6 +58,7 @@ func runRun(cmd *Command, args []string) {
 			fatalf("go run: cannot run *_test.go files (%s)", file)
 		}
 	}
+	// p 貌似表示 go run xxx.go 中, .go 文件所在的包名(一般只能为 main)
 	p := goFilesPackage(files)
 	if p.Error != nil {
 		fatalf("%s", p.Error)
@@ -63,6 +68,7 @@ func runRun(cmd *Command, args []string) {
 	}
 	exitIfErrors()
 	if p.Name != "main" {
+		// go run 只能运行 main 包.
 		fatalf("go run: cannot run non-main package")
 	}
 	p.target = "" // must build - not up to date
@@ -80,14 +86,15 @@ func runRun(cmd *Command, args []string) {
 		}
 		fatalf("go run: no suitable source files%s", hint)
 	}
-	p.exeName = src[:len(src)-len(".go")] // name temporary executable for first go file
+	// name temporary executable for first go file
+	p.exeName = src[:len(src)-len(".go")] 
 	a1 := b.action(modeBuild, modeBuild, p)
 	a := &action{f: (*builder).runProgram, args: cmdArgs, deps: []*action{a1}}
 	b.do(a)
 }
 
-// runProgram is the action for running a binary that has already
-// been compiled.  We ignore exit status.
+// runProgram is the action for running a binary that has already been compiled. 
+// We ignore exit status.
 func (b *builder) runProgram(a *action) error {
 	if buildN || buildX {
 		b.showcmd("", "%s %s", a.deps[0].target, strings.Join(a.args, " "))

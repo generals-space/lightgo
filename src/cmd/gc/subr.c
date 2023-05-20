@@ -30,16 +30,14 @@ errorexit(void)
 }
 
 extern int yychar;
-int
-parserline(void)
+int parserline(void)
 {
 	if(yychar != 0 && yychar != -2)	// parser has one symbol lookahead
 		return prevlineno;
 	return lineno;
 }
 
-static void
-adderr(int line, char *fmt, va_list arg)
+static void adderr(int line, char *fmt, va_list arg)
 {
 	Fmt f;
 	Error *p;
@@ -50,10 +48,12 @@ adderr(int line, char *fmt, va_list arg)
 	fmtprint(&f, "\n");
 
 	if(nerr >= merr) {
-		if(merr == 0)
+		if(merr == 0) {
 			merr = 16;
-		else
+		}
+		else {
 			merr *= 2;
+		}
 		p = realloc(err, merr*sizeof err[0]);
 		if(p == nil) {
 			merr = nerr;
@@ -128,8 +128,7 @@ yyerrorl(int line, char *fmt, ...)
 
 extern int yystate, yychar;
 
-void
-yyerror(char *fmt, ...)
+void yyerror(char *fmt, ...)
 {
 	int i;
 	static int lastsyntax;
@@ -208,8 +207,22 @@ yyerror(char *fmt, ...)
 	}
 }
 
-void
-warn(char *fmt, ...)
+void mywarn(char *fmt, ...)
+{
+	va_list arg;
+	Fmt f;
+
+	int line = parserline();
+	va_start(arg, fmt);
+	fmtstrinit(&f);
+	fmtprint(&f, "warning: ");
+	fmtprint(&f, "%L: ", line);
+	fmtvprint(&f, fmt, arg);
+	print("%s", fmtstrflush(&f));
+	va_end(arg);
+}
+
+void warn(char *fmt, ...)
 {
 	va_list arg;
 

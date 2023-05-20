@@ -45,6 +45,13 @@ func init() {
 
 const toolWindowsExtension = ".exe"
 
+// tool 获取名为 toolName 的编译工具所在的路径并返回, 如 6g, 6l 等.
+//
+// 	@param toolName: 编译工具名称, 如 6g, 6l 等
+//
+// caller:
+// 	1. src/cmd/go/build.go -> gcToolchain.gc() 由 go build 命令调用的 6g 进行编译时,
+// 	通过调用该函数先获取工具的绝对路径, 然后由主调函数再次调用.
 func tool(toolName string) string {
 	toolPath := filepath.Join(toolDir, toolName)
 	if toolIsWindows && toolName != "pprof" {
