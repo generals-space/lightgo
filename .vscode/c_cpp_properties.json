@@ -6,7 +6,7 @@
                 "${workspaceFolder}/include",
                 "${workspaceFolder}/src/**"
             ],
-            "intelliSenseMode": "linux-gcc-x64",
+            "intelliSenseMode": "gcc-x64",
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c89",
             "cppStandard": "gnu++98"

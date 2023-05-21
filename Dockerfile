@@ -3,6 +3,9 @@
 FROM registry.cn-hangzhou.aliyuncs.com/generals-space/remote-dev:latest as gopath_extension
 RUN cd /root/ && git clone https://gitee.com/skeyes/go-vs-extension.git
 
+################################################################################
+## 容器环境配置可参考 [go-vs-extension](https://gitee.com/skeyes/go-vs-extension) 
+
 FROM registry.cn-hangzhou.aliyuncs.com/generals-space/remote-dev:latest
 
 ## 这里声明的环境变量, 在容器启动后仍然有效
