@@ -1,7 +1,7 @@
 {
     "go.goroot": "${workspaceFolder}",
-    "go.gopath": "${workspaceFolder}/gopath",
-    "go.toolsGopath": "${workspaceFolder}/gotoolpath",
+    "go.gopath": "${workspaceFolder}/gopath:/usr/local/gopath:/usr/local/gopath_extension",
+    "go.toolsGopath": "/usr/local/gopath_extension",
     "files.associations": {
         "*.goc": "c",
         "*.h": "c",
