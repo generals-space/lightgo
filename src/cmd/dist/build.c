@@ -1567,14 +1567,12 @@ cmdenv(int argc, char **argv)
 	bfree(&b1);
 }
 
-// 构建 6g, 6l, 6c 等命令.
+// 构建并生成 pkg/tool/linux_amd64{6g, 6l, 6c, go_bootstrap} 等工具.
 // 每调用一次 install() 方法, 就构建1个命令.
-//
 //
 // The bootstrap command runs a build from scratch,
 // stopping at having installed the go_bootstrap command.
-void
-cmdbootstrap(int argc, char **argv)
+void cmdbootstrap(int argc, char **argv)
 {
 	int i;
 	Buf b;

@@ -8,9 +8,9 @@
 # GOROOT_FINAL: The expected final Go root, baked into binaries.
 # The default is the location of the Go tree during the build.
 #
-# GOHOSTARCH: The architecture for host tools (compilers and
-# binaries).  Binaries of this type must be executable on the current
-# system, so the only common reason to set this is to set
+# GOHOSTARCH: The architecture for host tools (compilers and binaries). 
+# Binaries of this type must be executable on the current system,
+# so the only common reason to set this is to set
 # GOHOSTARCH=386 on an amd64 machine.
 #
 # GOARCH: The target architecture for installed packages and tools.
@@ -44,20 +44,14 @@
 # to build a statically linked toolchain.
 
 set -e
+
+################################################################################
+## 环境检测
+
 if [ ! -f run.bash ]; then
 	echo 'make.bash must be run from $GOROOT/src' 1>&2
 	exit 1
 fi
-
-# Test for Windows.
-case "$(uname)" in
-*MINGW* | *WIN32* | *CYGWIN*)
-	echo 'ERROR: Do not use make.bash to build on Windows.'
-	echo 'Use make.bat instead.'
-	echo
-	exit 1
-	;;
-esac
 
 # Test for bad ld.
 if ld --version 2>&1 | grep 'gold.* 2\.20' >/dev/null; then
@@ -93,17 +87,13 @@ do
 	fi
 done
 
-# Test for debian/kFreeBSD.
-# cmd/dist will detect kFreeBSD as freebsd/$GOARCH, but we need to
-# disable cgo manually.
-if [ "$(uname -s)" == "GNU/kFreeBSD" ]; then
-        export CGO_ENABLED=0
-fi
-
 # Clean old generated file that will cause problems in the build.
 rm -f ./pkg/runtime/runtime_defs.go
 
-# Finally!  Run the build.
+# Finally! Run the build.
+
+################################################################################
+## 环境检测完成, 开始构建
 
 echo '# Building C bootstrap tool.'
 echo cmd/dist
@@ -116,13 +106,22 @@ case "$GOHOSTARCH" in
 386) mflag=-m32;;
 amd64) mflag=-m64;;
 esac
-if [ "$(uname)" == "Darwin" ]; then
-	# golang.org/issue/5261
-	mflag="$mflag -mmacosx-version-min=10.6"
-fi
-${CC:-gcc} $mflag -O0 -Wall -Werror -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
-## ${CC:-gcc} $mflag -Wall -Werror -g -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
 
+################################################################################
+## Step 1: 先编译生成 dist 工具
+
+## gcc 选项解释:
+##
+## -I: include 的缩写, 表示头文件路径.
+## -D: 在编译期间向 .c 程序中传入宏选项, 在 .c 程序中可以直接获取 GOROOT_FINAL 的值.
+##
+## 实际的命令应该为
+## gcc -m64 -O0 -Wall -Werror -o cmd/dist/dist -Icmd/dist '-DGOROOT_FINAL="/usr/local/go"' cmd/dist/*.c
+##
+## ${CC:-gcc} $mflag -Wall -Werror -g -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
+${CC:-gcc} $mflag -O0 -Wall -Werror -o cmd/dist/dist -Icmd/dist "$DEFGOROOT" cmd/dist/*.c
+
+## dist env 打印出的内容与 go env 差不多
 # -e doesn't propagate out of eval, so check success by hand.
 eval $(./cmd/dist/dist env -p || echo FAIL=true)
 if [ "$FAIL" = true ]; then
@@ -131,6 +130,7 @@ fi
 
 echo
 
+## 如果命令类似于`./make.bash --dist-tool`, 说明是只想构建 dist 工具, 执行到这里即可退出.
 if [ "$1" = "--dist-tool" ]; then
 	# Stop after building dist tool.
 	mkdir -p "$GOTOOLDIR"
@@ -141,17 +141,28 @@ if [ "$1" = "--dist-tool" ]; then
 	exit 0
 fi
 
+################################################################################
+## Step 2: 使用 dist 构建 go_bootstrap 工具
+
 echo "# Building compilers and Go bootstrap tool for host, $GOHOSTOS/$GOHOSTARCH."
 buildall="-a"
 if [ "$1" = "--no-clean" ]; then
 	buildall=""
 fi
-./cmd/dist/dist bootstrap $buildall $GO_DISTFLAGS -v # builds go_bootstrap
-# Delay move of dist tool to now, because bootstrap may clear tool directory.
+
+## 实际的命令应该为
+## ./cmd/dist/dist bootstrap -a -v
+##
+## 这一行将生成 pkg/tool/linux_amd64/{6a,6c,6g,6l,go_bootstrap} 等工具
+./cmd/dist/dist bootstrap $buildall $GO_DISTFLAGS -v
 mv cmd/dist/dist "$GOTOOLDIR"/dist
 "$GOTOOLDIR"/go_bootstrap clean -i std
 echo
 
+################################################################################
+## Step 3: 使用 go_bootstrap 
+
+## 一般不会进到这个 if 块中
 if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ]; then
 	echo "# Building packages and commands for host, $GOHOSTOS/$GOHOSTARCH."
 	GOOS=$GOHOSTOS GOARCH=$GOHOSTARCH \
@@ -160,11 +171,16 @@ if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ]; then
 fi
 
 echo "# Building packages and commands for $GOOS/$GOARCH."
+## 实际命令应该为
+## go_bootstrap install -ccflags '' -gcflags '' -ldflags '' -v std
+##
+## 这一行将在 bin 目录下生成 go 二进制可执行文件
 "$GOTOOLDIR"/go_bootstrap install $GO_FLAGS -ccflags "$GO_CCFLAGS" -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std
 echo
 
 rm -f "$GOTOOLDIR"/go_bootstrap
 
+## 打印 Successful 信息
 if [ "$1" != "--no-banner" ]; then
 	"$GOTOOLDIR"/dist banner
 fi
