@@ -2,6 +2,9 @@
     "go.goroot": "${workspaceFolder}",
     "go.gopath": "${workspaceFolder}/gopath:/usr/local/gopath:/usr/local/gopath_extension",
     "go.toolsGopath": "/usr/local/gopath_extension",
+    // goimports 是 gofmt 的进阶版, 除了自动调整源文件格式, 还可以自动导入源码中
+    // 已使用但未 import 的 package
+    "go.formatTool": "goimports",
     "files.associations": {
         "*.goc": "c",
         "*.h": "c",
