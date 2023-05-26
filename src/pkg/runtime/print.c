@@ -46,8 +46,7 @@ runtime·dump(byte *p, int32 n)
 		runtime·prints("\n");
 }
 
-void
-runtime·prints(int8 *s)
+void runtime·prints(int8 *s)
 {
 	gwrite(s, runtime·findnull((byte*)s));
 }
@@ -348,8 +347,7 @@ runtime·printpointer(void *p)
 }
 
 // golang原生: println() 函数(非 fmt 包的 Println())
-void
-runtime·printstring(String v)
+void runtime·printstring(String v)
 {
 	if(v.len > runtime·maxstring) {
 		gwrite("[string too long]", 17);
@@ -360,20 +358,17 @@ runtime·printstring(String v)
 	}
 }
 
-void
-runtime·printsp(void)
+void runtime·printsp(void)
 {
 	gwrite(" ", 1);
 }
 
-void
-runtime·printnl(void)
+void runtime·printnl(void)
 {
 	gwrite("\n", 1);
 }
 
-void
-runtime·typestring(Eface e, String s)
+void runtime·typestring(Eface e, String s)
 {
 	s = *e.type->string;
 	FLUSH(&s);

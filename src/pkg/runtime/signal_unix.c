@@ -11,8 +11,9 @@
 
 extern SigTab runtime·sigtab[];
 
-void
-runtime·initsig(void)
+// caller:
+// 	1. src/pkg/runtime/proc.c -> runtime·mstart() 只有这一处
+void runtime·initsig(void)
 {
 	int32 i;
 	SigTab *t;

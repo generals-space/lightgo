@@ -326,24 +326,26 @@ uintptr runtime·memlimit(void)
 extern void runtime·sigtramp(void);
 extern void runtime·sigreturn(void);	// calls runtime·sigreturn
 
-void
-runtime·setsig(int32 i, GoSighandler *fn, bool restart)
+void runtime·setsig(int32 i, GoSighandler *fn, bool restart)
 {
 	Sigaction sa;
 
 	runtime·memclr((byte*)&sa, sizeof sa);
 	sa.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTORER;
-	if(restart)
+	if(restart) {
 		sa.sa_flags |= SA_RESTART;
+	}
 	sa.sa_mask = ~0ULL;
 	// TODO(adonovan): Linux manpage says "sa_restorer element is
 	// obsolete and should not be used".  Avoid it here, and test.
 	sa.sa_restorer = (void*)runtime·sigreturn;
-	if(fn == runtime·sighandler)
+	if(fn == runtime·sighandler) {
 		fn = (void*)runtime·sigtramp;
+	}
 	sa.sa_handler = fn;
-	if(runtime·rt_sigaction(i, &sa, nil, sizeof(sa.sa_mask)) != 0)
+	if(runtime·rt_sigaction(i, &sa, nil, sizeof(sa.sa_mask)) != 0) {
 		runtime·throw("rt_sigaction failure");
+	}
 }
 
 GoSighandler*

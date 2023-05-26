@@ -137,10 +137,9 @@ void ·entersyscall(int32 dummy)
 }
 
 // 与 runtime·entersyscall() 相同, 但这里的系统调用是阻塞的.
-// 没懂什么意思...??? handoff()这一行是阻塞的吗? 直到 syscall 完成?
 //
 // caller: 
-// 	1. lock_sema.c/lock_futex.c -> runtime·notetsleepg() 只有这一处.
+// 	1. src/pkg/runtime/lock_futex.c -> runtime·notetsleepg() 只有这一处.
 //
 // The same as runtime·entersyscall(), 
 // but with a hint that the syscall is blocking.
@@ -150,7 +149,7 @@ void ·entersyscallblock(int32 dummy)
 	P *p;
 
 	// see comment in entersyscall
-	m->locks++; 
+	m->locks++;
 
 	// 保留SP用于GC和回溯
 	//
@@ -171,7 +170,8 @@ void ·entersyscallblock(int32 dummy)
 	// 直到这里, 仍与 ·entersyscall 保持一致, 区别在下半部分.
 
 	p = releasep();
-	// 把 p 移交到新的 m
+	// 把 p 移交到新的 m, 而当前 m 则与 g 任务仍绑定在一起.
+	// 即 m 阻塞在这里等 g 任务从 syscall 中返回, 而让 p 则去寻找其他的 m 继续发挥作用.
 	handoffp(p);
 	// do not consider blocked scavenger for deadlock detection
 	if(g->isbackground) {

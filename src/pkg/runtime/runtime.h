@@ -102,15 +102,19 @@ typedef	struct	DebugVars	DebugVars;
 /*
  * Per-CPU declaration.
  *
- * 这里声明的是全局 m 和 g 对象, g != m->g0, 而是**当前协程**的 g .
+ * 这里声明的是全局 m 和 g 对象.
  * 
  * 全局 m 变量不是所谓的 m0, 并不唯一, 应该是**当前线程**的 m id.
  * 在 src/pkg/runtime/os_linux.c -> runtime·newosproc() clone 出一个新的系统线程后,
  * 在 src/pkg/runtime/proc.c -> runtime·mstart() 中, 该 m 变量就已经是自己的 id 了.
  * 
- * 所谓的 m0, 应该是 src/pkg/runtime/proc.c -> runtime·m0 
+ * 所谓的 m0, 应该是 src/pkg/runtime/proc.c -> runtime·m0, 即全局唯一的主线程.
  * 
- * 在 src/pkg/runtime/asm_amd64.s -> _rt0_go() 初始化过程被赋值
+ * 而 g 变量, 虽然我猜测ta是当前 m 线程正在执行的 g, 但是实际上貌似ta就是 g0,
+ * 且 g == m.g0, 每个 m 中的 g0 成员是同一个.
+ * 另外, M 对象中本来就有一个 curg 成员, 表示当前 m 正在执行的任务, 不需要用 g 来表示.
+ * 
+ * m 和 g 在 src/pkg/runtime/asm_amd64.s -> _rt0_go() 初始化过程被赋值
  * (在 runtime·osinit 和 runtime·schedinit 之前)
  * 
  * "extern register" is a special storage class implemented by 6c, 8c, etc.
@@ -377,7 +381,7 @@ struct	G
 
 struct	M
 {
-	// 所有 M 对象的 g0 是同一个???
+	// 貌似所有 M 对象的 g0 是同一个.
 	//
 	// goroutine with scheduling stack
 	G*	g0;
@@ -403,7 +407,7 @@ struct	M
 	G*	gsignal;	// signal-handling G
 	uintptr	tls[4];		// thread-local storage (for x86 extern register)
 	// 如果一个 m 在被创建时指定了要执行的函数, 就会在这里赋值目标函数地址.
-	// 在 newm() 函数中被赋值.
+	// 在 src/pkg/runtime/proc.c -> newm() 函数中被赋值.
 	void	(*mstartfn)(void);
 	// 当前正在运行的 g 对象
 	//
@@ -978,11 +982,41 @@ int32	runtime·charntorune(int32*, uint8*, int32);
  */
 #define FLUSH(x)	USED(x)
 
+////////////////////////////////////////////////////////////////////////////////
+// 汇编函数实现
 void	runtime·gogo(Gobuf*);
 void	runtime·gostartcall(Gobuf*, void(*)(void), void*);
 void	runtime·gostartcallfn(Gobuf*, FuncVal*);
 void	runtime·gosave(Gobuf*);
 void	runtime·lessstack(void);
+void	runtime·memmove(void*, void*, uintptr);
+
+int32	runtime·open(int8*, int32, int32);
+int32	runtime·read(int32, void*, int32);
+int32	runtime·write(int32, void*, int32);
+int32	runtime·close(int32);
+int32	runtime·mincore(void*, uintptr, byte*);
+
+bool	runtime·cas(uint32*, uint32, uint32);
+bool	runtime·cas64(uint64*, uint64, uint64);
+bool	runtime·casp(void**, void*, void*);
+// Don't confuse with XADD x86 instruction,
+// this one is actually 'addx', that is, add-and-fetch.
+uint32	runtime·xadd(uint32 volatile*, int32);
+uint64	runtime·xadd64(uint64 volatile*, int64);
+uint32	runtime·xchg(uint32 volatile*, uint32);
+uint64	runtime·xchg64(uint64 volatile*, uint64);
+
+// 切换到 m->g0 的上下文, 执行目标函数, 同时会把主调函数所在的 g 协程对象, 当作参数传给ta.
+// (毕竟, m->g0 全局对象很容易获取)
+void	runtime·mcall(void(*)(G*));
+// runtime·usleep 实际是 select 的系统调用. 
+void	runtime·usleep(uint32);
+int64	runtime·cputicks(void);
+
+// 汇编函数实现结束
+////////////////////////////////////////////////////////////////////////////////
+
 void	runtime·goargs(void);
 void	runtime·goenvs(void);
 void	runtime·goenvs_unix(void);
@@ -993,7 +1027,6 @@ void	runtime·prints(int8*);
 void	runtime·printf(int8*, ...);
 byte*	runtime·mchr(byte*, byte, byte*);
 int32	runtime·mcmp(byte*, byte*, uintptr);
-void	runtime·memmove(void*, void*, uintptr);
 void*	runtime·mal(uintptr);
 String	runtime·catstring(String, String);
 String	runtime·gostring(byte*);
@@ -1006,20 +1039,7 @@ void	runtime·sigenable(uint32 sig);
 void	runtime·sigdisable(uint32 sig);
 int32	runtime·gotraceback(bool *crash);
 void	runtime·goroutineheader(G*);
-int32	runtime·open(int8*, int32, int32);
-int32	runtime·read(int32, void*, int32);
-int32	runtime·write(int32, void*, int32);
-int32	runtime·close(int32);
-int32	runtime·mincore(void*, uintptr, byte*);
-bool	runtime·cas(uint32*, uint32, uint32);
-bool	runtime·cas64(uint64*, uint64, uint64);
-bool	runtime·casp(void**, void*, void*);
-// Don't confuse with XADD x86 instruction,
-// this one is actually 'addx', that is, add-and-fetch.
-uint32	runtime·xadd(uint32 volatile*, int32);
-uint64	runtime·xadd64(uint64 volatile*, int64);
-uint32	runtime·xchg(uint32 volatile*, uint32);
-uint64	runtime·xchg64(uint64 volatile*, uint64);
+
 uint32	runtime·atomicload(uint32 volatile*);
 void	runtime·atomicstore(uint32 volatile*, uint32);
 void	runtime·atomicstore64(uint64 volatile*, uint64);
@@ -1062,9 +1082,7 @@ void	runtime·runpanic(Panic*);
 uintptr	runtime·getcallersp(void*);
 int32	runtime·mcount(void);
 int32	runtime·gcount(void);
-// 切换到 m->g0 的上下文, 执行目标函数, 同时会把主调函数所在的 g 协程对象, 当作参数传给ta.
-// (毕竟, m->g0 全局对象很容易获取)
-void	runtime·mcall(void(*)(G*));
+
 uint32	runtime·fastrand1(void);
 void	runtime·rewindmorestack(Gobuf*);
 int32	runtime·timediv(int64, int32, int32*);
@@ -1095,9 +1113,7 @@ void	runtime·unwindstack(G*, byte*);
 void	runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp);
 void	runtime·resetcpuprofiler(int32);
 void	runtime·setcpuprofilerate(void(*)(uintptr*, int32), int32);
-// runtime·usleep 是汇编代码, 实际是 select 的系统调用. 
-void	runtime·usleep(uint32);
-int64	runtime·cputicks(void);
+
 int64	runtime·tickspersecond(void);
 void	runtime·blockevent(int64, int32);
 extern int64 runtime·blockprofilerate;

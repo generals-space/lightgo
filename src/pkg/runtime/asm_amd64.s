@@ -87,7 +87,8 @@ ok:
 	// 不过这里应该是只给此处的全局 m 对象赋值, 其他 fork 出的 m 对象应该不会再赋值给 g0 了吧?
 	MOVQ	CX, m_g0(AX)
 
-	CLD				// convention is D is always left cleared
+	// convention is D is always left cleared
+	CLD
 	CALL	runtime·check(SB)
 
 	MOVL	16(SP), AX		// copy argc
@@ -143,6 +144,8 @@ TEXT runtime·asminit(SB),NOSPLIT,$0-0
 TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	8(SP), AX		// gobuf
 	LEAQ	8(SP), BX		// caller's SP
+	// 这里的 gobuf_sp 指的应该是 gobuf 对象的 sp 成员.
+	// 同理, 下面的 gobuf_pc, gobuf_ret, gobuf_ctxt, gobuf_g 也都指代 gobuf 中的成员.
 	MOVQ	BX, gobuf_sp(AX)
 	MOVQ	0(SP), BX		// caller's PC
 	MOVQ	BX, gobuf_pc(AX)

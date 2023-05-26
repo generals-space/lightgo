@@ -1430,7 +1430,7 @@ int	m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
 // 在 src/pkg/runtime/os_linux.c -> runtime·newosproc() clone 出一个新的系统线程后,
 // 在 src/pkg/runtime/proc.c -> runtime·mstart() 中, 该 m 变量就已经是自己的 id 了.
 // 
-// 所谓的 m0, 应该是 src/pkg/runtime/proc.c -> runtime·m0 
+// 真正的 m0 应该是 src/pkg/runtime/proc.c -> runtime·m0 
 // 
 int	*m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9};
 

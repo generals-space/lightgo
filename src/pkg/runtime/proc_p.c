@@ -8,7 +8,7 @@
 
 // 修改 p 对象的数量为 new, 不足的补上, 多余的丢掉(主要是修改 runtime·gomaxprocs 的值).
 //
-// 	@param new: [1, MaxGomaxprocs]
+// 	@param new: 范围在[1, MaxGomaxprocs]
 //
 // caller: 
 // 	1. runtime·schedinit() 为 runtime·allp 数组申请完空间后, 调用此函数将 P 数量调整到合适值.
@@ -346,9 +346,8 @@ G* runqget(P *p)
 }
 
 // Grow local runnable queue.
-// TODO(dvyukov): consider using fixed-size array
-// and transfer excess to the global list 
-// (local queue can grow way too big).
+// TODO(dvyukov): consider using fixed-size array and transfer excess
+// to the global list (local queue can grow way too big).
 static void runqgrow(P *p)
 {
 	G **q;
@@ -361,8 +360,9 @@ static void runqgrow(P *p)
 	q = runtime·malloc(2*s*sizeof(*q));
 	while(t != h) {
 		q[t2++] = p->runq[h++];
-		if(h == s)
+		if(h == s) {
 			h = 0;
+		}
 	}
 	runtime·free(p->runq);
 	p->runq = q;
@@ -374,7 +374,8 @@ static void runqgrow(P *p)
 // 从 p2 的本地队列中, 偷取一半的 g 任务对象, 并放到 p 的队列中.
 //
 // caller:
-// 	1. findrunnable() 
+// 	1. findrunnable()
+// 	2. runtime·testSchedLocalQueueSteal() 这个可以忽略
 //
 // Steal half of elements from local runnable queue of p2
 // and put onto local runnable queue of p.

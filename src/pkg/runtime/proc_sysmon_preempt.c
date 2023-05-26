@@ -148,7 +148,7 @@ struct Pdesc
 // pdesc 没有地方初始化, 所以第一次使用时需要判断各字段的空值情况
 static Pdesc pdesc[MaxGomaxprocs];
 
-// retake 回收陷入系统调用的 p 对象, 同时也抢占运行时间比较长的 g 任务.
+// retake 回收陷入系统调用的 p 对象, 同时也可能抢占运行时间比较长的 g 任务.
 // (防止某一个任务占用CPU太久影响其他任务的执行)
 //
 // 	@param now: 为绝对时间 nanotime

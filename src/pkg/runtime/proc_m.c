@@ -61,7 +61,7 @@ void mcommoninit(M *mp)
 //
 // caller:
 // 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 
-//     程序启动入口, 开始运行主协程.
+//     程序启动入口, 完成 runtime·schedinit() 初始化后, 正式运行主协程.
 // 	2. src/pkg/runtime/os_linux.c -> runtime·newosproc()
 //     创建新 m 对象时, 底层关联系统线程, 并通过 clone 系统调用执行本函数.
 //
@@ -86,15 +86,15 @@ void runtime·mstart(void)
 
 	// Install signal handlers; after minit so that minit can
 	// prepare the thread to be able to handle the signals.
-	// 装载信号处理函数
+	// 加载信号处理函数, 只有主线程需要加载, 用于处理 ctrl-c 这类信号.
 	if(m == &runtime·m0) {
 		runtime·initsig();
 	}
-	// mstart 被 newm 调用时可能会提供 mstartfn 函数
-	// 执行完成目标 fn 后, 该 m 会加入到 g 的抢夺队列(schedule).
+	// 当主调函数为 runtime·newosproc() 时可能会提供 mstartfn 成员方法.
 	if(m->mstartfn) {
 		m->mstartfn();
-	} 
+	}
+	// 执行完 mstartfn 后, 该 m 会加入到 g 的抢夺队列(schedule).
 
 	if(m->helpgc) {
 		// 对于 helpgc 的赋值, 有如下几种可能: 
@@ -269,8 +269,7 @@ retry:
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
 	// 被唤醒的地方有4处, 可能性还是有很多种的.
-	// 如果被唤醒后发现 m->helpgc > 0, 
-	// 说明此m被选为参与执行gc了.
+	// 如果被唤醒后发现 m->helpgc > 0, 说明此m被选为参与执行gc了.
 	if(m->helpgc) {
 		runtime·gchelper();
 		// 辅助执行完毕, 立刻回归原来的角色.
@@ -299,8 +298,10 @@ static void mspinning(void)
 // 如果获取不到, 则返回 false...这个函数好像没有返回值吧???
 //
 // caller:
-// 	1. handoffp()
-// 	2. wakep()
+// 	1. wakep() 当有 go func() 新增任务, 或是原本阻塞的 g 被唤醒, 需要找 m 来执行时被调用,
+// 	此时传入的参数 p 为 nil, 需要自行从 p 列表中寻找.
+// 	2. handoffp() gc stw, sysmon 发起抢占, 或是陷入系统调用时, p 与所属的 m 解绑,
+// 	需要寻找新的 m 继续发挥作用.
 // 	3. injectglist()
 //
 // Schedules some M to run the p (creates an M if necessary).
@@ -351,7 +352,7 @@ void startm(P *p, bool spinning)
 
 // 将 mp 放到全局调度器的 midle 链表头部, 并将其标记为 idle.
 //
-// 调用此函数时必须对sched全局调度器加锁
+// 调用此函数时必须对sched全局调度器加锁.
 //
 // Put mp on midle list.
 // Sched must be locked.

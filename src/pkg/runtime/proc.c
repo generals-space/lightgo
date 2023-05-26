@@ -218,9 +218,10 @@ void runtime·main(void)
 // 如果处于gc过程中, 就不再做这些移交的操作, 置 p 为 Pcstop, 然后尝试唤醒STW.
 //
 // caller: 
-// 	1. stoplockedm()
-// 	2. ·entersyscallblock() 某个 g 任务陷入系统调用时触发
-// 	3. retake()
+// 	1. ·entersyscallblock() 当 GMP 陷入阻塞的系统调用时, GM一起等待返回,
+// 	而P则与M解绑, 寻找其他的 m 对象继续发挥作用.
+// 	2. retake() 由 sysmon() 发起, 回收陷入系统调用的 p 对象, 同时也可能抢占运行时间比较长的 g 任务.
+// 	3. stoplockedm() gc时, m 被告知需要与当前绑定的 p 解绑.
 //
 // Hands off P from syscall or locked M.
 void handoffp(P *p)
@@ -294,8 +295,8 @@ void handoffp(P *p)
 // 尝试再添加一个 p 对象来执行 g 任务.
 //
 // caller:
-// 	1. runtime·newproc1()
-// 	2. runtime·ready()
+// 	1. runtime·newproc1() go func() 新建 g 任务时被调用.
+// 	2. runtime·ready() 在原本阻塞的 g 任务被唤醒时(如 channel 有数据, socket 可读写等情况)被调用
 // 	3. resetspinning()
 //
 // Tries to add one more P to execute G's.
@@ -309,7 +310,7 @@ void wakep(void)
 	if(!runtime·cas(&runtime·sched.nmspinning, 0, 1)) {
 		return;
 	}
-	// ...不是说添加 p 对象吗, 怎么 startm 了
+	// 这里不指定 p, 获取/新建 p 对象会在 startm() 中完成
 	startm(nil, true);
 }
 
@@ -459,7 +460,7 @@ void execute(G *gp)
 }
 
 // caller:
-// 	1. schedule()
+// 	1. schedule() 只有这一处
 static void resetspinning(void)
 {
 	int32 nmspinning;
@@ -488,7 +489,9 @@ static void resetspinning(void)
 	}
 }
 
-// 找到一个待执行的 g 并运行 ta
+// 找到一个待执行的 g 并运行 ta, 即 goroutine 的抢占.
+//
+// 该函数的执行主体为各 M 对象.
 //
 // caller: 
 // 	1. runtime·mstart() 新建的 m 对象完成并启动后, 调用此函数参与调度循环.
@@ -845,87 +848,6 @@ void checkdead(void)
 ////////////////////////////////////////////////////////////////////////////////
 // 拆分 p 对象操作函数到 proc_p.c
 ////////////////////////////////////////////////////////////////////////////////
-
-void runtime·testSchedLocalQueue(void)
-{
-	P p;
-	G gs[1000];
-	int32 i, j;
-
-	runtime·memclr((byte*)&p, sizeof(p));
-	p.runqsize = 1;
-	p.runqhead = 0;
-	p.runqtail = 0;
-	p.runq = runtime·malloc(p.runqsize*sizeof(*p.runq));
-
-	for(i = 0; i < nelem(gs); i++) {
-		if(runqget(&p) != nil) {
-			runtime·throw("runq is not empty initially");
-		}
-		for(j = 0; j < i; j++) {
-			runqput(&p, &gs[i]);
-		}
-		for(j = 0; j < i; j++) {
-			if(runqget(&p) != &gs[i]) {
-				runtime·printf("bad element at iter %d/%d\n", i, j);
-				runtime·throw("bad element");
-			}
-		}
-		if(runqget(&p) != nil) {
-			runtime·throw("runq is not empty afterwards");
-		}
-	}
-}
-
-void runtime·testSchedLocalQueueSteal(void)
-{
-	P p1, p2;
-	G gs[1000], *gp;
-	int32 i, j, s;
-
-	runtime·memclr((byte*)&p1, sizeof(p1));
-	p1.runqsize = 1;
-	p1.runqhead = 0;
-	p1.runqtail = 0;
-	p1.runq = runtime·malloc(p1.runqsize*sizeof(*p1.runq));
-
-	runtime·memclr((byte*)&p2, sizeof(p2));
-	p2.runqsize = nelem(gs);
-	p2.runqhead = 0;
-	p2.runqtail = 0;
-	p2.runq = runtime·malloc(p2.runqsize*sizeof(*p2.runq));
-
-	for(i = 0; i < nelem(gs); i++) {
-		for(j = 0; j < i; j++) {
-			gs[j].sig = 0;
-			runqput(&p1, &gs[j]);
-		}
-		gp = runqsteal(&p2, &p1);
-		s = 0;
-		if(gp) {
-			s++;
-			gp->sig++;
-		}
-		while(gp = runqget(&p2)) {
-			s++;
-			gp->sig++;
-		}
-		while(gp = runqget(&p1)) {
-			gp->sig++;
-		}
-		for(j = 0; j < i; j++) {
-			if(gs[j].sig != 1) {
-				runtime·printf("bad element %d(%d) at iter %d\n", j, gs[j].sig, i);
-				runtime·throw("bad element");
-			}
-		}
-		if(s != i/2 && s != i/2+1) {
-			runtime·printf("bad steal %d, want %d or %d, iter %d\n",
-				s, i/2, i/2+1, i);
-			runtime·throw("bad steal");
-		}
-	}
-}
 
 static int8 experiment[] = GOEXPERIMENT; // defined in zaexperiment.h
 

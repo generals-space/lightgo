@@ -48,7 +48,7 @@ void runtime·ready(G *gp)
 		runtime·throw("bad g->status in ready");
 	}
 	gp->status = Grunnable;
-	// 将gp对象放到当前m绑定的p对象的runq待执行队列中.
+	// 将 gp 对象放到当前 m 绑定的本地 p 对象的 runq 待执行队列中.
 	runqput(m->p, gp);
 	// TODO: fast atomic
 	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0){
@@ -222,7 +222,7 @@ void injectglist(G *glist)
 		globrunqput(gp);
 	}
 	runtime·unlock(&runtime·sched);
-	// 如果全局队列中还有处于 idle 状态的p, 就创建更多的m来运行这些任务.
+	// 如果全局队列中还有处于 idle 状态的 p, 就创建更多的m来运行这些任务.
 	for(; n && runtime·sched.npidle; n--) {
 		startm(nil, false);
 	}
