@@ -3,6 +3,7 @@
 参考文章
 
 1. [Static functions declared in "C" header files](https://stackoverflow.com/questions/42056160/static-functions-declared-in-c-header-files)
+    - 声明为`static`静态类型的函数, 只能在其定义所在的`.c`文件中被引用, 无法跨源文件调用, 即使共用同一个`.h`头文件也不行.
 2. [c/c++开发分享在“C”头文件中声明的静态函数](https://www.ssfiction.com/c-cyuyankaifa/560791.html)
     - 参考文章1的中文翻译
 
@@ -105,3 +106,7 @@ void patch(void) {
 好吧, 因此我把被 chan.c 和 select.c 同时引用的`dequeue()`, `enqueue()`和`dequeueg()` 3个函数, 在2个`.c`源文件都定义一遍.
 
 这次编译真的成功了.
+
+20230527更新
+
+为了精简代码, 将这3个函数从 select.c 中删掉, 同时移除函数声明中的`static`标记.

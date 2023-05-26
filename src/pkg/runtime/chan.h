@@ -17,17 +17,14 @@ typedef	struct	Scase	Scase;
 // chanbuf(c, i) is pointer to the i'th slot in the buffer.
 #define chanbuf(c, i) ((byte*)((c)+1)+(uintptr)(c)->elemsize*(i))
 
-////////////////////////////////////////////////////////////////////////////////
-// 下述3个函数: dequeue, enqueue, racesync, 同时在 chan.c 和 select.c 中使用.
-// 虽然在 chan.h 中有ta们的声明, 但是由于是静态类型, 需要在所有用到ta们的 .c 文件中定义.
-// 这是C语言的特性规定, 以后可以考虑将这3个函数修改为非静态函数.
-// 相关资料见: https://stackoverflow.com/questions/42056160/static-functions-declared-in-c-header-files
+// static 函数只能用于源文件自身, 要实现跨文件的函数相互调用, 则需要将被调函数的 static 标记移除.
+
+SudoG*	dequeue(WaitQ*);
+void	enqueue(WaitQ*, SudoG*);
+void	racesync(Hchan*, SudoG*);
 
 static	void	dequeueg(WaitQ*);
-static	SudoG*	dequeue(WaitQ*);
-static	void	enqueue(WaitQ*, SudoG*);
 static	void	destroychan(Hchan*);
-static	void	racesync(Hchan*, SudoG*);
 
 enum
 {

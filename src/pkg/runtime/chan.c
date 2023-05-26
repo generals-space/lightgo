@@ -717,15 +717,8 @@ reflect·chancap(Hchan *c, intgo cap)
 	FLUSH(&cap);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// 下述3个函数: dequeue, enqueue, racesync, 同时在 chan.c 和 select.c 中使用.
-// 虽然在 chan.h 中有ta们的声明, 但是由于是静态类型, 需要在所有用到ta们的 .c 文件中定义.
-// 这是C语言的特性规定, 以后可以考虑将这3个函数修改为非静态函数.
-// 相关资料见: https://stackoverflow.com/questions/42056160/static-functions-declared-in-c-header-files
-
 // 从 channel 自身的 recvq/sendq 队列中, 随便取一个 goroutine 返回.
-static SudoG*
-dequeue(WaitQ *q)
+SudoG* dequeue(WaitQ *q)
 {
 	SudoG *sgp;
 
@@ -747,8 +740,7 @@ loop:
 	return sgp;
 }
 
-static void
-enqueue(WaitQ *q, SudoG *sgp)
+void enqueue(WaitQ *q, SudoG *sgp)
 {
 	sgp->link = nil;
 	if(q->first == nil) {
@@ -760,12 +752,10 @@ enqueue(WaitQ *q, SudoG *sgp)
 	q->last = sgp;
 }
 
-static void
-racesync(Hchan *c, SudoG *sg)
+void racesync(Hchan *c, SudoG *sg)
 {
 	runtime·racerelease(chanbuf(c, 0));
 	runtime·raceacquireg(sg->g, chanbuf(c, 0));
 	runtime·racereleaseg(sg->g, chanbuf(c, 0));
 	runtime·raceacquire(chanbuf(c, 0));
 }
-////////////////////////////////////////////////////////////////////////////////
