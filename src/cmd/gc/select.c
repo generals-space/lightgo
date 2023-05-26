@@ -3,15 +3,23 @@
 // license that can be found in the LICENSE file.
 
 /*
- * select
+ * select.c 由 chan.c 拆分而来, 专用于如下结构
+ * 
+ * select {
+ * data := <- channel:
+ * 	// ...省略
+ * channel <- data:
+ * 	// ...省略
+ * }
+ * 
+ * 20221101
  */
 
 #include <u.h>
 #include <libc.h>
 #include "go.h"
 
-void
-typecheckselect(Node *sel)
+void typecheckselect(Node *sel)
 {
 	Node *ncase, *n, *def;
 	NodeList *l;
@@ -90,8 +98,7 @@ typecheckselect(Node *sel)
 	lineno = lno;
 }
 
-void
-walkselect(Node *sel)
+void walkselect(Node *sel)
 {
 	int lno, i;
 	Node *n, *r, *a, *tmp, *var, *cas, *dflt, *ch;
@@ -255,7 +262,7 @@ walkselect(Node *sel)
 			r->ntest = mkcall1(chanfn("selectnbsend", 2, ch->type),
 					types[TBOOL], &r->ninit, typename(ch->type), ch, n->right);
 			break;
-			
+
 		case OSELRECV:
 			// if c != nil && selectnbrecv(&v, c) { body } else { default body }
 			r = nod(OIF, N, N);

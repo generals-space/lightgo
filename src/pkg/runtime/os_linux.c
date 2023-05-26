@@ -42,8 +42,7 @@ enum
 // 允许被误唤醒
 // 休眠时间最长为 ns 纳秒, 如果 ns < 0, 表示永久休眠.
 #pragma textflag NOSPLIT
-void
-runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
+void runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 {
 	Timespec ts;
 
@@ -68,8 +67,7 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 // cnt 可以指定此次操作能够唤醒多少个休眠中的进程.
 //
 // If any procs are sleeping on addr, wake up at most cnt.
-void
-runtime·futexwakeup(uint32 *addr, uint32 cnt)
+void runtime·futexwakeup(uint32 *addr, uint32 cnt)
 {
 	int64 ret;
 
@@ -144,8 +142,7 @@ enum
 //
 // caller:
 // 	1. src/pkg/runtime/proc.c -> newm() 创建 m 对象时, 调用此函数创建系统线程. 只有这一处.
-void
-runtime·newosproc(M *mp, void *stk)
+void runtime·newosproc(M *mp, void *stk)
 {
 	int32 ret;
 	int32 flags;
@@ -197,8 +194,7 @@ runtime·newosproc(M *mp, void *stk)
 
 // caller: 
 // 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 主程序入口
-void
-runtime·osinit(void)
+void runtime·osinit(void)
 {
 	runtime·ncpu = getproccount();
 }
@@ -208,8 +204,7 @@ runtime·osinit(void)
 byte*	runtime·startup_random_data;
 uint32	runtime·startup_random_data_len;
 
-void
-runtime·get_random_data(byte **rnd, int32 *rnd_len)
+void runtime·get_random_data(byte **rnd, int32 *rnd_len)
 {
 	if(runtime·startup_random_data != nil) {
 		*rnd = runtime·startup_random_data;
@@ -230,24 +225,21 @@ runtime·get_random_data(byte **rnd, int32 *rnd_len)
 	}
 }
 
-void
-runtime·goenvs(void)
+void runtime·goenvs(void)
 {
 	runtime·goenvs_unix();
 }
 
 // Called to initialize a new m (including the bootstrap m).
 // Called on the parent thread (main thread in case of bootstrap), can allocate memory.
-void
-runtime·mpreinit(M *mp)
+void runtime·mpreinit(M *mp)
 {
 	mp->gsignal = runtime·malg(32*1024);	// OS X wants >=8K, Linux >=2K
 }
 
 // Called to initialize a new m (including the bootstrap m).
 // Called on the new thread, can not allocate memory.
-void
-runtime·minit(void)
+void runtime·minit(void)
 {
 	// Initialize signal handling.
 	runtime·signalstack((byte*)m->gsignal->stackguard - StackGuard, 32*1024);
@@ -255,14 +247,12 @@ runtime·minit(void)
 }
 
 // Called from dropm to undo the effect of an minit.
-void
-runtime·unminit(void)
+void runtime·unminit(void)
 {
 	runtime·signalstack(nil, 0);
 }
 
-void
-runtime·sigpanic(void)
+void runtime·sigpanic(void)
 {
 	switch(g->sig) {
 	case SIGBUS:
@@ -298,8 +288,7 @@ runtime·sigpanic(void)
 	runtime·panicstring(runtime·sigtab[g->sig].name);
 }
 
-uintptr
-runtime·memlimit(void)
+uintptr runtime·memlimit(void)
 {
 	Rlimit rl;
 	extern byte text[], end[];

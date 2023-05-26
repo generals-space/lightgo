@@ -234,6 +234,8 @@ runtime·netpollfd(PollDesc *pd)
 	return pd->fd;
 }
 
+// 	@param mode: 'r', 'w', 或'rw'
+//
 // caller:
 // 	1. src/pkg/runtime/netpoll_epoll.c -> runtime·netpoll()
 //
@@ -244,10 +246,12 @@ void runtime·netpollready(G **gpp, PollDesc *pd, int32 mode)
 
 	rg = wg = nil;
 	runtime·lock(pd);
-	if(mode == 'r' || mode == 'r'+'w')
+	if(mode == 'r' || mode == 'r'+'w') {
 		rg = netpollunblock(pd, 'r', true);
-	if(mode == 'w' || mode == 'r'+'w')
+	}
+	if(mode == 'w' || mode == 'r'+'w') {
 		wg = netpollunblock(pd, 'w', true);
+	}
 	runtime·unlock(pd);
 	if(rg) {
 		rg->schedlink = *gpp;
@@ -292,8 +296,7 @@ netpollblock(PollDesc *pd, int32 mode)
 	return false;
 }
 
-static G*
-netpollunblock(PollDesc *pd, int32 mode, bool ioready)
+static G* netpollunblock(PollDesc *pd, int32 mode, bool ioready)
 {
 	G **gpp, *old;
 

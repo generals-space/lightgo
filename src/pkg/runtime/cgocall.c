@@ -94,8 +94,7 @@ static void unwindm(void);
 static void endcgo(void);
 static FuncVal endcgoV = { endcgo };
 
-void
-runtime·cgocall(void (*fn)(void*), void *arg)
+void runtime·cgocall(void (*fn)(void*), void *arg)
 {
 	Defer d;
 
@@ -243,8 +242,7 @@ struct CallbackArgs
 void runtime·cgocallbackg1(void);
 
 #pragma textflag NOSPLIT
-void
-runtime·cgocallbackg(void)
+void runtime·cgocallbackg(void)
 {
 	if(g != m->curg) {
 		runtime·prints("runtime: bad g in cgocallback");
@@ -268,8 +266,7 @@ runtime·cgocallbackg(void)
 	}
 }
 
-void
-runtime·cgocallbackg1(void)
+void runtime·cgocallbackg1(void)
 {
 	CallbackArgs *cb;
 	Defer d;
@@ -306,8 +303,7 @@ runtime·cgocallbackg1(void)
 	g->defer = d.link;
 }
 
-static void
-unwindm(void)
+static void unwindm(void)
 {
 	// Restore sp saved by cgocallback during
 	// unwind of g's stack (see comment at top of file).
