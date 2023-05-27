@@ -11,8 +11,7 @@ uint32 runtime·Hchansize = sizeof(Hchan);
 
 // caller:
 // 	1. runtime·makechan()
-Hchan*
-runtime·makechan_c(ChanType *t, int64 hint)
+Hchan* runtime·makechan_c(ChanType *t, int64 hint)
 {
 	Hchan *c;
 	Type *elem;
@@ -49,8 +48,7 @@ runtime·makechan_c(ChanType *t, int64 hint)
 
 // For reflect
 //	func makechan(typ *ChanType, size uint64) (chan)
-void
-reflect·makechan(ChanType *t, uint64 size, Hchan *c)
+void reflect·makechan(ChanType *t, uint64 size, Hchan *c)
 {
 	c = runtime·makechan_c(t, size);
 	FLUSH(&c);
@@ -87,15 +85,14 @@ void runtime·makechan(ChanType *t, int64 hint, Hchan *ret)
 // when a channel involved in the sleep has been closed. 
 // it is easiest to loop and re-run the operation; we'll see that it's now closed.
 //
-void
-runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
+void runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 {
-	SudoG *sg;
-	SudoG mysg;
+	SudoG *sg; 	// 需要从 channel->recvq 队列中取出一个 receiver 对象.
+	SudoG mysg; // 当前的 sender 对象.
 	G* gp;
 	int64 t0;
 
-	// 如果 channel 对象为 nil(比如只声明变量, 未使用 make() 进行初始)
+	// 如果 channel 对象为 nil(比如只声明变量, 未使用 make() 进行初始化)
 	if(c == nil) {
 		USED(t);
 		if(pres != nil) {
@@ -133,12 +130,12 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	if(c->dataqsiz > 0) {
 		goto asynch;
 	} 
-
+	// 如果是无缓冲队列, 则进行面对面的通信.
 	sg = dequeue(&c->recvq);
 	if(sg != nil) {
 		if(raceenabled){
 			racesync(c, sg);
-		} 
+		}
 		// 运行到此处, 说明是同步收发的流程, 同步收发完全可以两个 goroutine 一对一完成,
 		// 不需要经过 channel, 这里直接把锁释放.
 		runtime·unlock(c);
@@ -150,12 +147,12 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 			// 这里是将待写入的数据直接放到 receiver 对象中, 不在 channel 中存储一遍了.
 			//
 			// 注意: receiver 中也有这个过程, 看当前的逻辑, sender 与 receiver 必定
-			// 一前一后地订阅一个 channel, 而且总是后来者完成 copy 的工作.
+			// 一前一后地订阅一个 channel, 前者陷入休眠, 后者完成 copy 的工作.
 			c->elemalg->copy(c->elemsize, sg->elem, ep);
-		} 
+		}
 		if(sg->releasetime) {
 			sg->releasetime = runtime·cputicks();
-		} 
+		}
 		runtime·ready(gp);
 
 		if(pres != nil) {
@@ -171,7 +168,7 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	}
 
 	// 运行到这里, 说明 channel 是无缓冲的, 而且没有 receiver, 那么写入行为会被阻塞.
-	// 在将自身 g 对象注册到 channel 对象的 sendq 队列后, 当前 g 就要挂起了(执行其他任务).
+	// 在将自身 g 对象注册到 channel 对象的 sendq 队列后, 当前 g 就要挂起了.
 	mysg.elem = ep;
 	mysg.g = g;
 	mysg.selgen = NOSELGEN;
@@ -183,17 +180,20 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	// [anchor] 运行到此处的示例, 请见 010.channel 中的 chan03() 函数.
 	runtime·park(runtime·unlock, c, "chan send");
 
+	// 注意: 运行到这里, 说明之前阻塞的 sender 被唤醒, 但是并没有向 receiver 写入的代码.
+	// 这是因为, 在休眠之前, sender 已经将自己注册到 c->sendq 中, receiver 的代码中
+	// 可以直接找到当前 sender, 然后通过 copy() 拿到数据, 通信就完成了, 不需要其他操作.
 	if(g->param == nil) {
 		runtime·lock(c);
 		if(!c->closed) {
 			runtime·throw("chansend: spurious wakeup");
-		} 
+		}
 		goto closed;
 	}
 
 	if(mysg.releasetime > 0) {
 		runtime·blockevent(mysg.releasetime - t0, 2);
-	} 
+	}
 
 	// 无缓冲 channel 的数据发送处理结束
 	return;
@@ -202,7 +202,7 @@ runtime·chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 asynch:
 	if(c->closed) {
 		goto closed;
-	} 
+	}
 
 	// 异步队列的缓冲区只有 dataqsiz 这么大, 如果其中的成员数量等于这个值, 说明已经满了,
 	// 则发送端所在的 goroutine 需要挂起, 无法发送.
@@ -263,8 +263,7 @@ closed:
 //
 // 	@param ep: 接收结果的变量地址
 // 	@param received: 应该是 var, ok := <- channel 场景中的 "ok" 值.
-void
-runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *received)
+void runtime·chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *received)
 {
 	SudoG *sg;
 	SudoG mysg;
@@ -446,112 +445,27 @@ closed:
 
 // chansend1(hchan *chan any, elem any);
 #pragma textflag NOSPLIT
-void
-runtime·chansend1(ChanType *t, Hchan* c, ...)
+void runtime·chansend1(ChanType *t, Hchan* c, ...)
 {
 	runtime·chansend(t, c, (byte*)(&c+1), nil, runtime·getcallerpc(&t));
 }
 
 // chanrecv1(hchan *chan any) (elem any);
 #pragma textflag NOSPLIT
-void
-runtime·chanrecv1(ChanType *t, Hchan* c, ...)
+void runtime·chanrecv1(ChanType *t, Hchan* c, ...)
 {
 	runtime·chanrecv(t, c, (byte*)(&c+1), nil, nil);
 }
 
 // chanrecv2(hchan *chan any) (elem any, received bool);
 #pragma textflag NOSPLIT
-void
-runtime·chanrecv2(ChanType *t, Hchan* c, ...)
+void runtime·chanrecv2(ChanType *t, Hchan* c, ...)
 {
 	byte *ae, *ap;
 
 	ae = (byte*)(&c+1);
 	ap = ae + t->elem->size;
 	runtime·chanrecv(t, c, ae, nil, ap);
-}
-
-// func selectnbsend(c chan any, elem any) bool
-//
-// compiler implements
-//
-//	select {
-//	case c <- v:
-//		... foo
-//	default:
-//		... bar
-//	}
-//
-// as
-//
-//	if selectnbsend(c, v) {
-//		... foo
-//	} else {
-//		... bar
-//	}
-//
-#pragma textflag NOSPLIT
-void
-runtime·selectnbsend(ChanType *t, Hchan *c, ...)
-{
-	byte *ae, *ap;
-
-	ae = (byte*)(&c + 1);
-	ap = ae + ROUND(t->elem->size, Structrnd);
-	runtime·chansend(t, c, ae, ap, runtime·getcallerpc(&t));
-}
-
-// func selectnbrecv(elem *any, c chan any) bool
-//
-// compiler implements
-//
-//	select {
-//	case v = <-c:
-//		... foo
-//	default:
-//		... bar
-//	}
-//
-// as
-//
-//	if selectnbrecv(&v, c) {
-//		... foo
-//	} else {
-//		... bar
-//	}
-//
-#pragma textflag NOSPLIT
-void
-runtime·selectnbrecv(ChanType *t, byte *v, Hchan *c, bool selected)
-{
-	runtime·chanrecv(t, c, v, &selected, nil);
-}
-
-// func selectnbrecv2(elem *any, ok *bool, c chan any) bool
-//
-// compiler implements
-//
-//	select {
-//	case v, ok = <-c:
-//		... foo
-//	default:
-//		... bar
-//	}
-//
-// as
-//
-//	if c != nil && selectnbrecv2(&v, &ok, c) {
-//		... foo
-//	} else {
-//		... bar
-//	}
-//
-#pragma textflag NOSPLIT
-void
-runtime·selectnbrecv2(ChanType *t, byte *v, bool *received, Hchan *c, bool selected)
-{
-	runtime·chanrecv(t, c, v, &selected, received);
 }
 
 // For reflect:
@@ -562,8 +476,7 @@ runtime·selectnbrecv2(ChanType *t, byte *v, bool *received, Hchan *c, bool sele
 // The "uintptr selected" is really "bool selected" but saying
 // uintptr gets us the right alignment for the output parameter block.
 #pragma textflag NOSPLIT
-void
-reflect·chansend(ChanType *t, Hchan *c, uintptr val, bool nb, uintptr selected)
+void reflect·chansend(ChanType *t, Hchan *c, uintptr val, bool nb, uintptr selected)
 {
 	bool *sp;
 	byte *vp;
@@ -589,8 +502,7 @@ reflect·chansend(ChanType *t, Hchan *c, uintptr val, bool nb, uintptr selected)
 //	func chanrecv(c chan, nb bool) (val iword, selected, received bool)
 // where an iword is the same word an interface value would use:
 // the actual data if it fits, or else a pointer to the data.
-void
-reflect·chanrecv(ChanType *t, Hchan *c, bool nb, uintptr val, bool selected, bool received)
+void reflect·chanrecv(ChanType *t, Hchan *c, bool nb, uintptr val, bool selected, bool received)
 {
 	byte *vp;
 	bool *sp;
@@ -620,8 +532,7 @@ static void closechan(Hchan *c, void *pc);
 
 // closechan(sel *byte);
 #pragma textflag NOSPLIT
-void
-runtime·closechan(Hchan *c)
+void runtime·closechan(Hchan *c)
 {
 	closechan(c, runtime·getcallerpc(&c));
 }
@@ -629,14 +540,12 @@ runtime·closechan(Hchan *c)
 // For reflect
 //	func chanclose(c chan)
 #pragma textflag NOSPLIT
-void
-reflect·chanclose(Hchan *c)
+void reflect·chanclose(Hchan *c)
 {
 	closechan(c, runtime·getcallerpc(&c));
 }
 
-static void
-closechan(Hchan *c, void *pc)
+static void closechan(Hchan *c, void *pc)
 {
 	SudoG *sg;
 	G* gp;
@@ -691,8 +600,7 @@ closechan(Hchan *c, void *pc)
 
 // For reflect
 //	func chanlen(c chan) (len int)
-void
-reflect·chanlen(Hchan *c, intgo len)
+void reflect·chanlen(Hchan *c, intgo len)
 {
 	if(c == nil) {
 		len = 0;
@@ -705,8 +613,7 @@ reflect·chanlen(Hchan *c, intgo len)
 
 // For reflect
 //	func chancap(c chan) int
-void
-reflect·chancap(Hchan *c, intgo cap)
+void reflect·chancap(Hchan *c, intgo cap)
 {
 	if(c == nil) {
 		cap = 0;

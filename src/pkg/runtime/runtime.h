@@ -341,6 +341,7 @@ struct	G
 	// 1. garbage collection
 	// 2. stack unsplit
 	// 3. stack split
+	// 4. chan send/recv(无缓冲 channel 读写阻塞)
 	//
 	// if status==Gwaiting
 	int8*	waitreason;

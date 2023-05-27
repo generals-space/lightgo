@@ -48,14 +48,13 @@ enum
 // MUTEX_SLEEPING means that there is presumably at least one sleeping thread.
 // Note that there can be spinning threads during all states - they do not
 // affect mutex's state.
-void
-runtime·lock(Lock *l)
+void runtime·lock(Lock *l)
 {
 	uint32 i, v, wait, spin;
 
 	if(m->locks++ < 0) {
 		runtime·throw("runtime·lock: lock count");
-	} 
+	}
 
 	// 1. 偏向锁(只有一个线程, 未发生锁竞争时, 性能极高(基本不需要额外开销))
 	//
@@ -67,7 +66,7 @@ runtime·lock(Lock *l)
 	v = runtime·xchg((uint32*)&l->key, MUTEX_LOCKED);
 	if(v == MUTEX_UNLOCKED) {
 		return;
-	} 
+	}
 
 	// 运行到这里, 说明没抢占成功.
 	// 那肯定就要么是 locked, 要么是 sleeping了, 区别在于是不是有协程在此 mutex 上休眠.
@@ -132,8 +131,7 @@ runtime·lock(Lock *l)
 // lock_sema.c 的 unlock() 中修改 l->key 的值的时候用了 for 循环, 
 // 不修改成功就不停的那种...感觉那样比较靠谱啊...
 // 这俩文件的实现应该是不同的人写的吧? 风格都不像.
-void
-runtime·unlock(Lock *l)
+void runtime·unlock(Lock *l)
 {
 	uint32 v;
 
@@ -170,15 +168,13 @@ runtime·unlock(Lock *l)
 // 如果不为0, 则表示被唤醒, 可以返回了.
 //
 // One-time notifications.
-void
-runtime·noteclear(Note *n)
+void runtime·noteclear(Note *n)
 {
 	n->key = 0;
 }
 
 // src/pkg/runtime/lock_sema.c -> runtime·notewakeup() 不同的实现方式
-void
-runtime·notewakeup(Note *n)
+void runtime·notewakeup(Note *n)
 {
 	uint32 old;
 	// 将 n->key 赋值为1, old为true/false ???
@@ -197,8 +193,7 @@ runtime·notewakeup(Note *n)
 // caller:
 // 	1. src/pkg/runtime/proc.c -> sysmon() 
 // 	在发现处于 gc 过程中, 或是所有 p 都已空闲时, sysmon 线程会调用此函数将自己挂起.
-void
-runtime·notesleep(Note *n)
+void runtime·notesleep(Note *n)
 {
 	// 只能在g0上调用.
 	if(g != m->g0) {
@@ -210,8 +205,7 @@ runtime·notesleep(Note *n)
 }
 
 #pragma textflag NOSPLIT
-static bool
-notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
+static bool notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 {
 	// Conceptually, deadline and now are local variables.
 	// They are passed as arguments so that the space for them
@@ -227,22 +221,28 @@ notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 	}
 	
 	// n->key不等于0, 说明已被唤醒???
-	if(runtime·atomicload((uint32*)&n->key) != 0) return true;
+	if(runtime·atomicload((uint32*)&n->key) != 0) {
+		return true;
+	}
 	// 计时开始
 	deadline = runtime·nanotime() + ns;
 	for(;;) {
 		runtime·futexsleep((uint32*)&n->key, 0, ns);
 
-		if(runtime·atomicload((uint32*)&n->key) != 0) break;
+		if(runtime·atomicload((uint32*)&n->key) != 0) {
+			break;
+		}
 
 		now = runtime·nanotime();
 		
-		if(now >= deadline) break;
+		if(now >= deadline) {
+			break;
+		}
 
 		ns = deadline - now;
 	}
 	// deadline时间到
-	
+
 	return runtime·atomicload((uint32*)&n->key) != 0;
 }
 

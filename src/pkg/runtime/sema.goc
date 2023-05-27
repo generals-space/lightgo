@@ -78,52 +78,54 @@ static struct semtable semtable[SEMTABLESZ];
 
 // 从 semtable 映射表中获取 addr 对应的 semroot 队列.
 // ...???这个addr到数组索引的映射算法很奇怪啊
-static SemaRoot*
-semroot(uint32 *addr)
+static SemaRoot* semroot(uint32 *addr)
 {
 	return &semtable[((uintptr)addr >> 3) % SEMTABLESZ];
 }
 
 // 将目标 SemaWaiter 对象s放到 SemaRoot 对象root所指队列的队列尾.
-static void
-semqueue(SemaRoot *root, uint32 volatile *addr, SemaWaiter *s)
+static void semqueue(SemaRoot *root, uint32 volatile *addr, SemaWaiter *s)
 {
 	s->g = g;
 	s->addr = addr;
 	s->next = nil; // 作为队列尾, 后面没有元素.
 	s->prev = root->tail;
 
-	if(root->tail)
+	if(root->tail) {
 		root->tail->next = s;
-	else
+	}
+	else {
 		// root->tail 为空, 说明队列为空, 直接把队列头指向s
 		root->head = s;
+	}
 	root->tail = s;
 }
 
 // 将 s 对象从 root 所指队列中移出.
-static void
-semdequeue(SemaRoot *root, SemaWaiter *s)
+static void semdequeue(SemaRoot *root, SemaWaiter *s)
 {
-	if(s->next)
+	if(s->next) {
 		s->next->prev = s->prev;
-	else
+	}
+	else {
 		// 说明s对象是队列尾
 		root->tail = s->prev;
+	}
 
-	if(s->prev)
+	if(s->prev) {
 		s->prev->next = s->next;
-	else
+	}
+	else {
 		// 说明s对象是队列头
 		root->head = s->next;
+	}
 
 	s->prev = nil;
 	s->next = nil;
 }
 
 // 判断目标地址 addr 是否可以...???
-static int32
-cansemacquire(uint32 *addr)
+static int32 cansemacquire(uint32 *addr)
 {
 	uint32 v;
 	// runtime·atomicload() 在 runtime/atomic_amd64.c 中定义
@@ -140,8 +142,7 @@ cansemacquire(uint32 *addr)
 //
 // caller: 
 // 	1. mutex.go->Lock() 中 runtime_Semacquire(), 
-void
-runtime·semacquire(uint32 volatile *addr, bool profile)
+void runtime·semacquire(uint32 volatile *addr, bool profile)
 {
 	// Needs to be allocated on stack, otherwise 
 	// garbage collector could deallocate it
@@ -174,7 +175,6 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 		// 对 root 的修改需要加锁, 作为 mutex 的底层实现, 
 		// 实际借助了OS层面的 semaphore/futex 机制.
 		// runtime·lock() 在 lock_futex.c/lock_sema.c 文件中定义...
-		// 不过 lock() 方法接受的应该是 *Lock 类型啊.
 		runtime·lock(root);
 		// Add ourselves to nwait to disable "easy case" in semrelease.
 		// 将 root->nwait 加1, 这会导致在 semrelease() 无法满足 easy case.
@@ -207,8 +207,7 @@ runtime·semacquire(uint32 volatile *addr, bool profile)
 	}
 }
 
-void
-runtime·semrelease(uint32 volatile *addr)
+void runtime·semrelease(uint32 volatile *addr)
 {
 	SemaWaiter *s;
 	SemaRoot *root;
@@ -317,22 +316,27 @@ func runtime_Syncsemacquire(s *SyncSema) {
 		if(s->head->nrelease == 0) {
 			wake = s->head;
 			s->head = wake->next;
-			if(s->head == nil)
+			if(s->head == nil) {
 				s->tail = nil;
+			}
 		}
 		runtime·unlock(s);
-		if(wake)
+		if(wake) {
 			runtime·ready(wake->g);
+		}
 	} else {
 		// enqueue itself
-		if(s->tail == nil)
+		if(s->tail == nil) {
 			s->head = &w;
-		else
+		}
+		else {
 			s->tail->next = &w;
+		}
 		s->tail = &w;
 		runtime·park(runtime·unlock, s, "semacquire");
-		if(t0)
+		if(t0) {
 			runtime·blockevent(w.releasetime - t0, 2);
+		}
 	}
 }
 
@@ -350,21 +354,26 @@ func runtime_Syncsemrelease(s *SyncSema, n uint32) {
 		// have pending acquire, satisfy it
 		wake = s->head;
 		s->head = wake->next;
-		if(s->head == nil)
+		if(s->head == nil) {
 			s->tail = nil;
-		if(wake->releasetime)
+		}
+		if(wake->releasetime) {
 			wake->releasetime = runtime·cputicks();
+		}
 		runtime·ready(wake->g);
 		w.nrelease--;
 	}
 	if(w.nrelease > 0) {
 		// enqueue itself
-		if(s->tail == nil)
+		if(s->tail == nil) {
 			s->head = &w;
-		else
+		}
+		else {
 			s->tail->next = &w;
+		}
 		s->tail = &w;
 		runtime·park(runtime·unlock, s, "semarelease");
-	} else
+	} else {
 		runtime·unlock(s);
+	}
 }

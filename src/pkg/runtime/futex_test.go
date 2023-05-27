@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+// 命令行执行可用: go test -v -run ./futex_test.go
+
 func TestFutexsleep(t *testing.T) {
 	ch := make(chan bool, 1)
 	var dummy uint32
@@ -27,8 +29,10 @@ func TestFutexsleep(t *testing.T) {
 	}()
 	select {
 	case <-ch:
+		// 过早醒来, 说明 futex sleep 失败了.
 		t.Errorf("futexsleep finished early after %s!", time.Since(start))
 	case <-time.After(time.Second):
+		// 成功休眠1秒后, 手动唤醒
 		Futexwakeup(&dummy, 1)
 	}
 }

@@ -2,8 +2,22 @@
 
 1. [自己对go协程的理解](https://www.jianshu.com/p/4267cfbbc2d1)
     - qq群"天天"大神写的, 比较亲民
-2. [go语言调度器源代码情景分析](https://mp.weixin.qq.com/mp/homepage?sn=8fc2b63f53559bc0cee292ce629c4788&__biz=MzU1OTg5NDkzOA%3D%3D&scene=18&hid=1&devicetype=iOS13.1.2&version=17000831&lang=zh_CN&nettype=WIFI&ascene=0&session_us=gh_ceeb25947b8b&fontScale=100&pass_ticket=CiGLC18BKjQ8hvKyiMSivuT%2ByXVZrOOaysEtqZt15G6c55gdqBGw7H11c4lzLcEG&wx_header=1&scene=1)
+2. [go语言调度器源代码情景分析](https://mp.weixin.qq.com/mp/homepage?__biz=MzU1OTg5NDkzOA%3D%3D&hid=1)
     - 微信系列文章
+
+如果把`GMP`整体框架看作是线程池+任务调度, 那么`P`就是对"线程数量"的限制.
+
+> 该值默认为1, 由`GOMAXPROCS`环境变量在程序启动初始控制, 但当前版本还无法根据当前系统线程数量(即`M`的数量)弹性扩缩容.
+
+但是这种说法只是简化了理解, `P`只是`M`执行`G`任务的前提条件, 默认只有一个`P`时, 仍然可以因此`G`的增多而`fork`出更多的`M`. 但是由于`P`的限制, 多出来的`M`只能休眠, 等待能够获取到`P`后, 才真正的执行`G`, 所以真正的并发只有1. (这种理解对不对, 好像有点python的`GIL`的感觉了 ???)
+
+目前引起`G`任务阻塞的, 可能有如下几种情况
+
+1. channel读写缓冲满;
+2. 陷入系统调用(open,read,close等);
+3. Mutex互斥锁占用;
+
+## 
 
 GMP框架中, M遍历G并执行, 那多余的M是根据什么判断出来的, 会自动退出吗? 如何实现的?
 

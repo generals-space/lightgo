@@ -5,6 +5,14 @@
     // goimports 是 gofmt 的进阶版, 除了自动调整源文件格式, 还可以自动导入源码中
     // 已使用但未 import 的 package
     "go.formatTool": "goimports",
+    
+    // 如果不显式指定该配置, 那么 vscode 在执行单元测试时, 会自主加上`-count=1`的参数,
+    // 而当前版本的 go test 工具并不支持 count 选项, 所以会出现如下错误
+    //
+    // go test -timeout 30s -run ^(TestFutexsleep)$ -v -count=1
+    // flag provided but not defined: -count
+    //
+    "go.testFlags": ["-v"],
     "files.associations": {
         "*.goc": "c",
         "*.h": "c",

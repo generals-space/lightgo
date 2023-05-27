@@ -1,3 +1,5 @@
+// chan.h 文件是从 chan.c 中拆分出来, 与 select.c 共享的头文件部分
+
 #include "runtime.h"
 #include "race.h"
 #include "type.h"
@@ -17,7 +19,10 @@ typedef	struct	Scase	Scase;
 // chanbuf(c, i) is pointer to the i'th slot in the buffer.
 #define chanbuf(c, i) ((byte*)((c)+1)+(uintptr)(c)->elemsize*(i))
 
+#define debug 0
+
 // static 函数只能用于源文件自身, 要实现跨文件的函数相互调用, 则需要将被调函数的 static 标记移除.
+// 下面3个函数在 chan.c 和 select.c 2个文件中都有使用, 所以需要移除`static`标记.
 
 SudoG*	dequeue(WaitQ*);
 void	enqueue(WaitQ*, SudoG*);
@@ -25,16 +30,6 @@ void	racesync(Hchan*, SudoG*);
 
 static	void	dequeueg(WaitQ*);
 static	void	destroychan(Hchan*);
-
-enum
-{
-	debug = 0,
-
-	// Scase.kind
-	CaseRecv,
-	CaseSend,
-	CaseDefault,
-};
 
 struct	SudoG
 {
@@ -60,7 +55,7 @@ struct	Hchan
 	//
 	// total data in the q
 	uintgo	qcount;
-	// dataqsiz 表示该 channel 可缓冲的元素数量, 与qcount相比, 应该是cap与len的区别.
+	// dataqsiz 表示该 channel 可缓冲的元素数量, 与 qcount 相比, 应该是cap与len的区别.
 	// 如果 dataqsiz > 0 则表示为异步队列, 否则为同步队列.
 	// 注意, channel对象无法像slice一样扩容, 所以初始化后这个值是无法改变的.
 	//

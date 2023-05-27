@@ -75,7 +75,7 @@ void runtime·futexwakeup(uint32 *addr, uint32 cnt)
 
 	if(ret >= 0) {
 		return;
-	} 
+	}
 
 	// I don't know that futex wakeup can return EAGAIN or EINTR, 
 	// but if it does, it would be safe to loop and call futex again.
@@ -91,8 +91,7 @@ extern runtime·sched_getaffinity(uintptr pid, uintptr len, uintptr *buf);
 //
 // caller:
 // 	1. runtime·osinit() 只有这一处, 在 runtime 启动时被调用.
-static int32
-getproccount(void)
+static int32 getproccount(void)
 {
 	uintptr buf[16], t;
 	int32 r, cnt, i;
@@ -294,23 +293,27 @@ uintptr runtime·memlimit(void)
 	extern byte text[], end[];
 	uintptr used;
 
-	if(runtime·getrlimit(RLIMIT_AS, &rl) != 0)
+	if(runtime·getrlimit(RLIMIT_AS, &rl) != 0) {
 		return 0;
-	if(rl.rlim_cur >= 0x7fffffff)
+	}
+	if(rl.rlim_cur >= 0x7fffffff) {
 		return 0;
+	}
 
 	// Estimate our VM footprint excluding the heap.
 	// Not an exact science: use size of binary plus
 	// some room for thread stacks.
 	used = end - text + (64<<20);
-	if(used >= rl.rlim_cur)
+	if(used >= rl.rlim_cur) {
 		return 0;
+	}
 
 	// If there's not at least 16 MB left, we're probably
 	// not going to be able to do much.  Treat as no limit.
 	rl.rlim_cur -= used;
-	if(rl.rlim_cur < (16<<20))
+	if(rl.rlim_cur < (16<<20)) {
 		return 0;
+	}
 
 	return rl.rlim_cur - used;
 }
@@ -348,8 +351,7 @@ void runtime·setsig(int32 i, GoSighandler *fn, bool restart)
 	}
 }
 
-GoSighandler*
-runtime·getsig(int32 i)
+GoSighandler* runtime·getsig(int32 i)
 {
 	Sigaction sa;
 
@@ -361,15 +363,15 @@ runtime·getsig(int32 i)
 	return (void*)sa.sa_handler;
 }
 
-void
-runtime·signalstack(byte *p, int32 n)
+void runtime·signalstack(byte *p, int32 n)
 {
 	Sigaltstack st;
 
 	st.ss_sp = p;
 	st.ss_size = n;
 	st.ss_flags = 0;
-	if(p == nil)
+	if(p == nil) {
 		st.ss_flags = SS_DISABLE;
+	}
 	runtime·sigaltstack(&st, nil);
 }
