@@ -30,7 +30,7 @@ int32 runtime·gcount(void)
 
 // 唤醒因 runtime·park() 而陷入休眠的 g 对象.
 //
-// 将 gp 标记为 Grunnable 状态(gp->status 需要是 Gwaiting 状态),
+// 将目标 gp 标记为 Grunnable 状态(gp->status 需要是 Gwaiting 状态),
 // 并将 gp 通过 runqput() 放到待执行队列中.
 //
 // caller:
@@ -87,7 +87,7 @@ top:
 		return gp;
 	} 
 
-	// 2. 尝试从全局任务队列中获取一"批" g, 默认数量 sched.runqsize/gomaxprocs+1
+	// 2. 尝试从全局任务队列中获取一"批" g 对象, 默认数量 sched.runqsize/gomaxprocs+1
 	// global runq
 	if(runtime·sched.runqsize) {
 		runtime·lock(&runtime·sched);

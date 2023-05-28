@@ -249,10 +249,10 @@ void stopm(void)
 {
 	if(m->locks) {
 		runtime·throw("stopm holding locks");
-	} 
+	}
 	if(m->p) {
 		runtime·throw("stopm holding p");
-	} 
+	}
 	if(m->spinning) {
 		// 如果当前m处于自旋, 那么结束自旋, 
 		// 同时将全局调度器的 nmspinning 字段减1

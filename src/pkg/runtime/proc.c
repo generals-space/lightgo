@@ -314,9 +314,15 @@ void wakep(void)
 	startm(nil, true);
 }
 
+// 本来像 channel 发生阻塞这种情况, 使 g 任务暂停, 与其关联的 m 只要与该 g 解绑,
+// 就可以寻找其他 g 任务继续工作, 而不必让出关联的 p 对象.
+// 但如果 m 与 g 绑定(如开发者显式声明osthread()), 则该 m 必须要原地待该 g 解除阻塞.
+// 而 p 对象是很宝贵的, 因为需要调用该方法, 将 p 对象让出来, 让其他 m 执行.
+//
 // caller:
 // 	1. park0()
 // 	2. runtime·gosched0()
+// 	3. exitsyscall0()
 //
 // Stops execution of the current m that is locked to a g 
 // until the g is runnable again.
@@ -335,13 +341,14 @@ void stoplockedm(void)
 		handoffp(p);
 	}
 	incidlelocked(1);
+	// 此时已经让出了 p, 原地休眠(系统线程级别的真正休眠)
 	// Wait until another thread schedules lockedg again.
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
 	if(m->lockedg->status != Grunnable) {
 		runtime·throw("stoplockedm: not runnable");
 	}
-	// 为当前m绑定下一个p(只是修改了一下m->p的值)...但是就没有下下一个p了.
+	// 为当前 m 绑定下一个p(只是修改了一下m->p的值)...但是就没有下下一个p了.
 	// 注意能运行到这里, 说明 m->p 已经是 nil 了
 	acquirep(m->nextp);
 	m->nextp = nil;
@@ -615,6 +622,8 @@ void runtime·park(void(*unlockf)(Lock*), Lock *lock, int8 *reason)
 
 // 在 g0 上继续执行 park 操作, gp 是上面提到的当前 g 对象.
 //
+// 	@param gp: 待休眠的 g 对象
+//
 // caller:
 // 	1. runtime·park() 只有这一处
 //
@@ -635,14 +644,15 @@ static void park0(G *gp)
 
 	gp->status = Gwaiting;
 	gp->m = nil;
+	// 这里的 m 应该是主调函数 runtime·park() 中所在的 m
 	m->curg = nil;
-	// 这是让该m仍然能正常工作吧, 不受g对象的影响.
 	if(m->waitunlockf) {
+		// 这里解开了锁, 目的是什么, 为什么要放在这里 ???
 		m->waitunlockf(m->waitlock);
 		m->waitunlockf = nil;
 		m->waitlock = nil;
 	}
-	// 休眠了 gp 对象, 但 m 不能闲着, 重新开始调度.
+	// 如果 m 已经与该 gp 绑定, 则无法去执行其他 g 任务, 只能原地等待被唤醒.
 	if(m->lockedg) {
 		stoplockedm();
 		execute(gp); // Never returns.

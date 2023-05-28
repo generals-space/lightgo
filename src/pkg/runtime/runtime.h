@@ -479,6 +479,8 @@ struct	M
 	uint32	stackcachecnt;
 	void*	stackcache[StackCacheSize];
 
+	// 在 lockOSThread() 中, 将 m-g 相互绑定(该函数由开发者显式调用).
+	// 
 	G*	lockedg;
 	uintptr	createstack[32];// Stack that created this thread.
 	uint32	freglo[16];	// D[i] lsb and F[i]
@@ -489,9 +491,10 @@ struct	M
 	// 下一个正在等待某个锁的m对象.
 	// nextwaitm 只在 lock_sema.c 中有使用.
 	M*	nextwaitm;
-	// semaphore for parking on locks
 	// 用于 mutex 互斥锁的底层实现.
 	// waitsemaXXX 相关的成员只在 mac/win平台下有效, linux下是 futex 机制
+	//
+	// semaphore for parking on locks
 	uintptr	waitsema;
 	uint32	waitsemacount;
 	uint32	waitsemalock;
@@ -500,8 +503,16 @@ struct	M
 	// 都在 race.c 文件中赋值.
 	bool	racecall;
 	bool	needextram;
+
+	// 关于如下2个成员的解释, 可以见 runtime·park() 方法.
+	// 比如在 channel 中, 如果缓冲满而阻塞当前 g 任务, m 则需要记录下下面2个参数,
+	// 然后与 g 解绑, 去执行其他 g 任务.
+	//
+	// 用于解除 waitlock 阻塞的解锁函数.
 	void	(*waitunlockf)(Lock*);
+	// 当前 g 阻塞的位置, 可以将其当作一个普通的互斥锁.
 	void*	waitlock;
+
 	// settype_buf 中存储着当前 m 已经分配的对象的地址信息, 每个对象信息包含2部分
 	// 1. p: 该对象在 arena 区域中的地址指针
 	// 2. typ: 该对象的gc标记, 如 FlagNoScan, FlagNoGC
