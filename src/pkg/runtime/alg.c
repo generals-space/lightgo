@@ -14,8 +14,7 @@ static bool use_aeshash;
 /*
  * map and chan helpers for dealing with unknown types
  */
-void
-runtime·memhash(uintptr *h, uintptr s, void *a)
+void runtime·memhash(uintptr *h, uintptr s, void *a)
 {
 	byte *b;
 	uintptr hash;
@@ -34,8 +33,7 @@ runtime·memhash(uintptr *h, uintptr s, void *a)
 	*h = hash;
 }
 
-void
-runtime·memequal(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal(bool *eq, uintptr s, void *a, void *b)
 {
 	if(a == b) {
 		*eq = 1;
@@ -44,8 +42,7 @@ runtime·memequal(bool *eq, uintptr s, void *a, void *b)
 	*eq = runtime·memeq(a, b, s);
 }
 
-void
-runtime·memprint(uintptr s, void *a)
+void runtime·memprint(uintptr s, void *a)
 {
 	uint64 v;
 
@@ -67,8 +64,7 @@ runtime·memprint(uintptr s, void *a)
 	runtime·printint(v);
 }
 
-void
-runtime·memcopy(uintptr s, void *a, void *b)
+void runtime·memcopy(uintptr s, void *a, void *b)
 {
 	if(b == nil) {
 		runtime·memclr(a, s);
@@ -77,8 +73,7 @@ runtime·memcopy(uintptr s, void *a, void *b)
 	runtime·memmove(a, b, s);
 }
 
-void
-runtime·memequal0(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal0(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	USED(a);
@@ -86,23 +81,20 @@ runtime·memequal0(bool *eq, uintptr s, void *a, void *b)
 	*eq = true;
 }
 
-void
-runtime·memcopy0(uintptr s, void *a, void *b)
+void runtime·memcopy0(uintptr s, void *a, void *b)
 {
 	USED(s);
 	USED(a);
 	USED(b);
 }
 
-void
-runtime·memequal8(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal8(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = *(uint8*)a == *(uint8*)b;
 }
 
-void
-runtime·memcopy8(uintptr s, void *a, void *b)
+void runtime·memcopy8(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -112,15 +104,13 @@ runtime·memcopy8(uintptr s, void *a, void *b)
 	*(uint8*)a = *(uint8*)b;
 }
 
-void
-runtime·memequal16(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal16(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = *(uint16*)a == *(uint16*)b;
 }
 
-void
-runtime·memcopy16(uintptr s, void *a, void *b)
+void runtime·memcopy16(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -130,15 +120,13 @@ runtime·memcopy16(uintptr s, void *a, void *b)
 	*(uint16*)a = *(uint16*)b;
 }
 
-void
-runtime·memequal32(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal32(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = *(uint32*)a == *(uint32*)b;
 }
 
-void
-runtime·memcopy32(uintptr s, void *a, void *b)
+void runtime·memcopy32(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -148,15 +136,13 @@ runtime·memcopy32(uintptr s, void *a, void *b)
 	*(uint32*)a = *(uint32*)b;
 }
 
-void
-runtime·memequal64(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal64(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = *(uint64*)a == *(uint64*)b;
 }
 
-void
-runtime·memcopy64(uintptr s, void *a, void *b)
+void runtime·memcopy64(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -166,15 +152,13 @@ runtime·memcopy64(uintptr s, void *a, void *b)
 	*(uint64*)a = *(uint64*)b;
 }
 
-void
-runtime·memequal128(bool *eq, uintptr s, void *a, void *b)
+void runtime·memequal128(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = ((uint64*)a)[0] == ((uint64*)b)[0] && ((uint64*)a)[1] == ((uint64*)b)[1];
 }
 
-void
-runtime·memcopy128(uintptr s, void *a, void *b)
+void runtime·memcopy128(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -186,22 +170,19 @@ runtime·memcopy128(uintptr s, void *a, void *b)
 	((uint64*)a)[1] = ((uint64*)b)[1];
 }
 
-void
-runtime·f32equal(bool *eq, uintptr s, void *a, void *b)
+void runtime·f32equal(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = *(float32*)a == *(float32*)b;
 }
 
-void
-runtime·f64equal(bool *eq, uintptr s, void *a, void *b)
+void runtime·f64equal(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = *(float64*)a == *(float64*)b;
 }
 
-void
-runtime·c64equal(bool *eq, uintptr s, void *a, void *b)
+void runtime·c64equal(bool *eq, uintptr s, void *a, void *b)
 {	
 	Complex64 *ca, *cb;
 	
@@ -211,8 +192,7 @@ runtime·c64equal(bool *eq, uintptr s, void *a, void *b)
 	*eq = ca->real == cb->real && ca->imag == cb->imag;
 }
 
-void
-runtime·c128equal(bool *eq, uintptr s, void *a, void *b)
+void runtime·c128equal(bool *eq, uintptr s, void *a, void *b)
 {	
 	Complex128 *ca, *cb;
 	
@@ -227,8 +207,7 @@ runtime·c128equal(bool *eq, uintptr s, void *a, void *b)
 // To avoid long hash chains, we assign a random number
 // as the hash value for a NaN.
 
-void
-runtime·f32hash(uintptr *h, uintptr s, void *a)
+void runtime·f32hash(uintptr *h, uintptr s, void *a)
 {
 	uintptr hash;
 	float32 f;
@@ -244,8 +223,7 @@ runtime·f32hash(uintptr *h, uintptr s, void *a)
 	*h = (*h ^ hash ^ M0) * M1;
 }
 
-void
-runtime·f64hash(uintptr *h, uintptr s, void *a)
+void runtime·f64hash(uintptr *h, uintptr s, void *a)
 {
 	uintptr hash;
 	float64 f;
@@ -267,24 +245,21 @@ runtime·f64hash(uintptr *h, uintptr s, void *a)
 	*h = (*h ^ hash ^ M0) * M1;
 }
 
-void
-runtime·c64hash(uintptr *h, uintptr s, void *a)
+void runtime·c64hash(uintptr *h, uintptr s, void *a)
 {
 	USED(s);
 	runtime·f32hash(h, 0, a);
 	runtime·f32hash(h, 0, (float32*)a+1);
 }
 
-void
-runtime·c128hash(uintptr *h, uintptr s, void *a)
+void runtime·c128hash(uintptr *h, uintptr s, void *a)
 {
 	USED(s);
 	runtime·f64hash(h, 0, a);
 	runtime·f64hash(h, 0, (float64*)a+1);
 }
 
-void
-runtime·slicecopy(uintptr s, void *a, void *b)
+void runtime·slicecopy(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -298,15 +273,13 @@ runtime·slicecopy(uintptr s, void *a, void *b)
 	((Slice*)a)->cap = ((Slice*)b)->cap;
 }
 
-void
-runtime·strhash(uintptr *h, uintptr s, void *a)
+void runtime·strhash(uintptr *h, uintptr s, void *a)
 {
 	USED(s);
 	runtime·memhash(h, ((String*)a)->len, ((String*)a)->str);
 }
 
-void
-runtime·strequal(bool *eq, uintptr s, void *a, void *b)
+void runtime·strequal(bool *eq, uintptr s, void *a, void *b)
 {
 	intgo alen;
 	byte *s1, *s2;
@@ -326,8 +299,7 @@ runtime·strequal(bool *eq, uintptr s, void *a, void *b)
 	*eq = runtime·memeq(s1, s2, alen);
 }
 
-void
-runtime·strprint(uintptr s, void *a)
+void runtime·strprint(uintptr s, void *a)
 {
 	USED(s);
 	runtime·printstring(*(String*)a);
@@ -335,8 +307,7 @@ runtime·strprint(uintptr s, void *a)
 
 // runtime·strcopy 将 b 指针指向的 String 对象的内容, 拷贝到 a 指针的 String 对象.
 // (这里的 String 对象指的是 golang 中的 string 常规对象)
-void
-runtime·strcopy(uintptr s, void *a, void *b)
+void runtime·strcopy(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -348,29 +319,25 @@ runtime·strcopy(uintptr s, void *a, void *b)
 	((String*)a)->len = ((String*)b)->len;
 }
 
-void
-runtime·interhash(uintptr *h, uintptr s, void *a)
+void runtime·interhash(uintptr *h, uintptr s, void *a)
 {
 	USED(s);
 	*h = runtime·ifacehash(*(Iface*)a, *h ^ M0) * M1;
 }
 
-void
-runtime·interprint(uintptr s, void *a)
+void runtime·interprint(uintptr s, void *a)
 {
 	USED(s);
 	runtime·printiface(*(Iface*)a);
 }
 
-void
-runtime·interequal(bool *eq, uintptr s, void *a, void *b)
+void runtime·interequal(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = runtime·ifaceeq_c(*(Iface*)a, *(Iface*)b);
 }
 
-void
-runtime·intercopy(uintptr s, void *a, void *b)
+void runtime·intercopy(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -382,29 +349,25 @@ runtime·intercopy(uintptr s, void *a, void *b)
 	((Iface*)a)->data = ((Iface*)b)->data;
 }
 
-void
-runtime·nilinterhash(uintptr *h, uintptr s, void *a)
+void runtime·nilinterhash(uintptr *h, uintptr s, void *a)
 {
 	USED(s);
 	*h = runtime·efacehash(*(Eface*)a, *h ^ M0) * M1;
 }
 
-void
-runtime·nilinterprint(uintptr s, void *a)
+void runtime·nilinterprint(uintptr s, void *a)
 {
 	USED(s);
 	runtime·printeface(*(Eface*)a);
 }
 
-void
-runtime·nilinterequal(bool *eq, uintptr s, void *a, void *b)
+void runtime·nilinterequal(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	*eq = runtime·efaceeq_c(*(Eface*)a, *(Eface*)b);
 }
 
-void
-runtime·nilintercopy(uintptr s, void *a, void *b)
+void runtime·nilintercopy(uintptr s, void *a, void *b)
 {
 	USED(s);
 	if(b == nil) {
@@ -416,8 +379,7 @@ runtime·nilintercopy(uintptr s, void *a, void *b)
 	((Eface*)a)->data = ((Eface*)b)->data;
 }
 
-void
-runtime·nohash(uintptr *h, uintptr s, void *a)
+void runtime·nohash(uintptr *h, uintptr s, void *a)
 {
 	USED(s);
 	USED(a);
@@ -425,8 +387,7 @@ runtime·nohash(uintptr *h, uintptr s, void *a)
 	runtime·panicstring("hash of unhashable type");
 }
 
-void
-runtime·noequal(bool *eq, uintptr s, void *a, void *b)
+void runtime·noequal(bool *eq, uintptr s, void *a, void *b)
 {
 	USED(s);
 	USED(a);
@@ -466,8 +427,7 @@ Alg runtime·algarray[] =
 // used in asm_{386,amd64}.s
 byte runtime·aeskeysched[HashRandomBytes];
 
-void
-runtime·hashinit(void)
+void runtime·hashinit(void)
 {
 	// Install aes hash algorithm if we have the instructions we need
 	if((runtime·cpuid_ecx & (1 << 25)) != 0 &&  // aes (aesenc)
@@ -502,8 +462,7 @@ runtime·hashinit(void)
 
 // func equal(t *Type, x T, y T) (ret bool)
 #pragma textflag NOSPLIT
-void
-runtime·equal(Type *t, ...)
+void runtime·equal(Type *t, ...)
 {
 	byte *x, *y;
 	uintptr ret;
