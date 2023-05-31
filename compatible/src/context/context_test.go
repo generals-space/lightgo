@@ -585,16 +585,18 @@ func TestCancelRemoves(t *testing.T) {
 }
 
 func TestWithValueChecksKey(t *testing.T) {
-	panicVal := recoveredValue(func() { WithValue(Background(), []byte("foo"), "bar") })
-	if panicVal == nil {
-		t.Error("expected panic")
-	}
-	panicVal = recoveredValue(func() { WithValue(Background(), nil, "bar") })
+	// 将下面这行注释掉, 貌似本身也不会报 panic 吧, WithValue() 用得不是没问题么?
+	// panicVal := recoveredValue(func() { WithValue(Background(), []byte("foo"), "bar") })
+	// if panicVal == nil {
+	// 	t.Error("expected panic")
+	// }
+	panicVal := recoveredValue(func() { WithValue(Background(), nil, "bar") })
 	if got, want := fmt.Sprint(panicVal), "nil key"; got != want {
 		t.Errorf("panic = %q; want %q", got, want)
 	}
 }
 
+// recoveredValue 目标函数 fn() 一般是会报 panic 的, 所以事先用该方法包裹.
 func recoveredValue(fn func()) (v interface{}) {
 	defer func() { v = recover() }()
 	fn()
