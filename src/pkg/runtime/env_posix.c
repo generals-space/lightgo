@@ -6,10 +6,13 @@
 
 #include "runtime.h"
 
+// 以下3者内容相同, 应该是同一个对象.
+//
+// src/pkg/runtime/runtime.c -> syscall·envs
+// src/pkg/syscall/env_unix.go -> envs 
 Slice syscall·envs;
 
-byte*
-runtime·getenv(int8 *s)
+byte* runtime·getenv(int8 *s)
 {
 	int32 i, j;
 	intgo len;
@@ -40,13 +43,13 @@ void (*_cgo_setenv)(byte**);
 
 // Update the C environment if cgo is loaded.
 // Called from syscall.Setenv.
-void
-syscall·setenv_c(String k, String v)
+void syscall·setenv_c(String k, String v)
 {
 	byte *arg[2];
 
-	if(_cgo_setenv == nil)
+	if(_cgo_setenv == nil) {
 		return;
+	}
 
 	arg[0] = runtime·malloc(k.len + 1);
 	runtime·memmove(arg[0], k.str, k.len);

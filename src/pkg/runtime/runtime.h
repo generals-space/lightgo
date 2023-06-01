@@ -1026,6 +1026,7 @@ void	runtime·mcall(void(*)(G*));
 void	runtime·usleep(uint32);
 int64	runtime·cputicks(void);
 
+void	runtime·asmcgocall(void (*fn)(void*), void*);
 // 汇编函数实现结束
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1110,7 +1111,6 @@ void	runtime·park(void(*)(Lock*), Lock*, int8*);
 void	runtime·tsleep(int64, int8*);
 M*	runtime·newm(void);
 void	runtime·goexit(void);
-void	runtime·asmcgocall(void (*fn)(void*), void*);
 void	runtime·entersyscall(void);
 void	runtime·entersyscallblock(void);
 void	runtime·exitsyscall(void);

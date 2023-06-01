@@ -224,6 +224,8 @@ void runtime·get_random_data(byte **rnd, int32 *rnd_len)
 	}
 }
 
+// caller:
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 在程序启动时被调用.
 void runtime·goenvs(void)
 {
 	runtime·goenvs_unix();

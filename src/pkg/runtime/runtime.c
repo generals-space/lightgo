@@ -80,8 +80,7 @@ void (*runtime·sysargs)(int32, uint8**);
 // caller: 
 // 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() (main()函数)
 //
-void
-runtime·args(int32 c, uint8 **v)
+void runtime·args(int32 c, uint8 **v)
 {
 	argc = c;
 	argv = v;
@@ -99,8 +98,7 @@ uint32 runtime·cpuid_ecx;
 uint32 runtime·cpuid_edx;
 
 // 将命令行传入的参数列表填充入os·Args列表.
-void
-runtime·goargs(void)
+void runtime·goargs(void)
 {
 	String *s; // 参数列表, 按照字符串类型处理
 	int32 i;
@@ -119,8 +117,11 @@ runtime·goargs(void)
 	os·Args.cap = argc;
 }
 
-void
-runtime·goenvs_unix(void)
+// runtime·goenvs_unix 程序启动时加载其所在终端中的所有环境变量到 syscall·envs 数组中.
+//
+// caller:
+// 	1. src/pkg/runtime/os_linux.c -> runtime·goenvs() 在程序启动时被调用
+void runtime·goenvs_unix(void)
 {
 	String *s;
 	int32 i, n;
@@ -138,8 +139,7 @@ runtime·goenvs_unix(void)
 	syscall·envs.cap = n;
 }
 
-void
-runtime·getgoroot(String out)
+void runtime·getgoroot(String out)
 {
 	byte *p;
 
@@ -148,8 +148,7 @@ runtime·getgoroot(String out)
 	FLUSH(&out);
 }
 
-int32
-runtime·atoi(byte *p)
+int32 runtime·atoi(byte *p)
 {
 	int32 n;
 
