@@ -66,9 +66,9 @@ func (b *Builder) grow(n int) {
 	b.buf = buf
 }
 
-// Grow grows b's capacity, if necessary, to guarantee space for
-// another n bytes. After Grow(n), at least n bytes can be written to b
-// without another allocation. If n is negative, Grow panics.
+// Grow grows b's capacity, if necessary, to guarantee space for another n bytes.
+// After Grow(n), at least n bytes can be written to b without another allocation.
+// If n is negative, Grow panics.
 func (b *Builder) Grow(n int) {
 	b.copyCheck()
 	if n < 0 {
