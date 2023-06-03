@@ -18,6 +18,13 @@ import (
 	"strings"
 )
 
+// readSource 如果 src 不为 nil, 则返回 src 对应的内容, 否则读取并返回 filename 文件的内容.
+//
+// 	@param src: 可能是 string 字符串, []byte 数组, 或是缓冲区等.
+//
+// caller:
+// 	1. ParseFile() 只有这一处
+//
 // If src != nil, readSource converts src to a []byte if possible;
 // otherwise it returns an error. If src == nil, readSource returns
 // the result of reading the file specified by filename.
@@ -62,6 +69,9 @@ const (
 	AllErrors         = SpuriousErrors             // report all errors (not just the first 10 on different lines)
 )
 
+// caller:
+// 	1. src/pkg/sort/genzfunc_compatible.go -> main()
+//
 // ParseFile parses the source code of a single Go source file and returns
 // the corresponding ast.File node. The source code may be provided via
 // the filename of the source file, or via the src parameter.
@@ -81,7 +91,9 @@ const (
 // representing the fragments of erroneous source code). Multiple errors
 // are returned via a scanner.ErrorList which is sorted by file position.
 //
-func ParseFile(fset *token.FileSet, filename string, src interface{}, mode Mode) (f *ast.File, err error) {
+func ParseFile(
+	fset *token.FileSet, filename string, src interface{}, mode Mode,
+) (f *ast.File, err error) {
 	// get source
 	text, err := readSource(filename, src)
 	if err != nil {
