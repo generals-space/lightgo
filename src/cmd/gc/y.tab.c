@@ -1,5 +1,7 @@
 /* A Bison parser, made by GNU Bison 2.5.  */
 
+// 貌似本文件就是 go.y 文件编译而来的, go.y 用特殊格式声明了语法规则, y.tab.c 则是可编译的 c 文件.
+
 /* Bison implementation for Yacc-like parsers in C
    
       Copyright (C) 1984, 1989-1990, 2000-2011 Free Software Foundation, Inc.

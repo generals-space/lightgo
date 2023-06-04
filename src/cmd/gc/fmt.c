@@ -497,8 +497,7 @@ etnames[] =
 };
 
 // Fmt "%E": etype
-static int
-Econv(Fmt *fp)
+static int Econv(Fmt *fp)
 {
 	int et;
 
@@ -509,8 +508,7 @@ Econv(Fmt *fp)
 }
 
 // Fmt "%S": syms
-static int
-symfmt(Fmt *fp, Sym *s)
+static int symfmt(Fmt *fp, Sym *s)
 {
 	char *p;
 
@@ -581,8 +579,7 @@ basicnames[] =
 	[TBLANK]	= "blank",
 };
 
-static int
-typefmt(Fmt *fp, Type *t)
+static int typefmt(Fmt *fp, Type *t)
 {
 	Type *t1;
 	Sym *s;
@@ -795,8 +792,7 @@ typefmt(Fmt *fp, Type *t)
 }
 
 // Statements which may be rendered with a simplestmt as init.
-static int
-stmtwithinit(int op)
+static int stmtwithinit(int op)
 {
 	switch(op) {
 	case OIF:
@@ -807,8 +803,7 @@ stmtwithinit(int op)
 	return 0;
 }
 
-static int
-stmtfmt(Fmt *f, Node *n)
+static int stmtfmt(Fmt *f, Node *n)
 {
 	int complexinit, simpleinit, extrablock;
 
@@ -1696,8 +1691,11 @@ Hconv(Fmt *fp)
 	return r;
 }
 
-void
-fmtinstallgo(void)
+// 编译期间的格式化打印, 加载用于打印格式为 %S, %T 等的对象的各个处理函数.
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main() 只有这一处
+void fmtinstallgo(void)
 {
 	fmtmode = FErr;
 	fmtinstall('E', Econv);		// etype opcodes
@@ -1714,17 +1712,14 @@ fmtinstallgo(void)
 	// These are in mparith1.c
 	fmtinstall('B', Bconv);	// big numbers
 	fmtinstall('F', Fconv);	// big float numbers
-
 }
 
-void
-dumplist(char *s, NodeList *l)
+void dumplist(char *s, NodeList *l)
 {
 	print("%s%+H\n", s, l);
 }
 
-void
-dump(char *s, Node *n)
+void dump(char *s, Node *n)
 {
 	print("%s [%p]%+N\n", s, n, n);
 }

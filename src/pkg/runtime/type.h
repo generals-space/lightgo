@@ -17,6 +17,8 @@ typedef struct SliceType SliceType;
 typedef struct FuncType FuncType;
 typedef struct PtrType PtrType;
 
+// 有对应的 go 结构 src/pkg/reflect/type.go -> rtype{}
+//
 // Needs to be in sync with typekind.h/CommonSize
 struct Type
 {

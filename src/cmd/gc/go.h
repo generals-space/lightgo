@@ -70,8 +70,9 @@ enum
 extern vlong	MAXWIDTH;
 
 /*
- * note this is the representation
- * of the compilers string literals,
+ * Strlit 编译器层面的字符串字面量(非 runtime 层面)
+ * 
+ * note this is the representation of the compilers string literals,
  * it is not the runtime representation
  */
 typedef	struct	Strlit	Strlit;
@@ -189,7 +190,9 @@ struct	Type
 	vlong	argwid;
 
 	// most nodes
-	Type*	type;   	// actual type for TFIELD, element type for TARRAY, TCHAN, TMAP, TPTRxx
+	
+	// actual type for TFIELD, element type for TARRAY, TCHAN, TMAP, TPTRxx
+	Type*	type;
 	// 当前类型所占空间的大小, 单位为字节. 如 int8 的 width 为 1.
 	//
 	// offset in TFIELD, width in all others
@@ -404,7 +407,7 @@ struct	NodeList
 
 enum
 {
-	SymExport	= 1<<0,	// to be exported
+	SymExport	= 1<<0,	// to be exported, 见 src/cmd/gc/export.c -> exportsym()
 	SymPackage	= 1<<1,
 	SymExported	= 1<<2,	// already written out by export
 	SymUniq		= 1<<3,
@@ -447,7 +450,13 @@ struct	Pkg
 	Pkg*	link;
 	uchar	imported;	// export data of this package was parsed
 	char	exported;	// import line written in export data
-	char	direct;	// imported directly
+	// 这是是一个 bool 类型.
+	// 从目前来看, 表示当前 pkg 对象是否**被** localpkg 直接引用.
+	//
+	// 因为 package 之间是嵌套引用的, 而只有被 localpkg 直接引用的 pkg 才会将该字段设置为 1.
+	//
+	// imported directly
+	char	direct;
 	char	safe;	// whether the package is marked as safe
 };
 
@@ -963,26 +972,40 @@ EXTERN	char	namebuf[NSYMB];
 EXTERN	char	lexbuf[NSYMB];
 EXTERN	char	litbuf[NSYMB];
 EXTERN	int	debug[256];
+// 全局变量, 6g 命令中, 通过 -d 选项指定的参数, 见 src/cmd/gc/lex.c -> main()
 EXTERN	char*	debugstr;
 EXTERN	int	debug_checknil;
 EXTERN	Sym*	hash[NHASH];
 EXTERN	Sym*	importmyname;	// my name for package
-EXTERN	Pkg*	localpkg;	// package being compiled
+
+////////////////////////////////////////////////////////////////////////////////
+// 全局变量, 表示 go run/build, 或是 6g 编译的目标 package, 一般为 main 包.
+// package being compiled
+EXTERN	Pkg*	localpkg;
 EXTERN	Pkg*	importpkg;	// package being imported
-EXTERN	Pkg*	structpkg;	// package that declared struct, during import
 EXTERN	Pkg*	builtinpkg;	// fake package for builtins
 EXTERN	Pkg*	gostringpkg;	// fake pkg for Go strings
 EXTERN	Pkg*	itabpkg;	// fake pkg for itab cache
 EXTERN	Pkg*	runtimepkg;	// package runtime
-EXTERN	Pkg*	racepkg;	// package runtime/race
 EXTERN	Pkg*	stringpkg;	// fake package for C strings
 EXTERN	Pkg*	typepkg;	// fake package for runtime type info (headers)
 EXTERN	Pkg*	typelinkpkg;	// fake package for runtime type info (data)
 EXTERN	Pkg*	weaktypepkg;	// weak references to runtime type info
 EXTERN	Pkg*	unsafepkg;	// package unsafe
 EXTERN	Pkg*	trackpkg;	// fake package for field tracking
+
+EXTERN	Pkg*	racepkg;	// package runtime/race
+// 在 src/cmd/gc/subr.c -> mkpkg() 中初始化,
+// 不过主调函数还是在 src/cmd/gc/lex.c -> main() 开头, 加载了多个 golang package.
+// 包含上面提到的所有 xxxpkg 
 EXTERN	Pkg*	phash[128];
-EXTERN	int	tptr;		// either TPTR32 or TPTR64
+
+EXTERN	Pkg*	structpkg;	// package that declared struct, during import
+////////////////////////////////////////////////////////////////////////////////
+
+// 全局变量, 当前编译过程中遇到的对象的地址(可视为指向自己的指针)
+// either TPTR32 or TPTR64
+EXTERN	int	tptr;
 extern	char*	runtimeimport;
 extern	char*	unsafeimport;
 EXTERN	char*	myimportpath;
@@ -1029,6 +1052,8 @@ EXTERN	NodeList*	xtop;
 // 由 src/cmd/gc/dcl.c -> declare() 完成初始化.
 EXTERN	NodeList*	externdcl;
 EXTERN	NodeList*	closures;
+// 全局变量, 表示当前正在编译的 package 中, 可以暴露出来的对象链表.
+// 可以是大写字母开头的变量, 函数, 或是 package 级别的 init() 方法.
 EXTERN	NodeList*	exportlist;
 EXTERN	NodeList*	importlist;	// imported functions and methods with inlinable bodies
 EXTERN	NodeList*	funcsyms;

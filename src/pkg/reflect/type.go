@@ -105,6 +105,11 @@ type Type interface {
 	// ConvertibleTo returns true if a value of the type is convertible to type u.
 	ConvertibleTo(u Type) bool
 
+	// 	@compatible: 该方法在 v1.4 版本初次添加
+	//
+	// Comparable returns true if values of this type are comparable.
+	Comparable() bool
+
 	// Methods applicable only to some types, depending on Kind.
 	// The methods allowed for each kind are:
 	//
@@ -262,11 +267,21 @@ type rtype struct {
 	//
 	// enumeration for C
 	kind          uint8
-	alg           *uintptr       // algorithm table (../runtime/runtime.h:/Alg)
+	alg           *typeAlg       // algorithm table (../runtime/runtime.h:/Alg)
 	gc            unsafe.Pointer // garbage collection data
 	string        *string        // string form; unnecessary but undeniably useful
 	*uncommonType                // (relatively) uncommon fields
 	ptrToThis     *rtype         // type for pointer to this type, if used in binary or has methods
+}
+
+// 	@compatible: 该结构在 v1.4 版本初次添加
+type typeAlg struct {
+	// function for hashing objects of this type
+	// (ptr to object, size, seed) -> hash
+	hash func(unsafe.Pointer, uintptr, uintptr) uintptr
+	// function for comparing objects of this type
+	// (ptr to object A, ptr to object B, size) -> ==?
+	equal func(unsafe.Pointer, unsafe.Pointer, uintptr) bool
 }
 
 // Method on non-interface type
@@ -1201,6 +1216,11 @@ func (t *rtype) ConvertibleTo(u Type) bool {
 	}
 	uu := u.(*rtype)
 	return convertOp(uu, t) != nil
+}
+
+// 	@compatible: 该方法在 v1.4 版本初次添加
+func (t *rtype) Comparable() bool {
+	return t.alg != nil && t.alg.equal != nil
 }
 
 // Implements 判断普通变量/对象的类型 V 是否实现了目标接口类型 T.

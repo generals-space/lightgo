@@ -13,12 +13,12 @@
 static	void	outhist(Biobuf *b);
 static	void	dumpglobls(void);
 
-// 执行`6g main.go`进行源码编译时, 输出`main.6`文件(OBJ文件)
+// 执行`6g main.go`进行源码编译时, 生成并输出`main.6`文件(OBJ文件)
 //
 // 注意: main.6 文件是可以打开的, 并不是完全的二进制文件.
 //
 // caller:
-// 	1. src/cmd/gc/lex.c -> main()
+// 	1. src/cmd/gc/lex.c -> main() 只有这一处
 void dumpobj(void)
 {
 	NodeList *externs, *tmp;
@@ -71,11 +71,13 @@ static void dumpglobls(void)
 	// add globals
 	for(l=externdcl; l; l=l->next) {
 		n = l->n;
-		if(n->op != ONAME)
+		if(n->op != ONAME) {
 			continue;
+		}
 
-		if(n->type == T)
+		if(n->type == T) {
 			fatal("external %N nil type\n", n);
+		}
 		if(n->class == PFUNC)
 			continue;
 		if(n->sym->pkg != localpkg)
@@ -92,83 +94,64 @@ static void dumpglobls(void)
 	}
 }
 
-void
-Bputname(Biobuf *b, Sym *s)
+void Bputname(Biobuf *b, Sym *s)
 {
 	Bprint(b, "%s", s->pkg->prefix);
 	BPUTC(b, '.');
 	Bwrite(b, s->name, strlen(s->name)+1);
 }
 
-static void
-outzfile(Biobuf *b, char *p)
+// caller:
+// 	1. outhist() 只有这一处
+// 	执行`6g main.go`进行源码编译时, 生成并输出`main.6`文件(OBJ文件)
+static void outzfile(Biobuf *b, char *p)
 {
-	char *q, *q2;
+	// print("outzfile: %s\n", p);
+	char *q;
 
+	// 下面这个 while 循环有点类似于 linux 中的 basename 命令,
+	// 寻找字符串 p 中, 以 '/' 分割的数组中的最后一个元素.
 	while(p) {
 		q = utfrune(p, '/');
-		if(windows) {
-			q2 = utfrune(p, '\\');
-			if(q2 && (!q || q2 < q))
-				q = q2;
-		}
+		// 如果 q 为 nil, 表示没找到, 里面不包含 /, 可以直接使用
 		if(!q) {
 			zfile(b, p, strlen(p));
 			return;
 		}
-		if(q > p)
+		// 这种应该是 p 的末尾是 / 的情况吧
+		if(q > p) {
 			zfile(b, p, q-p);
+		}
+		// 指针后移, 继续寻找.
 		p = q + 1;
 	}
 }
 
-#define isdelim(c) (c == '/' || c == '\\')
-
-static void
-outwinname(Biobuf *b, Hist *h, char *ds, char *p)
-{
-	if(isdelim(p[0])) {
-		// full rooted name
-		zfile(b, ds, 3);	// leading "c:/"
-		outzfile(b, p+1);
-	} else {
-		// relative name
-		if(h->offset >= 0 && pathname && pathname[1] == ':') {
-			if(tolowerrune(ds[0]) == tolowerrune(pathname[0])) {
-				// using current drive
-				zfile(b, pathname, 3);	// leading "c:/"
-				outzfile(b, pathname+3);
-			} else {
-				// using drive other then current,
-				// we don't have any simple way to
-				// determine current working directory
-				// there, therefore will output name as is
-				zfile(b, ds, 2);	// leading "c:"
-			}
-		}
-		outzfile(b, p);
-	}
-}
-
-static void
-outhist(Biobuf *b)
+// caller:
+// 	1. dumpobj() 只有这一处
+// 	执行`6g main.go`进行源码编译时, 生成并输出`main.6`文件(OBJ文件)
+static void outhist(Biobuf *b)
 {
 	Hist *h;
-	char *p, ds[] = {'c', ':', '/', 0};
+	char *p;
 	char *tofree;
 	int n;
 	static int first = 1;
 	static char *goroot, *goroot_final;
 
+	// 忽略, 跳过
 	if(first) {
 		// Decide whether we need to rewrite paths from $GOROOT to $GOROOT_FINAL.
 		first = 0;
+		// 通过环境变量覆盖?
 		goroot = getenv("GOROOT");
 		goroot_final = getenv("GOROOT_FINAL");
-		if(goroot == nil)
+		if(goroot == nil) {
 			goroot = "";
-		if(goroot_final == nil)
+		}
+		if(goroot_final == nil) {
 			goroot_final = goroot;
+		}
 		if(strcmp(goroot, goroot_final) == 0) {
 			goroot = nil;
 			goroot_final = nil;
@@ -178,6 +161,7 @@ outhist(Biobuf *b)
 	tofree = nil;
 	for(h = hist; h != H; h = h->link) {
 		p = h->name;
+		// print("hist name: %s\n", p);
 		if(p) {
 			if(goroot != nil) {
 				n = strlen(goroot);
@@ -186,36 +170,20 @@ outhist(Biobuf *b)
 					p = tofree;
 				}
 			}
-			if(windows) {
-				// if windows variable is set, then, we know already,
-				// pathname is started with windows drive specifier
-				// and all '\' were replaced with '/' (see lex.c)
-				if(isdelim(p[0]) && isdelim(p[1])) {
-					// file name has network name in it, 
-					// like \\server\share\dir\file.go
-					zfile(b, "//", 2);	// leading "//"
-					outzfile(b, p+2);
-				} else if(p[1] == ':') {
-					// file name has drive letter in it
-					ds[0] = p[0];
-					outwinname(b, h, ds, p+2);
-				} else {
-					// no drive letter in file name
-					outwinname(b, h, pathname, p);
-				}
+
+			if(p[0] == '/') {
+				// 绝对路径
+				// full rooted name, like /home/rsc/dir/file.go
+				zfile(b, "/", 1);	// leading "/"
+				outzfile(b, p+1);
 			} else {
-				if(p[0] == '/') {
-					// full rooted name, like /home/rsc/dir/file.go
+				// 相对路径
+				// relative name, like dir/file.go
+				if(h->offset >= 0 && pathname && pathname[0] == '/') {
 					zfile(b, "/", 1);	// leading "/"
-					outzfile(b, p+1);
-				} else {
-					// relative name, like dir/file.go
-					if(h->offset >= 0 && pathname && pathname[0] == '/') {
-						zfile(b, "/", 1);	// leading "/"
-						outzfile(b, pathname+1);
-					}
-					outzfile(b, p);
+					outzfile(b, pathname+1);
 				}
+				outzfile(b, p);
 			}
 		}
 		zhist(b, h->line, h->offset);
@@ -226,8 +194,7 @@ outhist(Biobuf *b)
 	}
 }
 
-void
-ieeedtod(uint64 *ieee, double native)
+void ieeedtod(uint64 *ieee, double native)
 {
 	double fr, ho, f;
 	int exp;
@@ -264,38 +231,32 @@ ieeedtod(uint64 *ieee, double native)
 	*ieee = bits;
 }
 
-int
-duint8(Sym *s, int off, uint8 v)
+int duint8(Sym *s, int off, uint8 v)
 {
 	return duintxx(s, off, v, 1);
 }
 
-int
-duint16(Sym *s, int off, uint16 v)
+int duint16(Sym *s, int off, uint16 v)
 {
 	return duintxx(s, off, v, 2);
 }
 
-int
-duint32(Sym *s, int off, uint32 v)
+int duint32(Sym *s, int off, uint32 v)
 {
 	return duintxx(s, off, v, 4);
 }
 
-int
-duint64(Sym *s, int off, uint64 v)
+int duint64(Sym *s, int off, uint64 v)
 {
 	return duintxx(s, off, v, 8);
 }
 
-int
-duintptr(Sym *s, int off, uint64 v)
+int duintptr(Sym *s, int off, uint64 v)
 {
 	return duintxx(s, off, v, widthptr);
 }
 
-Sym*
-stringsym(char *s, int len)
+Sym* stringsym(char *s, int len)
 {
 	static int gen;
 	Sym *sym;
@@ -323,8 +284,9 @@ stringsym(char *s, int len)
 	sym = pkglookup(namebuf, pkg);
 	
 	// SymUniq flag indicates that data is generated already
-	if(sym->flags & SymUniq)
+	if(sym->flags & SymUniq) {
 		return sym;
+	}
 	sym->flags |= SymUniq;
 	sym->def = newname(sym);
 
@@ -337,8 +299,9 @@ stringsym(char *s, int len)
 	// string data
 	for(n=0; n<len; n+=m) {
 		m = 8;
-		if(m > len-n)
+		if(m > len-n) {
 			m = len-n;
+		}
 		off = dsname(sym, off, s+n, m);
 	}
 	off = duint8(sym, off, 0);  // terminating NUL for runtime

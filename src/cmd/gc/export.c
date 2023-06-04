@@ -9,45 +9,53 @@
 
 static void	dumpexporttype(Type *t);
 
+// exportsym 标记目标 node n 是可以对外暴露的, 并将其添加到 exportlist 全局链表中.
+//
+// caller:
+// 	1. autoexport()
+// 	2. src/cmd/gc/init.c -> fninit()
+//
 // Mark n's symbol as exported
-void
-exportsym(Node *n)
+void exportsym(Node *n)
 {
-	if(n == N || n->sym == S)
+	if(n == N || n->sym == S) {
 		return;
+	}
 	if(n->sym->flags & (SymExport|SymPackage)) {
-		if(n->sym->flags & SymPackage)
+		if(n->sym->flags & SymPackage) {
 			yyerror("export/package mismatch: %S", n->sym);
+		}
 		return;
 	}
 	n->sym->flags |= SymExport;
 
-	if(debug['E'])
+	if(debug['E']) {
 		print("export symbol %S\n", n->sym);
+	}
 	exportlist = list(exportlist, n);
 }
 
-int
-exportname(char *s)
+// 可以被暴露的两个情况之一: 大写字母开头
+int exportname(char *s)
 {
 	Rune r;
 
-	if((uchar)s[0] < Runeself)
+	if((uchar)s[0] < Runeself) {
 		return 'A' <= s[0] && s[0] <= 'Z';
+	}
 	chartorune(&r, s);
 	return isupperrune(r);
 }
 
-static int
-initname(char *s)
+// 可以被暴露的两个情况之一: 函数名为 init
+static int initname(char *s)
 {
 	return strcmp(s, "init") == 0;
 }
 
 // exportedsym reports whether a symbol will be visible
 // to files that import our package.
-static int
-exportedsym(Sym *sym)
+static int exportedsym(Sym *sym)
 {
 	// Builtins are visible everywhere.
 	if(sym->pkg == builtinpkg || sym->origpkg == builtinpkg)
@@ -56,8 +64,11 @@ exportedsym(Sym *sym)
 	return sym->pkg == localpkg && exportname(sym->name);
 }
 
-void
-autoexport(Node *n, int ctxt)
+// 本函数应该是单纯对函数(而不是变量或结构体成员)是否可对外暴露的处理
+//
+// caller:
+// 	1. src/cmd/gc/dcl.c -> declare() 只有这一处
+void autoexport(Node *n, int ctxt)
 {
 	if(n == N || n->sym == S)
 		return;
@@ -65,32 +76,37 @@ autoexport(Node *n, int ctxt)
 		return;
 	if(n->ntype && n->ntype->op == OTFUNC && n->ntype->left)	// method
 		return;
+
+	// 函数可以对外暴露的两种情况: 以大写字母开头, 或是名称为 init
+	//
 	// -A is for cmd/gc/mkbuiltin script, so export everything
-	if(debug['A'] || exportname(n->sym->name) || initname(n->sym->name))
+	if(debug['A'] || exportname(n->sym->name) || initname(n->sym->name)) {
 		exportsym(n);
+	}
 }
 
-static void
-dumppkg(Pkg *p)
+static void dumppkg(Pkg *p)
 {
 	char *suffix;
 
-	if(p == nil || p == localpkg || p->exported || p == builtinpkg)
+	if(p == nil || p == localpkg || p->exported || p == builtinpkg) {
 		return;
+	}
 	p->exported = 1;
 	suffix = "";
-	if(!p->direct)
+	if(!p->direct) {
 		suffix = " // indirect";
+	}
 	Bprint(bout, "\timport %s \"%Z\"%s\n", p->name, p->path, suffix);
 }
 
 // Look for anything we need for the inline body
 static void reexportdep(Node *n);
-static void
-reexportdeplist(NodeList *ll)
+static void reexportdeplist(NodeList *ll)
 {
-	for(; ll ;ll=ll->next)
+	for(; ll ;ll=ll->next) {
 		reexportdep(ll->n);
+	}
 }
 
 static void
@@ -309,18 +325,21 @@ dumpexporttype(Type *t)
 	}
 }
 
-static void
-dumpsym(Sym *s)
+// caller:
+// 	1. dumpexport() 只有这一处
+// 	在执行 6g 生成 main.6 中间文件时被调用
+static void dumpsym(Sym *s)
 {
-	if(s->flags & SymExported)
+	if(s->flags & SymExported) {
 		return;
+	}
 	s->flags |= SymExported;
 
 	if(s->def == N) {
 		yyerror("unknown export symbol: %S", s);
 		return;
 	}
-//	print("dumpsym %O %+S\n", s->def->op, s);
+	// print("dumpsym %O %+S\n", s->def->op, s);
 	dumppkg(s->pkg);
 
 	switch(s->def->op) {
@@ -333,10 +352,12 @@ dumpsym(Sym *s)
 		break;
 
 	case OTYPE:
-		if(s->def->type->etype == TFORW)
+		if(s->def->type->etype == TFORW) {
 			yyerror("export of incomplete type %S", s);
-		else
+		}
+		else {
 			dumpexporttype(s->def->type);
+		}
 		break;
 
 	case ONAME:
@@ -345,31 +366,49 @@ dumpsym(Sym *s)
 	}
 }
 
-void
-dumpexport(void)
+// dumpexport 打印当前包直接引用的 package 列表, 可对外暴露的变量/函数列表等信息.
+//
+// caller:
+// 	1. src/cmd/gc/obj.c -> dumpobj() 只有这一处
+// 	在执行 6g 生成 main.6 中间文件时被调用
+void dumpexport(void)
 {
 	NodeList *l;
 	int32 i, lno;
 	Pkg *p;
 
 	lno = lineno;
-
+	// localpkg 一般是 main
 	Bprint(bout, "\n$$  // exports\n    package %s", localpkg->name);
-	if(safemode)
+	if(safemode) {
 		Bprint(bout, " safe");
+	}
 	Bprint(bout, "\n");
 
-	for(i=0; i<nelem(phash); i++)
-		for(p=phash[i]; p; p=p->link)
-			if(p->direct)
-				dumppkg(p);
+	// 打印当前 package 直接引用的 package 信息.
+	// print("dumpexport() localpkg name: %s\n", localpkg->name);
+	for(i=0; i<nelem(phash); i++) {
+		for(p=phash[i]; p; p=p->link) {
+			// print(
+			// 	"dumpexport() import index: %d, package: %s, is direct?: %b\n",
+			// 	i, p->name, p->direct
+			// );
 
+			// 只打印 localpkg **直接引用**的 package 信息.
+			if(p->direct) {
+				dumppkg(p);
+			}
+		}
+	}
+
+	// 打印当前 package 暴露给其他包的对象信息, 包括大写开头的变量, 函数等.
 	for(l=exportlist; l; l=l->next) {
 		lineno = l->n->lineno;
 		dumpsym(l->n->sym);
 	}
 
-	Bprint(bout, "\n$$  // local types\n\n$$\n");   // 6l expects this. (see ld/go.c)
+	// 6l expects this. (see ld/go.c)
+	Bprint(bout, "\n$$  // local types\n\n$$\n");
 
 	lineno = lno;
 }
@@ -381,8 +420,7 @@ dumpexport(void)
 /*
  * return the sym for ss, which should match lexical
  */
-Sym*
-importsym(Sym *s, int op)
+Sym* importsym(Sym *s, int op)
 {
 	char *pkgstr;
 
@@ -468,8 +506,9 @@ importconst(Sym *s, Type *t, Node *n)
 	n->sym = s;
 	declare(n, PEXTERN);
 
-	if(debug['E'])
+	if(debug['E']) {
 		print("import const %S\n", s);
+	}
 }
 
 void

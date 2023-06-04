@@ -38,8 +38,7 @@
 // At the same time, can raise StackBig in ../../pkg/runtime/stack.h.
 vlong unmappedzero = 4096;
 
-void
-clearp(Prog *p)
+void clearp(Prog *p)
 {
 	p->as = AEND;
 	p->from.type = D_NONE;
@@ -58,8 +57,7 @@ static Prog *dpc;
  * generate and return proc with p->as = as,
  * linked into program. pc is next instruction.
  */
-Prog*
-prog(int as)
+Prog* prog(int as)
 {
 	Prog *p;
 
@@ -90,12 +88,12 @@ prog(int as)
 	return p;
 }
 
-void
-dumpdata(void)
+void dumpdata(void)
 {
 	ddumped = 1;
-	if(dfirst == nil)
+	if(dfirst == nil) {
 		return;
+	}
 	newplist();
 	*pc = *dfirst;
 	pc = dpc;
@@ -110,8 +108,7 @@ dumpdata(void)
  *	0 no opinion
  *	+1 likely
  */
-Prog*
-gbranch(int as, Type *t, int likely)
+Prog* gbranch(int as, Type *t, int likely)
 {
 	Prog *p;
 	
@@ -155,16 +152,17 @@ unpatch(Prog *p)
 /*
  * start a new Prog list.
  */
-Plist*
-newplist(void)
+Plist* newplist(void)
 {
 	Plist *pl;
 
 	pl = mal(sizeof(*pl));
-	if(plist == nil)
+	if(plist == nil) {
 		plist = pl;
-	else
+	}
+	else {
 		plast->link = pl;
+	}
 	plast = pl;
 
 	pc = mal(sizeof(*pc));

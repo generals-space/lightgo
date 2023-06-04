@@ -35,9 +35,7 @@ enum
 static	Biobuf*	wbufs[MAXBUFS];
 static	int		atexitflag;
 
-static
-void
-batexit(void)
+static void batexit(void)
 {
 	Biobuf *bp;
 	int i;
@@ -51,9 +49,7 @@ batexit(void)
 	}
 }
 
-static
-void
-deinstall(Biobuf *bp)
+static void deinstall(Biobuf *bp)
 {
 	int i;
 
@@ -62,9 +58,7 @@ deinstall(Biobuf *bp)
 			wbufs[i] = 0;
 }
 
-static
-void
-install(Biobuf *bp)
+static void install(Biobuf *bp)
 {
 	int i;
 
@@ -80,10 +74,14 @@ install(Biobuf *bp)
 	}
 }
 
-int
-Binits(Biobuf *bp, int f, int mode, unsigned char *p, int size)
+// 	@param f: 通过 open() 得到的 fd 文件描述符
+// 	@param mode: 貌似已有的主调函数传入的都是 OREAD 模式
+//
+// caller:
+// 	1. Bfdopen()
+// 	2. Binit()
+int Binits(Biobuf *bp, int f, int mode, unsigned char *p, int size)
 {
-
 	p += Bungetsize;	/* make room for Bungets */
 	size -= Bungetsize;
 
@@ -116,28 +114,37 @@ Binits(Biobuf *bp, int f, int mode, unsigned char *p, int size)
 	return 0;
 }
 
-
-int
-Binit(Biobuf *bp, int f, int mode)
+int Binit(Biobuf *bp, int f, int mode)
 {
 	return Binits(bp, f, mode, bp->b, sizeof(bp->b));
 }
 
-Biobuf*
-Bfdopen(int f, int mode)
+// 	@param f: 通过 open() 得到的 fd 文件描述符
+// 	@param mode: 貌似已有的主调函数传入的都是 OREAD 模式
+//
+// caller:
+// 	1. Bopen()
+Biobuf* Bfdopen(int f, int mode)
 {
 	Biobuf *bp;
 
 	bp = malloc(sizeof(Biobuf));
-	if(bp == 0)
+	if(bp == 0) {
 		return 0;
+	}
 	Binits(bp, f, mode, bp->b, sizeof(bp->b));
 	bp->flag = Bmagic;
 	return bp;
 }
 
-Biobuf*
-Bopen(char *name, int mode)
+// Bopen 通过 open() 打开目标文件, 并将其 fd 封装为 Biobuf 对象并返回.
+//
+// 	@param name: 6g 命令要编译的目标文件的路径
+// 	@param mode: read, write 等
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main()
+Biobuf* Bopen(char *name, int mode)
 {
 	Biobuf *bp;
 	int f;
@@ -149,25 +156,27 @@ Bopen(char *name, int mode)
 
 	case OREAD:
 		f = open(name, OREAD);
-		if(f < 0)
+		if(f < 0) {
 			return 0;
+		}
 		break;
 
 	case OWRITE:
 		f = create(name, OWRITE|OTRUNC, 0666);
-		if(f < 0)
+		if(f < 0) {
 			return 0;
+		}
 	}
 	bp = Bfdopen(f, mode);
-	if(bp == 0)
+	if(bp == 0) {
 		close(f);
+	}
 	return bp;
 }
 
-int
-Bterm(Biobuf *bp)
+// Bterm 关闭文件释放内存
+int Bterm(Biobuf *bp)
 {
-
 	deinstall(bp);
 	Bflush(bp);
 	if(bp->flag == Bmagic) {

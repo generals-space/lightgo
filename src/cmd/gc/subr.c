@@ -332,8 +332,7 @@ int32 setlineno(Node *n)
 	return lno;
 }
 
-uint32
-stringhash(char *p)
+uint32 stringhash(char *p)
 {
 	uint32 h;
 	int c;
@@ -341,27 +340,27 @@ stringhash(char *p)
 	h = 0;
 	for(;;) {
 		c = *p++;
-		if(c == 0)
+		if(c == 0) {
 			break;
+		}
 		h = h*PRIME1 + c;
 	}
 
 	if((int32)h < 0) {
 		h = -h;
-		if((int32)h < 0)
+		if((int32)h < 0) {
 			h = 0;
+		}
 	}
 	return h;
 }
 
-Sym*
-lookup(char *name)
+Sym* lookup(char *name)
 {
 	return pkglookup(name, localpkg);
 }
 
-Sym*
-pkglookup(char *name, Pkg *pkg)
+Sym* pkglookup(char *name, Pkg *pkg)
 {
 	Sym *s;
 	uint32 h;
@@ -396,7 +395,6 @@ restrictlookup(char *name, Pkg *pkg)
 		yyerror("cannot refer to unexported name %s.%s", pkg->name, name);
 	return pkglookup(name, pkg);
 }
-
 
 // find all the exported symbols in package opkg
 // and make them available in the current package
@@ -435,8 +433,7 @@ void importdot(Pkg *opkg, Node *pack)
 	}
 }
 
-static void
-gethunk(void)
+static void gethunk(void)
 {
 	char *h;
 	int32 nh;
@@ -455,8 +452,7 @@ gethunk(void)
 	thunk += nh;
 }
 
-void*
-mal(int32 n)
+void* mal(int32 n)
 {
 	void *p;
 
@@ -485,8 +481,7 @@ mal(int32 n)
 	return p;
 }
 
-void*
-remal(void *p, int32 on, int32 n)
+void* remal(void *p, int32 on, int32 n)
 {
 	void *q;
 
@@ -716,9 +711,9 @@ Type* maptype(Type *key, Type *val)
 	return t;
 }
 
-// 初始化一个 Type 对象, 其类型为 et.
+// 初始化一个类型为 et 的 Type 对象
 //
-// 	@param et: 取自 src/cmd/gc/go.h -> Txxx 所在的枚举列表中的值
+// 	@param et: 取自 src/cmd/gc/go.h -> Txxx 所在的枚举列表中的值, 可以表示 int, bool, func, struct 等.
 Type* typ(int et)
 {
 	Type *t;
@@ -1727,13 +1722,13 @@ typehash(Type *t)
 	return md5sum(&d);
 }
 
-Type*
-ptrto(Type *t)
+Type* ptrto(Type *t)
 {
 	Type *t1;
 
-	if(tptr == 0)
+	if(tptr == 0) {
 		fatal("ptrto: no tptr");
+	}
 	t1 = typ(tptr);
 	t1->type = t;
 	t1->width = widthptr;
@@ -3227,13 +3222,15 @@ simsimtype(Type *t)
 	return et;
 }
 
-NodeList*
-concat(NodeList *a, NodeList *b)
+// concat 将目标链表 b, 追加到链表 a 末尾.
+NodeList* concat(NodeList *a, NodeList *b)
 {
-	if(a == nil)
+	if(a == nil) {
 		return b;
-	if(b == nil)
+	}
+	if(b == nil) {
 		return a;
+	}
 
 	a->end->next = b;
 	a->end = b->end;
@@ -3241,8 +3238,7 @@ concat(NodeList *a, NodeList *b)
 	return a;
 }
 
-NodeList*
-list1(Node *n)
+NodeList* list1(Node *n)
 {
 	NodeList *l;
 
@@ -3261,14 +3257,13 @@ list1(Node *n)
 	return l;
 }
 
-NodeList*
-list(NodeList *l, Node *n)
+// list 将目标 node 节点 n 加入到指定的 nodelist 链表 l 末尾.
+NodeList* list(NodeList *l, Node *n)
 {
 	return concat(l, list1(n));
 }
 
-void
-listsort(NodeList** l, int(*f)(Node*, Node*))
+void listsort(NodeList** l, int(*f)(Node*, Node*))
 {
 	NodeList *l1, *l2, *le;
 
@@ -3648,8 +3643,7 @@ umagic(Magic *m)
 	m->s = p-m->w;
 }
 
-Sym*
-ngotype(Node *n)
+Sym* ngotype(Node *n)
 {
 	if(n->type != T)
 		return typenamesym(n->type);
@@ -3665,8 +3659,7 @@ ngotype(Node *n)
  *
  * If you edit this, edit ../ld/lib.c:/^pathtoprefix copy too.
  */
-static char*
-pathtoprefix(char *s)
+static char* pathtoprefix(char *s)
 {
 	static char hex[] = "0123456789abcdef";
 	char *p, *r, *w, *l;
@@ -3702,16 +3695,22 @@ pathtoprefix(char *s)
 	return p;
 }
 
-Pkg*
-mkpkg(Strlit *path)
+// 将目标 path 所表示的 package 添加到 phash 数组中.
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main() 6g 命令编译初期, 加载内置的, 已知的 package
+// 	2. src/cmd/gc/lex.c -> importfile() 按 path 路径加载第3方的 package
+Pkg* mkpkg(Strlit *path)
 {
 	Pkg *p;
 	int h;
 
 	h = stringhash(path->s) & (nelem(phash)-1);
-	for(p=phash[h]; p; p=p->link)
-		if(p->path->len == path->len && memcmp(path->s, p->path->s, path->len) == 0)
+	for(p=phash[h]; p; p=p->link) {
+		if(p->path->len == path->len && memcmp(path->s, p->path->s, path->len) == 0) {
 			return p;
+		}
+	}
 
 	p = mal(sizeof *p);
 	p->path = path;
@@ -3721,11 +3720,11 @@ mkpkg(Strlit *path)
 	return p;
 }
 
-Strlit*
-strlit(char *s)
+// strlit 初始化一个 Strlit 字符串字面量对象, 把 s 的内容和长度赋值给该对象中的成员.
+Strlit* strlit(char *s)
 {
 	Strlit *t;
-	
+
 	t = mal(sizeof *t + strlen(s));
 	strcpy(t->s, s);
 	t->len = strlen(s);

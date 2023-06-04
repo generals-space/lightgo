@@ -32,8 +32,7 @@
 #include <libc.h>
 #include "gg.h"
 
-void
-zname(Biobuf *b, Sym *s, int t)
+void zname(Biobuf *b, Sym *s, int t)
 {
 	BPUTLE2(b, ANAME);	/* as */
 	BPUTC(b, t);		/* type */
@@ -42,8 +41,7 @@ zname(Biobuf *b, Sym *s, int t)
 	Bputname(b, s);
 }
 
-void
-zfile(Biobuf *b, char *p, int n)
+void zfile(Biobuf *b, char *p, int n)
 {
 	BPUTLE2(b, ANAME);
 	BPUTC(b, D_FILE);
@@ -53,8 +51,7 @@ zfile(Biobuf *b, char *p, int n)
 	BPUTC(b, 0);
 }
 
-void
-zhist(Biobuf *b, int line, vlong offset)
+void zhist(Biobuf *b, int line, vlong offset)
 {
 	Addr a;
 
@@ -69,8 +66,7 @@ zhist(Biobuf *b, int line, vlong offset)
 	zaddr(b, &a, 0, 0);
 }
 
-void
-zaddr(Biobuf *b, Addr *a, int s, int gotype)
+void zaddr(Biobuf *b, Addr *a, int s, int gotype)
 {
 	int32 l;
 	uint64 e;
@@ -151,8 +147,7 @@ static struct {
 	int sym;
 } z;
 
-static void
-zsymreset(void)
+static void zsymreset(void)
 {
 	for(z.sym=0; z.sym<NSYM; z.sym++) {
 		z.h[z.sym].sym = S;
@@ -161,8 +156,7 @@ zsymreset(void)
 	z.sym = 1;
 }
 
-static int
-zsym(Sym *s, int t, int *new)
+static int zsym(Sym *s, int t, int *new)
 {
 	int i;
 
@@ -186,19 +180,21 @@ zsym(Sym *s, int t, int *new)
 	return i;
 }
 
-static int
-zsymaddr(Addr *a, int *new)
+static int zsymaddr(Addr *a, int *new)
 {
 	int t;
 
 	t = a->type;
-	if(t == D_ADDR)
+	if(t == D_ADDR) {
 		t = a->index;
+	}
 	return zsym(a->sym, t, new);
 }
 
-void
-dumpfuncs(void)
+// caller:
+// 	1. src/cmd/gc/obj.c -> dumpobj() 只有这一处
+// 	执行`6g main.go`进行源码编译时, 生成并输出`main.6`文件
+void dumpfuncs(void)
 {
 	Plist *pl;
 	int sf, st, gf, gt, new;
@@ -210,42 +206,50 @@ dumpfuncs(void)
 	// fix up pc
 	pcloc = 0;
 	for(pl=plist; pl!=nil; pl=pl->link) {
-		if(isblank(pl->name))
+		if(isblank(pl->name)) {
 			continue;
+		}
 		for(p=pl->firstpc; p!=P; p=p->link) {
 			p->loc = pcloc;
-			if(p->as != ADATA && p->as != AGLOBL)
+			if(p->as != ADATA && p->as != AGLOBL) {
 				pcloc++;
+			}
 		}
 	}
 
 	// put out functions
 	for(pl=plist; pl!=nil; pl=pl->link) {
-		if(isblank(pl->name))
+		if(isblank(pl->name)) {
 			continue;
+		}
 
 		// -S prints code; -SS prints code and data
 		if(debug['S'] && (pl->name || debug['S']>1)) {
 			s = S;
-			if(pl->name != N)
+			if(pl->name != N) {
 				s = pl->name->sym;
+			}
 			print("\n--- prog list \"%S\" ---\n", s);
-			for(p=pl->firstpc; p!=P; p=p->link)
+			for(p=pl->firstpc; p!=P; p=p->link) {
 				print("%P\n", p);
+			}
 		}
 
 		for(p=pl->firstpc; p!=P; p=p->link) {
 			for(;;) {
 				sf = zsymaddr(&p->from, &new);
 				gf = zsym(p->from.gotype, D_EXTERN, &new);
-				if(new && sf == gf)
+				if(new && sf == gf) {
 					continue;
+				}
 				st = zsymaddr(&p->to, &new);
-				if(new && (st == sf || st == gf))
+				if(new && (st == sf || st == gf)) {
 					continue;
+				}
 				gt = zsym(p->to.gotype, D_EXTERN, &new);
-				if(new && (gt == sf || gt == gf || gt == st))
+				if(new && (gt == sf || gt == gf || gt == st)) {
 					continue;
+				}
 				break;
 			}
 

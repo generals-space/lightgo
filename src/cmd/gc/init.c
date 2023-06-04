@@ -88,7 +88,7 @@ anyinit(NodeList *n)
 }
 
 // caller:
-// 	1. src/cmd/gc/lex.c -> main()
+// 	1. src/cmd/gc/lex.c -> main() 只有这一处
 void fninit(NodeList *n)
 {
 	int i;

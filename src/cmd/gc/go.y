@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 
 /*
+ * 本文件定义了 golang 的语法规则, 经过处理得到可编译的 y.tab.c 文件.
+ *
  * Go language grammar.
  *
  * The Go semicolon rules are:

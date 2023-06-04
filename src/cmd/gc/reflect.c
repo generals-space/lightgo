@@ -17,8 +17,7 @@ static	Sym*	weaktypesym(Type*);
 static	Sym*	dalgsym(Type*);
 static	Sym*	dgcsym(Type*);
 
-static int
-sigcmp(Sig *a, Sig *b)
+static int sigcmp(Sig *a, Sig *b)
 {
 	int i;
 
@@ -34,8 +33,7 @@ sigcmp(Sig *a, Sig *b)
 	return strcmp(a->pkg->path->s, b->pkg->path->s);
 }
 
-static Sig*
-lsort(Sig *l, int(*f)(Sig*, Sig*))
+static Sig* lsort(Sig *l, int(*f)(Sig*, Sig*))
 {
 	Sig *l1, *l2, *le;
 
@@ -112,8 +110,7 @@ enum {
 	MAXVALSIZE = 128,
 };
 
-static Type*
-mapbucket(Type *t)
+static Type* mapbucket(Type *t)
 {
 	Type *keytype, *valtype;
 	Type *bucket;
@@ -181,8 +178,7 @@ mapbucket(Type *t)
 // we include only enough information to generate a correct GC
 // program for it.
 // Make sure this stays in sync with ../../pkg/runtime/hashmap.c!
-static Type*
-hmap(Type *t)
+static Type* hmap(Type *t)
 {
 	Type *h, *bucket;
 	Type *bucketsfield, *oldbucketsfield;
@@ -237,8 +233,7 @@ hmap(Type *t)
  * f is method type, with receiver.
  * return function type, receiver as first argument (or not).
  */
-Type*
-methodfunc(Type *f, Type *receiver)
+Type* methodfunc(Type *f, Type *receiver)
 {
 	NodeList *in, *out;
 	Node *d;
@@ -276,8 +271,7 @@ methodfunc(Type *f, Type *receiver)
  * return methods of non-interface type t, sorted by name.
  * generates stub functions as needed.
  */
-static Sig*
-methods(Type *t)
+static Sig* methods(Type *t)
 {
 	Type *f, *mt, *it, *this;
 	Sig *a, *b;
@@ -362,8 +356,7 @@ methods(Type *t)
 /*
  * return methods of interface type t, sorted by name.
  */
-static Sig*
-imethods(Type *t)
+static Sig* imethods(Type *t)
 {
 	Sig *a, *all, *last;
 	Type *f;
@@ -414,15 +407,15 @@ imethods(Type *t)
 	return all;
 }
 
-static void
-dimportpath(Pkg *p)
+static void dimportpath(Pkg *p)
 {
 	static Pkg *gopkg;
 	char *nam;
 	Node *n;
 
-	if(p->pathsym != S)
+	if(p->pathsym != S) {
 		return;
+	}
 
 	if(gopkg == nil) {
 		gopkg = mkpkg(strlit("go"));
@@ -441,8 +434,7 @@ dimportpath(Pkg *p)
 	ggloblsym(n->sym, types[TSTRING]->width, 1, 1);
 }
 
-static int
-dgopkgpath(Sym *s, int ot, Pkg *pkg)
+static int dgopkgpath(Sym *s, int ot, Pkg *pkg)
 {
 	if(pkg == nil)
 		return dgostringptr(s, ot, nil);
@@ -555,8 +547,7 @@ enum {
 	KindNoPointers = 1<<7,
 };
 
-static int
-kinds[] =
+static int kinds[] =
 {
 	[TINT]		= KindInt,
 	[TUINT]		= KindUint,
@@ -586,8 +577,7 @@ kinds[] =
 	[TUNSAFEPTR]	= KindUnsafePointer,
 };
 
-int
-haspointers(Type *t)
+int haspointers(Type *t)
 {
 	Type *t1;
 	int ret;
@@ -731,8 +721,7 @@ static int dcommontype(Sym *s, int ot, Type *t)
 	return ot;
 }
 
-Sym*
-typesym(Type *t)
+Sym* typesym(Type *t)
 {
 	char *p;
 	Sym *s;
@@ -744,8 +733,7 @@ typesym(Type *t)
 	return s;
 }
 
-Sym*
-tracksym(Type *t)
+Sym* tracksym(Type *t)
 {
 	char *p;
 	Sym *s;
@@ -756,8 +744,7 @@ tracksym(Type *t)
 	return s;
 }
 
-Sym*
-typelinksym(Type *t)
+Sym* typelinksym(Type *t)
 {
 	char *p;
 	Sym *s;
@@ -777,8 +764,7 @@ typelinksym(Type *t)
 	return s;
 }
 
-Sym*
-typesymprefix(char *prefix, Type *t)
+Sym* typesymprefix(char *prefix, Type *t)
 {
 	char *p;
 	Sym *s;
@@ -790,8 +776,7 @@ typesymprefix(char *prefix, Type *t)
 	return s;
 }
 
-Sym*
-typenamesym(Type *t)
+Sym* typenamesym(Type *t)
 {
 	Sym *s;
 	Node *n;
@@ -815,8 +800,7 @@ typenamesym(Type *t)
 	return s->def->sym;
 }
 
-Node*
-typename(Type *t)
+Node* typename(Type *t)
 {
 	Sym *s;
 	Node *n;
@@ -830,8 +814,7 @@ typename(Type *t)
 	return n;
 }
 
-static Sym*
-weaktypesym(Type *t)
+static Sym* weaktypesym(Type *t)
 {
 	char *p;
 	Sym *s;
@@ -1075,8 +1058,8 @@ ok:
 }
 
 // caller: 
-// 	1. src/cmd/gc/obj.c -> dumpobj() 只有这一处, 使用 6g 命令进行源码编译,
-// 	输出 main.6 OBJ文件时, 会调用本函数.
+// 	1. src/cmd/gc/obj.c -> dumpobj() 只有这一处.
+// 	使用 6g 命令进行源码编译, 输出 main.6 OBJ文件时, 会调用本函数.
 void dumptypestructs(void)
 {
 	int i;
@@ -1107,11 +1090,21 @@ void dumptypestructs(void)
 		}
 	}
 
+	// 打印当前 package 直接引用的 package 信息.
+	// print("dumpexport() localpkg name: %s\n", localpkg->name);
+	//
 	// generate import strings for imported packages
-	for(i=0; i<nelem(phash); i++)
-		for(p=phash[i]; p; p=p->link)
-			if(p->direct)
+	for(i=0; i<nelem(phash); i++) {
+		for(p=phash[i]; p; p=p->link) {
+			// print(
+			// 	"dumpexport() import index: %d, package: %s, is direct?: %b\n",
+			// 	i, p->name, p->direct
+			// );
+			if(p->direct) {
 				dimportpath(p);
+			}
+		}
+	}
 
 	// do basic types if compiling package runtime.
 	// they have to be in at least one package,
@@ -1120,8 +1113,9 @@ void dumptypestructs(void)
 	// another possible choice would be package main,
 	// but using runtime means fewer copies in .6 files.
 	if(compiling_runtime) {
-		for(i=1; i<=TBOOL; i++)
+		for(i=1; i<=TBOOL; i++) {
 			dtypesym(ptrto(types[i]));
+		}
 		dtypesym(ptrto(types[TSTRING]));
 		dtypesym(ptrto(types[TUNSAFEPTR]));
 
@@ -1134,8 +1128,9 @@ void dumptypestructs(void)
 
 		// add paths for runtime and main, which 6l imports implicitly.
 		dimportpath(runtimepkg);
-		if(flag_race)
+		if(flag_race) {
 			dimportpath(racepkg);
+		}
 		dimportpath(mkpkg(strlit("main")));
 	}
 }
@@ -1178,8 +1173,7 @@ static Sym* dalgsym(Type *t)
 	return s;
 }
 
-static int
-gcinline(Type *t)
+static int gcinline(Type *t)
 {
 	switch(t->etype) {
 	case TARRAY:
@@ -1197,8 +1191,7 @@ gcinline(Type *t)
 // caller:
 // 	1. dgcsym()
 //
-static int
-dgcsym1(Sym *s, int ot, Type *t, vlong *off, int stack_size)
+static int dgcsym1(Sym *s, int ot, Type *t, vlong *off, int stack_size)
 {
 	Type *t1;
 	vlong o, off2, fieldoffset, i;

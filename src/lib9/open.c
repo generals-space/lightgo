@@ -32,8 +32,7 @@ THE SOFTWARE.
 #define O_DIRECT 0
 #endif
 
-int
-p9open(char *name, int mode)
+int p9open(char *name, int mode)
 {
 	int rclose;
 	int fd, umode, rdwr;
@@ -61,8 +60,9 @@ p9open(char *name, int mode)
 	umode |= O_BINARY;
 	fd = open(name, umode);
 	if(fd >= 0){
-		if(rclose)
+		if(rclose) {
 			remove(name);
+		}
 	}
 	return fd;
 }
