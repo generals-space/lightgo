@@ -369,10 +369,12 @@ Sym* pkglookup(char *name, Pkg *pkg)
 	h = stringhash(name) % NHASH;
 	c = name[0];
 	for(s = hash[h]; s != S; s = s->link) {
-		if(s->name[0] != c || s->pkg != pkg)
+		if(s->name[0] != c || s->pkg != pkg) {
 			continue;
-		if(strcmp(s->name, name) == 0)
+		}
+		if(strcmp(s->name, name) == 0) {
 			return s;
+		}
 	}
 
 	s = mal(sizeof(*s));

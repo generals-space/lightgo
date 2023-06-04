@@ -1417,21 +1417,26 @@ addmethod(Sym *sf, Type *t, int local, int nointerface)
 	return;
 }
 
-void
-funccompile(Node *n, int isclosure)
+// 	@param isclosure: 从目前来看, 好像所有主调函数传入的都是 0 啊...
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main()
+// 	2. src/cmd/gc/init.c -> fninit()
+void funccompile(Node *n, int isclosure)
 {
 	stksize = BADWIDTH;
 	maxarg = 0;
 
 	if(n->type == T) {
-		if(nerrors == 0)
+		if(nerrors == 0) {
 			fatal("funccompile missing type");
+		}
 		return;
 	}
 
 	// assign parameter offsets
 	checkwidth(n->type);
-	
+
 	// record offset to actual frame pointer.
 	// for closure, have to skip over leading pointers and PC slot.
 	nodfp->xoffset = 0;
@@ -1444,8 +1449,9 @@ funccompile(Node *n, int isclosure)
 		}
 	}
 
-	if(curfn)
+	if(curfn) {
 		fatal("funccompile %S inside %S", n->nname->sym, curfn->nname->sym);
+	}
 
 	stksize = 0;
 	dclcontext = PAUTO;
@@ -1456,8 +1462,7 @@ funccompile(Node *n, int isclosure)
 	dclcontext = PEXTERN;
 }
 
-Sym*
-funcsym(Sym *s)
+Sym* funcsym(Sym *s)
 {
 	char *p;
 	Sym *s1;

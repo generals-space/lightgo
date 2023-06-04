@@ -57,60 +57,63 @@ static struct {
 	{nil, nil},
 };
 
-static void
-addexp(char *s)
+// caller:
+// 	1. setexp() 只有这一处
+static void addexp(char *s)
 {
 	int i;
-	
+
 	for(i=0; exper[i].name != nil; i++) {
 		if(strcmp(exper[i].name, s) == 0) {
 			*exper[i].val = 1;
 			return;
 		}
 	}
-	
+
 	print("unknown experiment %s\n", s);
 	exits("unknown experiment");
 }
 
-static void
-setexp(void)
+// caller:
+// 	1. main() 只有这一处
+static void setexp(void)
 {
 	char *f[20];
 	int i, nf;
 	
 	// The makefile #defines GOEXPERIMENT for us.
 	nf = getfields(GOEXPERIMENT, f, nelem(f), 1, ",");
-	for(i=0; i<nf; i++)
+	for(i=0; i<nf; i++) {
 		addexp(f[i]);
+	}
 }
 
-char*
-expstring(void)
+char* expstring(void)
 {
 	int i;
 	static char buf[512];
 
 	strcpy(buf, "X");
-	for(i=0; exper[i].name != nil; i++)
-		if(*exper[i].val)
+	for(i=0; exper[i].name != nil; i++) {
+		if(*exper[i].val) {
 			seprint(buf+strlen(buf), buf+sizeof buf, ",%s", exper[i].name);
-	if(strlen(buf) == 1)
+		}
+	}
+	if(strlen(buf) == 1) {
 		strcpy(buf, "X,none");
+	}
 	buf[1] = ':';
 	return buf;
 }
 
 // Our own isdigit, isspace, isalpha, isalnum that take care 
 // of EOF and other out of range arguments.
-static int
-yy_isdigit(int c)
+static int yy_isdigit(int c)
 {
 	return c >= 0 && c <= 0xFF && isdigit(c);
 }
 
-static int
-yy_isspace(int c)
+static int yy_isspace(int c)
 {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
@@ -130,8 +133,7 @@ static int yy_isalpha(int c)
 	return c >= 0 && c <= 0xFF && isalpha(c);
 }
 
-static int
-yy_isalnum(int c)
+static int yy_isalnum(int c)
 {
 	return c >= 0 && c <= 0xFF && isalnum(c);
 }
@@ -583,21 +585,28 @@ skiptopkgdef(Biobuf *b)
 	return 1;
 }
 
-static void
-addidir(char* dir)
+// addidir 将目标 dir 添加到 idirs 末尾.
+//
+// caller:
+// 	1. main() 只有这一处, 通过 6g -I 参数传入
+static void addidir(char* dir)
 {
 	Idir** pp;
 
-	if(dir == nil)
+	if(dir == nil) {
 		return;
+	}
 
-	for(pp = &idirs; *pp != nil; pp = &(*pp)->link)
+	for(pp = &idirs; *pp != nil; pp = &(*pp)->link) {
 		;
+	}
 	*pp = mal(sizeof(Idir));
 	(*pp)->link = nil;
 	(*pp)->dir = dir;
 }
 
+// islocalname 判断目标 name 是否为本地路径(golang 不允许通过本地路径指定 package)
+//
 // caller:
 // 	1. findpkg()
 // 	2. importfile()
@@ -663,11 +672,13 @@ static int findpkg(Strlit *name)
 
 	for(p = idirs; p != nil; p = p->link) {
 		snprint(namebuf, sizeof(namebuf), "%s/%Z.a", p->dir, name);
-		if(access(namebuf, 0) >= 0)
+		if(access(namebuf, 0) >= 0) {
 			return 1;
+		}
 		snprint(namebuf, sizeof(namebuf), "%s/%Z.%c", p->dir, name, thechar);
-		if(access(namebuf, 0) >= 0)
+		if(access(namebuf, 0) >= 0) {
 			return 1;
+		}
 	}
 	if(goroot != nil) {
 		suffix = "";
@@ -679,12 +690,21 @@ static int findpkg(Strlit *name)
 			suffixsep = "_";
 			suffix = "race";
 		}
-		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s%s/%Z.a", goroot, goos, goarch, suffixsep, suffix, name);
-		if(access(namebuf, 0) >= 0)
+		// 在 pkg/linux_amd64 目录下寻找目标库, 不过只能找到标准库.
+		snprint(
+			namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s%s/%Z.a", 
+			goroot, goos, goarch, suffixsep, suffix, name
+		);
+		if(access(namebuf, 0) >= 0) {
 			return 1;
-		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s%s/%Z.%c", goroot, goos, goarch, suffixsep, suffix, name, thechar);
-		if(access(namebuf, 0) >= 0)
+		}
+		snprint(
+			namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s%s/%Z.%c", 
+			goroot, goos, goarch, suffixsep, suffix, name, thechar
+		);
+		if(access(namebuf, 0) >= 0) {
 			return 1;
+		}
 	}
 	return 0;
 }
@@ -786,6 +806,10 @@ void importfile(Val *f, int line)
 	}
 	importpkg = mkpkg(path);
 
+	// 运行到这里, namebuf 一般为 pkg/linux_amd64 目录下某个标准库的 .a 文件全路径.
+
+	// 如果之前已经加载过了, 不要重复加载, 直接返回.
+	//
 	// If we already saw that package, feed a dummy statement
 	// to the lexer to avoid parsing export data twice.
 	if(importpkg->imported) {
@@ -799,6 +823,9 @@ void importfile(Val *f, int line)
 		return;
 	}
 	importpkg->imported = 1;
+
+	// 打开目标库的 .a 静态链接库文件, 确认文件格式.
+	// 编译期间不进行其他额外操作.
 
 	imp = Bopen(namebuf, OREAD);
 	if(imp == nil) {
@@ -814,7 +841,7 @@ void importfile(Val *f, int line)
 			errorexit();
 		}
 	}
-	
+
 	// check object header
 	p = Brdstr(imp, '\n', 1);
 	if(strcmp(p, "empty archive") != 0) {
@@ -835,8 +862,8 @@ void importfile(Val *f, int line)
 	linehist(file + len - path->len - 2, -1, 1);	// acts as #pragma lib
 
 	/*
-	 * position the input right
-	 * after $$ and return
+	 * 定位 $$ 出现的位置并返回, 如果没找到则表示这并不是合法的包, 需要回退一些操作.
+	 * position the input right after $$ and return
 	 */
 	pushedio = curio;
 	curio.bin = imp;
@@ -848,28 +875,36 @@ void importfile(Val *f, int line)
 
 	for(;;) {
 		c = getc();
-		if(c == EOF)
+		if(c == EOF) {
 			break;
-		if(c != '$')
+		}
+		if(c != '$') {
 			continue;
+		}
 		c = getc();
-		if(c == EOF)
+		if(c == EOF) {
 			break;
-		if(c != '$')
+		}
+		if(c != '$') {
 			continue;
+		}
 		return;
 	}
+	// 没找到则表示这并不是合法的包, 需要回退一些操作.
 	yyerror("no import in \"%Z\"", f->u.sval);
 	unimportfile();
 }
 
+// caller:
+// 	1. importfile() 在 pkg/linux_amd64 中找到了目标包, 但不是合法包, 需要回退一些操作.
 void unimportfile(void)
 {
 	if(curio.bin != nil) {
 		Bterm(curio.bin);
 		curio.bin = nil;
-	} else
+	} else {
 		lexlineno--;	// re correct sys.6 line number
+	}
 
 	curio = pushedio;
 	pushedio.bin = nil;
@@ -877,10 +912,10 @@ void unimportfile(void)
 	typecheckok = 0;
 }
 
-void
-cannedimports(char *file, char *cp)
+void cannedimports(char *file, char *cp)
 {
-	lexlineno++;		// if sys.6 is included on line 1,
+	// if sys.6 is included on line 1,
+	lexlineno++;
 
 	pushedio = curio;
 	curio.bin = nil;

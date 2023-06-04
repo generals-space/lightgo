@@ -275,6 +275,7 @@ struct	Node
 	NodeList*	list;
 	NodeList*	rlist;
 
+	// op 字段取值可见下面的 "Node ops" 部分
 	uchar	op;
 	uchar	nointerface;
 	uchar	ullman;		// sethi/ullman number
@@ -448,7 +449,10 @@ struct	Pkg
 	Sym*	pathsym;
 	char*	prefix;		// escaped path for use in symbol table
 	Pkg*	link;
-	uchar	imported;	// export data of this package was parsed
+	// imported 表示当前 package 是否已经**被** localpkg 加载过了, 也是个 bool 类型.
+	//
+	// export data of this package was parsed
+	uchar	imported;
 	char	exported;	// import line written in export data
 	// 这是是一个 bool 类型.
 	// 从目前来看, 表示当前 pkg 对象是否**被** localpkg 直接引用.
@@ -485,14 +489,25 @@ enum
 {
 	OXXX,
 
-	// names
-	ONAME,	// var, const or func name
-	ONONAME,	// unnamed arg or return value: f(int, string) (int, error) { etc }
+	// Node ops 分为好几个类型
+
+	////////////////////////////////////////////////////////////////////////////
+	// names 通过类型关键字声明的变量(bool, int 等)
+
+	// 变量定义
+	// var, const or func name
+	ONAME,
+	// 匿名参数或返回值
+	// unnamed arg or return value: f(int, string) (int, error) { etc }
+	ONONAME,
 	OTYPE,	// type name
-	OPACK,	// import
+	// 包引用
+	// import
+	OPACK,
 	OLITERAL, // literal
 
-	// expressions
+	////////////////////////////////////////////////////////////////////////////
+	// expressions 表达式
 	OADD,	// x + y
 	OSUB,	// x - y
 	OOR,	// x | y
@@ -625,7 +640,8 @@ enum
 	OIMAG,	// imag
 	OCOMPLEX,	// complex
 
-	// statements
+	////////////////////////////////////////////////////////////////////////////
+	// statements 声明, 包含多数流程关键字(排除其他类型定义关键字)
 	OBLOCK,	// block of code
 	OBREAK,	// break
 	OCASE,	// case, after being verified by swt.c's casebody.
@@ -646,6 +662,7 @@ enum
 	OSWITCH,	// switch x
 	OTYPESW,	// switch err.(type)
 
+	////////////////////////////////////////////////////////////////////////////
 	// types
 	OTCHAN,	// chan int
 	OTMAP,	// map[string]int
@@ -657,6 +674,7 @@ enum
 	OTARRAY,
 	OTPAREN,	// (T)
 
+	////////////////////////////////////////////////////////////////////////////
 	// misc
 	ODDD,	// func f(args ...int) or f(l...) or var a = [...]int{0, 1, 2}.
 	ODDDARG,	// func f(args ...int), introduced by escape analysis.
@@ -668,10 +686,12 @@ enum
 	OCFUNC,	// reference to c function pointer (not go func value)
 	OCHECKNIL, // emit code to ensure pointer/interface not nil
 
+	////////////////////////////////////////////////////////////////////////////
 	// arch-specific registers
 	OREGISTER,	// a register, such as AX.
 	OINDREG,	// offset plus indirect of a register, such as 8(SP).
 
+	////////////////////////////////////////////////////////////////////////////
 	// 386/amd64-specific opcodes
 	OCMP,	// compare: ACMP.
 	ODEC,	// decrement: ADEC.
@@ -982,7 +1002,6 @@ EXTERN	Sym*	importmyname;	// my name for package
 // 全局变量, 表示 go run/build, 或是 6g 编译的目标 package, 一般为 main 包.
 // package being compiled
 EXTERN	Pkg*	localpkg;
-EXTERN	Pkg*	importpkg;	// package being imported
 EXTERN	Pkg*	builtinpkg;	// fake package for builtins
 EXTERN	Pkg*	gostringpkg;	// fake pkg for Go strings
 EXTERN	Pkg*	itabpkg;	// fake pkg for itab cache
@@ -1000,6 +1019,10 @@ EXTERN	Pkg*	racepkg;	// package runtime/race
 // 包含上面提到的所有 xxxpkg 
 EXTERN	Pkg*	phash[128];
 
+// 全局变量, 表示当前编译过程中, 直接引入的 package
+// package being imported
+EXTERN	Pkg*	importpkg;
+
 EXTERN	Pkg*	structpkg;	// package that declared struct, during import
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1009,6 +1032,8 @@ EXTERN	int	tptr;
 extern	char*	runtimeimport;
 extern	char*	unsafeimport;
 EXTERN	char*	myimportpath;
+// 这是一个链表, 其中每个成员应该都是类似于 gopath 的目录, 可以在这些目录中搜索 import 的包.
+// 通过 6g -I 参数传入
 EXTERN	Idir*	idirs;
 EXTERN	char*	localimport;
 
@@ -1047,6 +1072,7 @@ EXTERN	Mpint*	maxintval[NTYPE];
 EXTERN	Mpflt*	minfltval[NTYPE];
 EXTERN	Mpflt*	maxfltval[NTYPE];
 
+// 貌似是所有 Node 的父节点, 类似于 gc 中的根节点.
 // 由 src/cmd/gc/y.tab.c -> yyparse() 完成初始化.
 EXTERN	NodeList*	xtop;
 // 由 src/cmd/gc/dcl.c -> declare() 完成初始化.

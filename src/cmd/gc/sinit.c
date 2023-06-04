@@ -27,8 +27,7 @@ static Node *staticname(Type*, int);
 
 // init1 walks the AST starting at n, and accumulates in out
 // the list of definitions needing init code in dependency order.
-static void
-init1(Node *n, NodeList **out)
+static void init1(Node *n, NodeList **out)
 {
 	NodeList *l;
 	Node *nv;
@@ -186,14 +185,15 @@ bad:
 }
 
 // recurse over n, doing init1 everywhere.
-static void
-init2(Node *n, NodeList **out)
+static void init2(Node *n, NodeList **out)
 {
-	if(n == N || n->initorder == InitDone)
+	if(n == N || n->initorder == InitDone) {
 		return;
+	}
 
-	if(n->op == ONAME && n->ninit)
+	if(n->op == ONAME && n->ninit) {
 		fatal("name %S with ninit: %+N\n", n->sym, n);
+	}
 
 	init1(n, out);
 	init2(n->left, out);
@@ -211,15 +211,14 @@ init2(Node *n, NodeList **out)
 		init2(n->type->nname, out);
 }
 
-static void
-init2list(NodeList *l, NodeList **out)
+static void init2list(NodeList *l, NodeList **out)
 {
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		init2(l->n, out);
+	}
 }
 
-static void
-initreorder(NodeList *l, NodeList **out)
+static void initreorder(NodeList *l, NodeList **out)
 {
 	Node *n;
 
@@ -237,11 +236,15 @@ initreorder(NodeList *l, NodeList **out)
 	}
 }
 
+// 	@param n: src/cmd/gc/go.h -> xtop
+//
+// caller:
+// 	1. src/cmd/gc/init.c -> fninit() 只有这一处
+//
 // initfix computes initialization order for a list l of top-level
 // declarations and outputs the corresponding list of statements
 // to include in the init() function body.
-NodeList*
-initfix(NodeList *l)
+NodeList* initfix(NodeList *l)
 {
 	NodeList *lout;
 	int lno;
@@ -260,13 +263,15 @@ initfix(NodeList *l)
 
 static int staticassign(Node*, Node*, NodeList**);
 
-static int
-staticinit(Node *n, NodeList **out)
+// caller:
+// 	1. init1() 只有这一处
+static int staticinit(Node *n, NodeList **out)
 {
 	Node *l, *r;
 
-	if(n->op != ONAME || n->class != PEXTERN || n->defn == N || n->defn->op != OAS)
+	if(n->op != ONAME || n->class != PEXTERN || n->defn == N || n->defn->op != OAS) {
 		fatal("staticinit");
+	}
 
 	lineno = n->lineno;
 	l = n->defn->left;
@@ -274,10 +279,8 @@ staticinit(Node *n, NodeList **out)
 	return staticassign(l, r, out);
 }
 
-// like staticassign but we are copying an already
-// initialized value r.
-static int
-staticcopy(Node *l, Node *r, NodeList **out)
+// like staticassign but we are copying an already initialized value r.
+static int staticcopy(Node *l, Node *r, NodeList **out)
 {
 	int i;
 	InitEntry *e;
@@ -370,8 +373,7 @@ staticcopy(Node *l, Node *r, NodeList **out)
 	return 0;
 }
 
-static int
-staticassign(Node *l, Node *r, NodeList **out)
+static int staticassign(Node *l, Node *r, NodeList **out)
 {
 	Node *a, n1;
 	Type *ta;

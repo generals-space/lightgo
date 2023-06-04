@@ -341,22 +341,20 @@ void walkstmt(Node **np)
 }
 
 /*
- * walk the whole tree of the body of an
- * expression or simple statement.
+ * walk the whole tree of the body of an expression or simple statement.
  * the types expressions are calculated.
  * compile-time constants are evaluated.
  * complex side effects like statements are appended to init
  */
 
-void
-walkexprlist(NodeList *l, NodeList **init)
+void walkexprlist(NodeList *l, NodeList **init)
 {
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		walkexpr(&l->n, init);
+	}
 }
 
-void
-walkexprlistsafe(NodeList *l, NodeList **init)
+void walkexprlistsafe(NodeList *l, NodeList **init)
 {
 	for(; l; l=l->next) {
 		l->n = safeexpr(l->n, init);
@@ -364,8 +362,7 @@ walkexprlistsafe(NodeList *l, NodeList **init)
 	}
 }
 
-void
-walkexpr(Node **np, NodeList **init)
+void walkexpr(Node **np, NodeList **init)
 {
 	Node *r, *l, *var, *a;
 	NodeList *ll, *lr, *lpost;
@@ -379,8 +376,9 @@ walkexpr(Node **np, NodeList **init)
 
 	n = *np;
 
-	if(n == N)
+	if(n == N) {
 		return;
+	}
 
 	if(init == &n->ninit) {
 		// not okay to use n->ninit when walking n,

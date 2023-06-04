@@ -18,6 +18,8 @@ static void allocauto(Prog* p);
 static void dumpgcargs(Node*, Sym*);
 static Bvec* dumpgclocals(Node*, Sym*);
 
+// caller:
+// 	1. src/cmd/gc/dcl.c -> funccompile() 只有这一处
 void compile(Node *fn)
 {
 	Bvec *bv;
@@ -44,8 +46,9 @@ void compile(Node *fn)
 	lno = setlineno(fn);
 
 	if(fn->nbody == nil) {
-		if(pure_go || memcmp(fn->nname->sym->name, "init·", 6) == 0)
+		if(pure_go || memcmp(fn->nname->sym->name, "init·", 6) == 0) {
 			yyerror("missing function body", fn);
+		}
 		goto ret;
 	}
 
@@ -71,8 +74,9 @@ void compile(Node *fn)
 	}
 	
 	order(curfn);
-	if(nerrors != 0)
+	if(nerrors != 0) {
 		goto ret;
+	}
 	
 	hasdefer = 0;
 	// 对 curfn 中可能存在的已声明但未使用的变量进行最终类型检查
@@ -204,8 +208,9 @@ void compile(Node *fn)
 	defframe(ptxt, bv);
 	free(bv);
 
-	if(0)
+	if(0) {
 		frame(0);
+	}
 
 ret:
 	lineno = lno;

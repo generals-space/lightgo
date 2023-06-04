@@ -39,8 +39,7 @@ Sym* renameinit(void)
  *		return					(11)
  *	}
  */
-static int
-anyinit(NodeList *n)
+static int anyinit(NodeList *n)
 {
 	uint32 h;
 	Sym *s;
@@ -87,6 +86,8 @@ anyinit(NodeList *n)
 	return 0;
 }
 
+// 	@param n: src/cmd/gc/go.h -> xtop
+//
 // caller:
 // 	1. src/cmd/gc/lex.c -> main() 只有这一处
 void fninit(NodeList *n)
@@ -104,8 +105,9 @@ void fninit(NodeList *n)
 	}
 
 	n = initfix(n);
-	if(!anyinit(n))
+	if(!anyinit(n)) {
 		return;
+	}
 
 	r = nil;
 
@@ -147,18 +149,22 @@ void fninit(NodeList *n)
 	r = list(r, a);
 
 	// (7)
-	for(h=0; h<NHASH; h++)
-	for(s = hash[h]; s != S; s = s->link) {
-		if(s->name[0] != 'i' || strcmp(s->name, "init") != 0)
-			continue;
-		if(s->def == N)
-			continue;
-		if(s == initsym)
-			continue;
+	for(h=0; h<NHASH; h++) {
+		for(s = hash[h]; s != S; s = s->link) {
+			if(s->name[0] != 'i' || strcmp(s->name, "init") != 0) {
+				continue;
+			}
+			if(s->def == N) {
+				continue;
+			}
+			if(s == initsym) {
+				continue;
+			}
 
-		// could check that it is fn of no args/returns
-		a = nod(OCALL, s->def, N);
-		r = list(r, a);
+			// could check that it is fn of no args/returns
+			a = nod(OCALL, s->def, N);
+			r = list(r, a);
+		}
 	}
 
 	// (8)
@@ -169,8 +175,9 @@ void fninit(NodeList *n)
 	for(i=1;; i++) {
 		snprint(namebuf, sizeof(namebuf), "init·%d", i);
 		s = lookup(namebuf);
-		if(s->def == N)
+		if(s->def == N) {
 			break;
+		}
 		a = nod(OCALL, s->def, N);
 		r = list(r, a);
 	}
