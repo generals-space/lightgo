@@ -14,7 +14,9 @@
 
 // 	@compatible: 本文件在 v1.8 版本初次出现.
 
-// go run 执行文件, 生成 zfuncversion_compatible.go, 但每次执行前要先将原本的 zfuncversion_compatible.go 先删除.
+// go run 执行文件, 生成 zfuncversion_compatible.go, 但每次执行前, 
+// 要先将原本的 zfuncversion_compatible.go 删除, 另外 sort_compatible.go 重命名为非 go 文件.
+// 否则执行会出错, 等到生成新的 zfuncversion_compatible.go 后, 再改回来.
 
 package main
 
@@ -27,6 +29,7 @@ import (
 	"io/ioutil"
 	"log"
 	"regexp"
+	"strings"
 )
 
 var fset = token.NewFileSet()
@@ -122,6 +125,9 @@ func rewriteCall(ce *ast.CallExpr) {
 		return
 	}
 	if len(ce.Args) < 1 {
+		return
+	}
+	if strings.HasPrefix(ident.Name, "_") {
 		return
 	}
 	ident.Name += "_func"

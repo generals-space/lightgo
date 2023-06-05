@@ -113,9 +113,9 @@ func doPivot_func(data lessSwap, lo, hi int) (midlo, midhi int) {
 		b++
 		c--
 	}
-	n := min_func(b-a, a-lo)
+	n := _min(b-a, a-lo)
 	swapRange_func(data, lo, b-n, n)
-	n = min_func(hi-d, d-c)
+	n = _min(hi-d, d-c)
 	swapRange_func(data, c, hi-n, n)
 	return lo + b - a, hi - (d - c)
 }
@@ -139,6 +139,28 @@ func quickSort_func(data lessSwap, a, b, maxDepth int) {
 	}
 	if b-a > 1 {
 		insertionSort_func(data, a, b)
+	}
+}
+
+// Auto-generated variant of sort.go:stable
+func stable_func(data lessSwap, n int) {
+	blockSize := 20
+	a, b := 0, blockSize
+	for b <= n {
+		insertionSort_func(data, a, b)
+		a = b
+		b += blockSize
+	}
+	insertionSort_func(data, a, n)
+	for blockSize < n {
+		a, b = 0, 2*blockSize
+		for b <= n {
+			symMerge_func(data, a, a+blockSize, b)
+			a = b
+			b += 2 * blockSize
+		}
+		symMerge_func(data, a, a+blockSize, n)
+		blockSize *= 2
 	}
 }
 
