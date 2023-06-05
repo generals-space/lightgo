@@ -60,15 +60,17 @@ func Swapper(slice interface{}) func(i, j int) {
 		}
 	}
 
-	s := (*sliceHeader)(v.ptr)
+	s := (*SliceHeader)(v.ptr)
 	tmp := unsafe_New(typ) // swap scratch space
 
 	return func(i, j int) {
 		if uint(i) >= uint(s.Len) || uint(j) >= uint(s.Len) {
 			panic("reflect: slice index out of range")
 		}
-		val1 := arrayAt(s.Data, i, size)
-		val2 := arrayAt(s.Data, j, size)
+		// 	@compatible: 该函数在 v1.8 版本初次出现.
+		// 	这里做了些修改, arrayAt() 第1个参数需要用 unsafe.Pointer() 转换一下.
+		val1 := arrayAt(unsafe.Pointer(s.Data), i, size)
+		val2 := arrayAt(unsafe.Pointer(s.Data), j, size)
 		typedmemmove(typ, tmp, val1)
 		typedmemmove(typ, val1, val2)
 		typedmemmove(typ, val2, tmp)
