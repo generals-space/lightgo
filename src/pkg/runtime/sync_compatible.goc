@@ -15,6 +15,18 @@ func sync·runtime_procUnpin() {
 	m->locks--;
 }
 
+// 	@compatible: 该函数在 v1.4 版本初次添加
+//
+// 	但原版是用汇编写的, 应该是为了编译流程的先后做的妥协, 见
+// 	[golang v1.4 atomic](https://github.com/golang/go/tree/go1.4/src/runtime/thunk.s#L173)
+//
+func sync∕atomic·runtime_procPin() (p int) {
+	// 	@todo
+}
+func sync∕atomic·runtime_procUnpin() {
+	// 	@todo
+}
+
 // 	@compatible: 该函数在 v1.3 版本初次添加
 // 	@todo
 //
