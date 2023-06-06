@@ -15,8 +15,7 @@ const bigEndian = false // can be smarter if we find a big-endian machine
 const ptrSize = unsafe.Sizeof((*byte)(nil))
 const cannotSet = "cannot set value obtained from unexported struct field"
 
-// TODO: This will have to go away when
-// the new gc goes in.
+// TODO: This will have to go away when the new gc goes in.
 func memmove(adst, asrc unsafe.Pointer, n uintptr) {
 	dst := uintptr(adst)
 	src := uintptr(asrc)
@@ -64,8 +63,10 @@ type Value struct {
 	// typ holds the type of the value represented by a Value.
 	typ *rtype
 
+	// 	@compatible: 该成员字段在 v1.3 版本由 val 被改为 ptr, 这里做了一个全局替换.
+	//
 	// 当前 Value 对象中, 实际存储数据的指针.
-	// 该 val 指针可以被转换为其实际的类型, 如 (*int64)(v.val)
+	// 该 val 指针可以被转换为其实际的类型, 如 (*int64)(v.ptr)
 	//
 	// Value 对象中有 SetXXX 函数族, 可以对 val 成员赋值.
 	//
@@ -76,7 +77,7 @@ type Value struct {
 	// the first byte (in the memory address sense) of val.
 	// We use unsafe.Pointer so that the garbage collector
 	// knows that val could be a pointer.
-	val unsafe.Pointer
+	ptr unsafe.Pointer
 
 	// flag holds metadata about the value.
 	// The lowest bits are flag bits:
@@ -158,9 +159,9 @@ type iword unsafe.Pointer
 func (v Value) iword() iword {
 	if v.flag&flagIndir != 0 && v.typ.size <= ptrSize {
 		// Have indirect but want direct word.
-		return loadIword(v.val, v.typ.size)
+		return loadIword(v.ptr, v.typ.size)
 	}
-	return iword(v.val)
+	return iword(v.ptr)
 }
 
 // loadIword loads n bytes at p from memory into an iword.
@@ -296,7 +297,7 @@ func (v Value) Addr() Value {
 	if v.flag&flagAddr == 0 {
 		panic("reflect.Value.Addr of unaddressable value")
 	}
-	return Value{v.typ.ptrTo(), v.val, (v.flag & flagRO) | flag(Ptr)<<flagKindShift}
+	return Value{v.typ.ptrTo(), v.ptr, (v.flag & flagRO) | flag(Ptr)<<flagKindShift}
 }
 
 // Bool returns v's underlying value.
@@ -304,9 +305,9 @@ func (v Value) Addr() Value {
 func (v Value) Bool() bool {
 	v.mustBe(Bool)
 	if v.flag&flagIndir != 0 {
-		return *(*bool)(v.val)
+		return *(*bool)(v.ptr)
 	}
-	return *(*bool)(unsafe.Pointer(&v.val))
+	return *(*bool)(unsafe.Pointer(&v.ptr))
 }
 
 // Bytes returns v's underlying value.
@@ -317,7 +318,7 @@ func (v Value) Bytes() []byte {
 		panic("reflect.Value.Bytes of non-byte slice")
 	}
 	// Slice is always bigger than a word; assume flagIndir.
-	return *(*[]byte)(v.val)
+	return *(*[]byte)(v.ptr)
 }
 
 // runes returns v's underlying value.
@@ -328,7 +329,7 @@ func (v Value) runes() []rune {
 		panic("reflect.Value.Bytes of non-rune slice")
 	}
 	// Slice is always bigger than a word; assume flagIndir.
-	return *(*[]rune)(v.val)
+	return *(*[]rune)(v.ptr)
 }
 
 // CanAddr returns true if the value's address can be obtained with Addr.
@@ -386,9 +387,9 @@ func (v Value) call(op string, in []Value) []Value {
 	if v.flag&flagMethod != 0 {
 		t, fn, rcvr = methodReceiver(op, v, int(v.flag)>>flagMethodShift)
 	} else if v.flag&flagIndir != 0 {
-		fn = *(*unsafe.Pointer)(v.val)
+		fn = *(*unsafe.Pointer)(v.ptr)
 	} else {
-		fn = v.val
+		fn = v.ptr
 	}
 
 	if fn == nil {
@@ -480,9 +481,9 @@ func (v Value) call(op string, in []Value) []Value {
 		addr := unsafe.Pointer(uintptr(ptr) + off)
 		v = v.assignTo("reflect.Value.Call", targ, (*interface{})(addr))
 		if v.flag&flagIndir == 0 {
-			storeIword(addr, iword(v.val), n)
+			storeIword(addr, iword(v.ptr), n)
 		} else {
-			memmove(addr, v.val, n)
+			memmove(addr, v.ptr, n)
 		}
 		off += n
 	}
@@ -533,14 +534,14 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer) {
 		v := Value{typ, nil, flag(typ.Kind()) << flagKindShift}
 		if typ.size <= ptrSize {
 			// value fits in word.
-			v.val = unsafe.Pointer(loadIword(unsafe.Pointer(uintptr(ptr)+off), typ.size))
+			v.ptr = unsafe.Pointer(loadIword(unsafe.Pointer(uintptr(ptr)+off), typ.size))
 		} else {
 			// value does not fit in word.
 			// Must make a copy, because f might keep a reference to it,
 			// and we cannot let f keep a reference to the stack frame
 			// after this function returns, not even a read-only reference.
-			v.val = unsafe_New(typ)
-			memmove(v.val, unsafe.Pointer(uintptr(ptr)+off), typ.size)
+			v.ptr = unsafe_New(typ)
+			memmove(v.ptr, unsafe.Pointer(uintptr(ptr)+off), typ.size)
 			v.flag |= flagIndir
 		}
 		in = append(in, v)
@@ -571,9 +572,9 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer) {
 			off += -off & uintptr(typ.align-1)
 			addr := unsafe.Pointer(uintptr(ptr) + off)
 			if v.flag&flagIndir == 0 {
-				storeIword(addr, iword(v.val), typ.size)
+				storeIword(addr, iword(v.ptr), typ.size)
 			} else {
-				memmove(addr, v.val, typ.size)
+				memmove(addr, v.ptr, typ.size)
 			}
 			off += typ.size
 		}
@@ -596,7 +597,7 @@ func methodReceiver(op string, v Value, methodIndex int) (t *rtype, fn unsafe.Po
 			panic("reflect: " + op + " of unexported method")
 		}
 		t = m.typ
-		iface := (*nonEmptyInterface)(v.val)
+		iface := (*nonEmptyInterface)(v.ptr)
 		if iface.itab == nil {
 			panic("reflect: " + op + " of method on nil interface value")
 		}
@@ -718,7 +719,7 @@ func (v Value) Cap() int {
 		return int(chancap(v.iword()))
 	case Slice:
 		// Slice is always bigger than a word; assume flagIndir.
-		return (*SliceHeader)(v.val).Cap
+		return (*SliceHeader)(v.ptr).Cap
 	}
 	panic(&ValueError{"reflect.Value.Cap", k})
 }
@@ -738,12 +739,12 @@ func (v Value) Complex() complex128 {
 	switch k {
 	case Complex64:
 		if v.flag&flagIndir != 0 {
-			return complex128(*(*complex64)(v.val))
+			return complex128(*(*complex64)(v.ptr))
 		}
-		return complex128(*(*complex64)(unsafe.Pointer(&v.val)))
+		return complex128(*(*complex64)(unsafe.Pointer(&v.ptr)))
 	case Complex128:
 		// complex128 is always bigger than a word; assume flagIndir.
-		return *(*complex128)(v.val)
+		return *(*complex128)(v.ptr)
 	}
 	panic(&ValueError{"reflect.Value.Complex", k})
 }
@@ -761,7 +762,7 @@ func (v Value) Elem() Value {
 			val unsafe.Pointer
 		)
 		if v.typ.NumMethod() == 0 {
-			eface := (*emptyInterface)(v.val)
+			eface := (*emptyInterface)(v.ptr)
 			if eface.typ == nil {
 				// nil interface value
 				return Value{}
@@ -769,7 +770,7 @@ func (v Value) Elem() Value {
 			typ = eface.typ
 			val = unsafe.Pointer(eface.word)
 		} else {
-			iface := (*nonEmptyInterface)(v.val)
+			iface := (*nonEmptyInterface)(v.ptr)
 			if iface.itab == nil {
 				// nil interface value
 				return Value{}
@@ -785,7 +786,7 @@ func (v Value) Elem() Value {
 		return Value{typ, val, fl}
 
 	case Ptr:
-		val := v.val
+		val := v.ptr
 		if v.flag&flagIndir != 0 {
 			val = *(*unsafe.Pointer)(val)
 		}
@@ -825,13 +826,13 @@ func (v Value) Field(i int) Value {
 	switch {
 	case fl&flagIndir != 0:
 		// Indirect.  Just bump pointer.
-		val = unsafe.Pointer(uintptr(v.val) + field.offset)
+		val = unsafe.Pointer(uintptr(v.ptr) + field.offset)
 	case bigEndian:
 		// Direct.  Discard leading bytes.
-		val = unsafe.Pointer(uintptr(v.val) << (field.offset * 8))
+		val = unsafe.Pointer(uintptr(v.ptr) << (field.offset * 8))
 	default:
 		// Direct.  Discard leading bytes.
-		val = unsafe.Pointer(uintptr(v.val) >> (field.offset * 8))
+		val = unsafe.Pointer(uintptr(v.ptr) >> (field.offset * 8))
 	}
 
 	return Value{typ, val, fl}
@@ -882,14 +883,14 @@ func (v Value) Float() float64 {
 	switch k {
 	case Float32:
 		if v.flag&flagIndir != 0 {
-			return float64(*(*float32)(v.val))
+			return float64(*(*float32)(v.ptr))
 		}
-		return float64(*(*float32)(unsafe.Pointer(&v.val)))
+		return float64(*(*float32)(unsafe.Pointer(&v.ptr)))
 	case Float64:
 		if v.flag&flagIndir != 0 {
-			return *(*float64)(v.val)
+			return *(*float64)(v.ptr)
 		}
-		return *(*float64)(unsafe.Pointer(&v.val))
+		return *(*float64)(unsafe.Pointer(&v.ptr))
 	}
 	panic(&ValueError{"reflect.Value.Float", k})
 }
@@ -915,13 +916,13 @@ func (v Value) Index(i int) Value {
 		switch {
 		case fl&flagIndir != 0:
 			// Indirect.  Just bump pointer.
-			val = unsafe.Pointer(uintptr(v.val) + offset)
+			val = unsafe.Pointer(uintptr(v.ptr) + offset)
 		case bigEndian:
 			// Direct.  Discard leading bytes.
-			val = unsafe.Pointer(uintptr(v.val) << (offset * 8))
+			val = unsafe.Pointer(uintptr(v.ptr) << (offset * 8))
 		default:
 			// Direct.  Discard leading bytes.
-			val = unsafe.Pointer(uintptr(v.val) >> (offset * 8))
+			val = unsafe.Pointer(uintptr(v.ptr) >> (offset * 8))
 		}
 		return Value{typ, val, fl}
 
@@ -929,7 +930,7 @@ func (v Value) Index(i int) Value {
 		// Element flag same as Elem of Ptr.
 		// Addressable, indirect, possibly read-only.
 		fl := flagAddr | flagIndir | v.flag&flagRO
-		s := (*SliceHeader)(v.val)
+		s := (*SliceHeader)(v.ptr)
 		if i < 0 || i >= s.Len {
 			panic("reflect: slice index out of range")
 		}
@@ -941,7 +942,7 @@ func (v Value) Index(i int) Value {
 
 	case String:
 		fl := v.flag&flagRO | flag(Uint8<<flagKindShift)
-		s := (*StringHeader)(v.val)
+		s := (*StringHeader)(v.ptr)
 		if i < 0 || i >= s.Len {
 			panic("reflect: string index out of range")
 		}
@@ -957,11 +958,11 @@ func (v Value) Int() int64 {
 	k := v.kind()
 	var p unsafe.Pointer
 	if v.flag&flagIndir != 0 {
-		p = v.val
+		p = v.ptr
 	} else {
-		// The escape analysis is good enough that &v.val
+		// The escape analysis is good enough that &v.ptr
 		// does not trigger a heap allocation.
-		p = unsafe.Pointer(&v.val)
+		p = unsafe.Pointer(&v.ptr)
 	}
 	switch k {
 	case Int:
@@ -1015,11 +1016,11 @@ func valueInterface(v Value, safe bool) interface{} {
 		// Empty interface has one layout, all interfaces with
 		// methods have a second layout.
 		if v.NumMethod() == 0 {
-			return *(*interface{})(v.val)
+			return *(*interface{})(v.ptr)
 		}
 		return *(*interface {
 			M()
-		})(v.val)
+		})(v.ptr)
 	}
 
 	// Non-interface value.
@@ -1049,7 +1050,7 @@ func (v Value) InterfaceData() [2]uintptr {
 	// has to import "unsafe" to turn it into something
 	// that can be abused.
 	// Interface value is always bigger than a word; assume flagIndir.
-	return *(*[2]uintptr)(v.val)
+	return *(*[2]uintptr)(v.ptr)
 }
 
 // IsNil returns true if v is a nil value.
@@ -1061,7 +1062,7 @@ func (v Value) IsNil() bool {
 		if v.flag&flagMethod != 0 {
 			return false
 		}
-		ptr := v.val
+		ptr := v.ptr
 		if v.flag&flagIndir != 0 {
 			ptr = *(*unsafe.Pointer)(ptr)
 		}
@@ -1069,7 +1070,7 @@ func (v Value) IsNil() bool {
 	case Interface, Slice:
 		// Both interface and slice are nil if first word is 0.
 		// Both are always bigger than a word; assume flagIndir.
-		return *(*unsafe.Pointer)(v.val) == nil
+		return *(*unsafe.Pointer)(v.ptr) == nil
 	}
 	panic(&ValueError{"reflect.Value.IsNil", k})
 }
@@ -1105,10 +1106,10 @@ func (v Value) Len() int {
 		return maplen(v.iword())
 	case Slice:
 		// Slice is bigger than a word; assume flagIndir.
-		return (*SliceHeader)(v.val).Len
+		return (*SliceHeader)(v.ptr).Len
 	case String:
 		// String is bigger than a word; assume flagIndir.
-		return (*StringHeader)(v.val).Len
+		return (*StringHeader)(v.ptr).Len
 	}
 	panic(&ValueError{"reflect.Value.Len", k})
 }
@@ -1194,7 +1195,7 @@ func (v Value) Method(i int) Value {
 	fl := v.flag & (flagRO | flagIndir)
 	fl |= flag(Func) << flagKindShift
 	fl |= flag(i)<<flagMethodShift | flagMethod
-	return Value{v.typ, v.val, fl}
+	return Value{v.typ, v.ptr, fl}
 }
 
 // NumMethod returns the number of methods in the value's method set.
@@ -1308,7 +1309,7 @@ func (v Value) Pointer() uintptr {
 	k := v.kind()
 	switch k {
 	case Chan, Map, Ptr, UnsafePointer:
-		p := v.val
+		p := v.ptr
 		if v.flag&flagIndir != 0 {
 			p = *(*unsafe.Pointer)(p)
 		}
@@ -1324,7 +1325,7 @@ func (v Value) Pointer() uintptr {
 			f := methodValueCall
 			return **(**uintptr)(unsafe.Pointer(&f))
 		}
-		p := v.val
+		p := v.ptr
 		if v.flag&flagIndir != 0 {
 			p = *(*unsafe.Pointer)(p)
 		}
@@ -1336,7 +1337,7 @@ func (v Value) Pointer() uintptr {
 		return uintptr(p)
 
 	case Slice:
-		return (*SliceHeader)(v.val).Data
+		return (*SliceHeader)(v.ptr).Data
 	}
 	panic(&ValueError{"reflect.Value.Pointer", k})
 }
@@ -1402,13 +1403,13 @@ func (v Value) Set(x Value) {
 	x.mustBeExported() // do not let unexported x leak
 	var target *interface{}
 	if v.kind() == Interface {
-		target = (*interface{})(v.val)
+		target = (*interface{})(v.ptr)
 	}
 	x = x.assignTo("reflect.Set", v.typ, target)
 	if x.flag&flagIndir != 0 {
-		memmove(v.val, x.val, v.typ.size)
+		memmove(v.ptr, x.ptr, v.typ.size)
 	} else {
-		storeIword(v.val, iword(x.val), v.typ.size)
+		storeIword(v.ptr, iword(x.ptr), v.typ.size)
 	}
 }
 
@@ -1417,7 +1418,7 @@ func (v Value) Set(x Value) {
 func (v Value) SetBool(x bool) {
 	v.mustBeAssignable()
 	v.mustBe(Bool)
-	*(*bool)(v.val) = x
+	*(*bool)(v.ptr) = x
 }
 
 // SetBytes sets v's underlying value.
@@ -1428,7 +1429,7 @@ func (v Value) SetBytes(x []byte) {
 	if v.typ.Elem().Kind() != Uint8 {
 		panic("reflect.Value.SetBytes of non-byte slice")
 	}
-	*(*[]byte)(v.val) = x
+	*(*[]byte)(v.ptr) = x
 }
 
 // setRunes sets v's underlying value.
@@ -1439,7 +1440,7 @@ func (v Value) setRunes(x []rune) {
 	if v.typ.Elem().Kind() != Int32 {
 		panic("reflect.Value.setRunes of non-rune slice")
 	}
-	*(*[]rune)(v.val) = x
+	*(*[]rune)(v.ptr) = x
 }
 
 // SetComplex sets v's underlying value to x.
@@ -1450,9 +1451,9 @@ func (v Value) SetComplex(x complex128) {
 	default:
 		panic(&ValueError{"reflect.Value.SetComplex", k})
 	case Complex64:
-		*(*complex64)(v.val) = complex64(x)
+		*(*complex64)(v.ptr) = complex64(x)
 	case Complex128:
-		*(*complex128)(v.val) = x
+		*(*complex128)(v.ptr) = x
 	}
 }
 
@@ -1464,9 +1465,9 @@ func (v Value) SetFloat(x float64) {
 	default:
 		panic(&ValueError{"reflect.Value.SetFloat", k})
 	case Float32:
-		*(*float32)(v.val) = float32(x)
+		*(*float32)(v.ptr) = float32(x)
 	case Float64:
-		*(*float64)(v.val) = x
+		*(*float64)(v.ptr) = x
 	}
 }
 
@@ -1478,15 +1479,15 @@ func (v Value) SetInt(x int64) {
 	default:
 		panic(&ValueError{"reflect.Value.SetInt", k})
 	case Int:
-		*(*int)(v.val) = int(x)
+		*(*int)(v.ptr) = int(x)
 	case Int8:
-		*(*int8)(v.val) = int8(x)
+		*(*int8)(v.ptr) = int8(x)
 	case Int16:
-		*(*int16)(v.val) = int16(x)
+		*(*int16)(v.ptr) = int16(x)
 	case Int32:
-		*(*int32)(v.val) = int32(x)
+		*(*int32)(v.ptr) = int32(x)
 	case Int64:
-		*(*int64)(v.val) = x
+		*(*int64)(v.ptr) = x
 	}
 }
 
@@ -1496,7 +1497,7 @@ func (v Value) SetInt(x int64) {
 func (v Value) SetLen(n int) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
-	s := (*SliceHeader)(v.val)
+	s := (*SliceHeader)(v.ptr)
 	if n < 0 || n > int(s.Cap) {
 		panic("reflect: slice length out of range in SetLen")
 	}
@@ -1509,7 +1510,7 @@ func (v Value) SetLen(n int) {
 func (v Value) SetCap(n int) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
-	s := (*SliceHeader)(v.val)
+	s := (*SliceHeader)(v.ptr)
 	if n < int(s.Len) || n > int(s.Cap) {
 		panic("reflect: slice capacity out of range in SetCap")
 	}
@@ -1542,17 +1543,17 @@ func (v Value) SetUint(x uint64) {
 	default:
 		panic(&ValueError{"reflect.Value.SetUint", k})
 	case Uint:
-		*(*uint)(v.val) = uint(x)
+		*(*uint)(v.ptr) = uint(x)
 	case Uint8:
-		*(*uint8)(v.val) = uint8(x)
+		*(*uint8)(v.ptr) = uint8(x)
 	case Uint16:
-		*(*uint16)(v.val) = uint16(x)
+		*(*uint16)(v.ptr) = uint16(x)
 	case Uint32:
-		*(*uint32)(v.val) = uint32(x)
+		*(*uint32)(v.ptr) = uint32(x)
 	case Uint64:
-		*(*uint64)(v.val) = x
+		*(*uint64)(v.ptr) = x
 	case Uintptr:
-		*(*uintptr)(v.val) = uintptr(x)
+		*(*uintptr)(v.ptr) = uintptr(x)
 	}
 }
 
@@ -1561,7 +1562,7 @@ func (v Value) SetUint(x uint64) {
 func (v Value) SetPointer(x unsafe.Pointer) {
 	v.mustBeAssignable()
 	v.mustBe(UnsafePointer)
-	*(*unsafe.Pointer)(v.val) = x
+	*(*unsafe.Pointer)(v.ptr) = x
 }
 
 // SetString sets v's underlying value to x.
@@ -1569,7 +1570,7 @@ func (v Value) SetPointer(x unsafe.Pointer) {
 func (v Value) SetString(x string) {
 	v.mustBeAssignable()
 	v.mustBe(String)
-	*(*string)(v.val) = x
+	*(*string)(v.ptr) = x
 }
 
 // Slice returns v[i:j].
@@ -1592,16 +1593,16 @@ func (v Value) Slice(i, j int) Value {
 		tt := (*arrayType)(unsafe.Pointer(v.typ))
 		cap = int(tt.len)
 		typ = (*sliceType)(unsafe.Pointer(tt.slice))
-		base = v.val
+		base = v.ptr
 
 	case Slice:
 		typ = (*sliceType)(unsafe.Pointer(v.typ))
-		s := (*SliceHeader)(v.val)
+		s := (*SliceHeader)(v.ptr)
 		base = unsafe.Pointer(s.Data)
 		cap = s.Cap
 
 	case String:
-		s := (*StringHeader)(v.val)
+		s := (*StringHeader)(v.ptr)
 		if i < 0 || j < i || j > s.Len {
 			panic("reflect.Value.Slice: string slice index out of bounds")
 		}
@@ -1649,11 +1650,11 @@ func (v Value) Slice3(i, j, k int) Value {
 		tt := (*arrayType)(unsafe.Pointer(v.typ))
 		cap = int(tt.len)
 		typ = (*sliceType)(unsafe.Pointer(tt.slice))
-		base = v.val
+		base = v.ptr
 
 	case Slice:
 		typ = (*sliceType)(unsafe.Pointer(v.typ))
-		s := (*SliceHeader)(v.val)
+		s := (*SliceHeader)(v.ptr)
 		base = unsafe.Pointer(s.Data)
 		cap = s.Cap
 	}
@@ -1685,7 +1686,7 @@ func (v Value) String() string {
 	case Invalid:
 		return "<invalid Value>"
 	case String:
-		return *(*string)(v.val)
+		return *(*string)(v.ptr)
 	}
 	// If you call String on a reflect.Value of other type, it's better to
 	// print something than to panic. Useful in debugging.
@@ -1751,11 +1752,11 @@ func (v Value) Uint() uint64 {
 	k := v.kind()
 	var p unsafe.Pointer
 	if v.flag&flagIndir != 0 {
-		p = v.val
+		p = v.ptr
 	} else {
-		// The escape analysis is good enough that &v.val
+		// The escape analysis is good enough that &v.ptr
 		// does not trigger a heap allocation.
-		p = unsafe.Pointer(&v.val)
+		p = unsafe.Pointer(&v.ptr)
 	}
 	switch k {
 	case Uint:
@@ -1784,7 +1785,7 @@ func (v Value) UnsafeAddr() uintptr {
 	if v.flag&flagAddr == 0 {
 		panic("reflect.Value.UnsafeAddr of unaddressable value")
 	}
-	return uintptr(v.val)
+	return uintptr(v.ptr)
 }
 
 // StringHeader is the runtime representation of a string.
@@ -1908,14 +1909,14 @@ func Copy(dst, src Value) int {
 	// Copy via memmove.
 	var da, sa unsafe.Pointer
 	if dk == Array {
-		da = dst.val
+		da = dst.ptr
 	} else {
-		da = unsafe.Pointer((*SliceHeader)(dst.val).Data)
+		da = unsafe.Pointer((*SliceHeader)(dst.ptr).Data)
 	}
 	if sk == Array {
-		sa = src.val
+		sa = src.ptr
 	} else {
-		sa = unsafe.Pointer((*SliceHeader)(src.val).Data)
+		sa = unsafe.Pointer((*SliceHeader)(src.ptr).Data)
 	}
 	memmove(da, sa, uintptr(n)*de.Size())
 	return n
@@ -2203,7 +2204,7 @@ func (v Value) assignTo(context string, dst *rtype, target *interface{}) Value {
 		v.typ = dst
 		fl := v.flag & (flagRO | flagAddr | flagIndir)
 		fl |= flag(dst.Kind()) << flagKindShift
-		return Value{dst, v.val, fl}
+		return Value{dst, v.ptr, fl}
 
 	case implements(dst, v.typ):
 		if target == nil {
@@ -2485,7 +2486,7 @@ func cvtStringRunes(v Value, t Type) Value {
 func cvtDirect(v Value, typ Type) Value {
 	f := v.flag
 	t := typ.common()
-	val := v.val
+	val := v.ptr
 	if f&flagAddr != 0 {
 		// indirect, mutable word - make a copy
 		ptr := unsafe_New(t)
