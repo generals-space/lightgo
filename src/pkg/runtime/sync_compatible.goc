@@ -1,0 +1,43 @@
+package runtime
+#include "runtime.h"
+
+// 	@compatible: 该函数在 v1.3 版本初次添加
+//
+func sync·runtime_procPin() (p int) {
+	M *mp;
+
+	mp = m;
+	// Disable preemption.
+	mp->locks++;
+	p = mp->p->id;
+}
+func sync·runtime_procUnpin() {
+	m->locks--;
+}
+
+// 	@compatible: 该函数在 v1.4 版本初次添加
+//
+// 	但原版是用汇编写的, 应该是为了编译流程的先后做的妥协, 见
+// 	[golang v1.4 atomic](https://github.com/golang/go/tree/go1.4/src/runtime/thunk.s#L173)
+//
+func sync∕atomic·runtime_procPin() (p int) {
+	// 	@todo
+}
+func sync∕atomic·runtime_procUnpin() {
+	// 	@todo
+}
+
+// 	@compatible: 该函数在 v1.3 版本初次添加
+// 	@todo
+//
+// [golang v1.3 mgc0.c](https://github.com/golang/go/tree/go1.3/src/pkg/runtime/mgc0.c#L94)
+static FuncVal* poolcleanup;
+void sync·runtime_registerPoolCleanup(FuncVal *f)
+{
+	poolcleanup = f;
+}
+
+static void clearpools(void) {
+	// @todo
+	// 这里调用了 poolcleanup() 函数
+}
