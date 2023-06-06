@@ -14,6 +14,8 @@ var (
 	ErrPermission = errors.New("permission denied")
 	ErrExist      = errors.New("file already exists")
 	ErrNotExist   = errors.New("file does not exist")
+	// 	@compatible 该错误在 v1.8 版本初次添加
+	ErrClosed     = errors.New("file already closed")
 )
 
 // PathError records an error and the operation and file path that caused it.
