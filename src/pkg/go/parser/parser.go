@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package parser implements a parser for Go source files. Input may be
-// provided in a variety of forms (see the various Parse* functions); the
-// output is an abstract syntax tree (AST) representing the Go source. The
-// parser is invoked through one of the Parse* functions.
+// Package parser implements a parser for Go source files.
+// Input may be provided in a variety of forms (see the various Parse* functions);
+// the output is an abstract syntax tree (AST) representing the Go source.
+// The parser is invoked through one of the Parse* functions.
 //
 package parser
 
@@ -63,6 +63,11 @@ type parser struct {
 	targetStack [][]*ast.Ident // stack of unresolved labels
 }
 
+// 	@param filename: 目标文件名称
+// 	@param src: 目标文件的内容
+//
+// caller:
+// 	1. src/pkg/go/parser/interface.go -> ParseFile()
 func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mode) {
 	p.file = fset.AddFile(filename, -1, len(src))
 	var m scanner.Mode
@@ -2368,6 +2373,8 @@ func (p *parser) parseDecl(sync func(*parser)) ast.Decl {
 // ----------------------------------------------------------------------------
 // Source files
 
+// caller:
+// 	1. src/pkg/go/parser/interface.go -> ParseFile()
 func (p *parser) parseFile() *ast.File {
 	if p.trace {
 		defer un(trace(p, "File"))

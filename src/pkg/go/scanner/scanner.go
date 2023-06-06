@@ -95,6 +95,11 @@ const (
 	dontInsertSemis                  // do not automatically insert semicolons - for testing only
 )
 
+// 	@param src: 目标文件的内容
+//
+// caller:
+// 	1. src/pkg/go/parser/parser.go -> parser.init()
+//
 // Init prepares the scanner s to tokenize the text src by setting the
 // scanner at the beginning of src. The scanner uses the file set file
 // for position information and it adds line information for each line.

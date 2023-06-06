@@ -334,6 +334,9 @@ func (s *FileSet) Base() int {
 
 }
 
+// 	@param filename: 目标文件名称
+// 	@param size: 目标文件的内容长度([]byte 数组的长度)
+//
 // AddFile adds a new file with a given filename, base offset, and file size
 // to the file set s and returns the file. Multiple files may have the same
 // name. The base offset must not be smaller than the FileSet's Base(), and
