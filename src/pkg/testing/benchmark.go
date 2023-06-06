@@ -46,6 +46,15 @@ type B struct {
 	// The net total of this test after being run.
 	netAllocs uint64
 	netBytes  uint64
+
+	// 	@compatible: 如下3个成员在 v1.3 版本初次添加
+	//
+	// number of iterations in the previous run
+	previousN        int
+	// total duration of the previous run
+	previousDuration time.Duration
+	// RunParallel creates parallelism*GOMAXPROCS goroutines
+	parallelism      int
 }
 
 // StartTimer starts timing a test.  This function is called automatically
@@ -114,10 +123,15 @@ func (b *B) runN(n int) {
 	// by clearing garbage from previous runs.
 	runtime.GC()
 	b.N = n
+	// @todo: 貌似 v1.3 版本新增的 parallelism, previousN 与 previousDuration, 
+	// 并不影响 runN() 函数, 只在 RunParallel() 方法中生效, 可以注释掉.
+	// b.parallelism = 1
 	b.ResetTimer()
 	b.StartTimer()
 	b.benchmark.F(b)
 	b.StopTimer()
+	// b.previousN = n
+	// b.previousDuration = b.duration
 }
 
 func min(x, y int) int {
