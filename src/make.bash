@@ -142,7 +142,13 @@ if [ "$1" = "--dist-tool" ]; then
 fi
 
 ################################################################################
-## Step 2: 使用 dist 构建 go_bootstrap 工具
+## Step 2: 使用 dist 构建 6c,6g,6l,go_bootstrap 工具及核心标准库.
+## 不过 pkg/linux_amd64/ 目录下并没有生成 .a 文件.
+##
+## go_bootstrap 可以说是一个精简版的 go 命令, ta也可以编译一些简单的 .go 文件,
+## 这些文件只能引用"核心标准库", 否则会报错 can't find import: "strings"
+##
+## go_bootstrap 入口函数在 src/cmd/go/main.go -> main()
 
 echo "# Building compilers and Go bootstrap tool for host, $GOHOSTOS/$GOHOSTARCH."
 buildall="-a"
@@ -160,21 +166,17 @@ mv cmd/dist/dist "$GOTOOLDIR"/dist
 echo
 
 ################################################################################
-## Step 3: 使用 go_bootstrap 
-
-## 一般不会进到这个 if 块中
-if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ]; then
-	echo "# Building packages and commands for host, $GOHOSTOS/$GOHOSTARCH."
-	GOOS=$GOHOSTOS GOARCH=$GOHOSTARCH \
-		"$GOTOOLDIR"/go_bootstrap install -ccflags "$GO_CCFLAGS" -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std
-	echo
-fi
+## Step 3: 使用 go_bootstrap 构建标准库及 go,gofmt 二进制文件
 
 echo "# Building packages and commands for $GOOS/$GOARCH."
 ## 实际命令应该为
 ## go_bootstrap install -ccflags '' -gcflags '' -ldflags '' -v std
 ##
-## 这一行将在 bin 目录下生成 go 二进制可执行文件
+## 将在 pkg/linux_amd64/ 目录下生成所有标准库的 .a 文件, 以及 bin/go 二进制可执行文件.
+##
+## 实际上, go_bootstrap install 就类似于 go install, 即安装(加载)库文件,
+## std 即为"标准库"的统称, 对该别名的处理可见如下函数.
+## src/cmd/go/main.go -> importPathsNoDotExpansion()
 "$GOTOOLDIR"/go_bootstrap install $GO_FLAGS -ccflags "$GO_CCFLAGS" -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std
 echo
 

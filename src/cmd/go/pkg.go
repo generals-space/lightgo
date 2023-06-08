@@ -391,9 +391,6 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 			// Override all the usual logic and force it into the tool directory.
 			p.target = filepath.Join(gorootPkg, "tool", full)
 		}
-		if p.target != "" && buildContext.GOOS == "windows" {
-			p.target += ".exe"
-		}
 	} else if p.local {
 		// Local import turned into absolute path.
 		// No permanent install target.
@@ -744,7 +741,10 @@ func loadPackage(arg string, stk *importStack) *Package {
 		if p.Error == nil && p.Name != "main" {
 			p.Error = &PackageError{
 				ImportStack: stk.copy(),
-				Err:         fmt.Sprintf("expected package main but found package %s in %s", p.Name, p.Dir),
+				Err:         fmt.Sprintf(
+					"expected package main but found package %s in %s", 
+					p.Name, p.Dir,
+				),
 			}
 		}
 		return p
@@ -786,9 +786,8 @@ func packages(args []string) []*Package {
 	return pkgs
 }
 
-// packagesAndErrors is like 'packages' but returns a
-// *Package for every argument, even the ones that
-// cannot be loaded at all.
+// packagesAndErrors is like 'packages' but returns a *Package for
+// every argument, even the ones that cannot be loaded at all.
 // The packages that fail to load will have p.Error != nil.
 func packagesAndErrors(args []string) []*Package {
 	if len(args) > 0 && strings.HasSuffix(args[0], ".go") {
@@ -811,9 +810,8 @@ func packagesAndErrors(args []string) []*Package {
 	return pkgs
 }
 
-// packagesForBuild is like 'packages' but fails if any of
-// the packages or their dependencies have errors
-// (cannot be built).
+// packagesForBuild is like 'packages' but fails if any of the packages 
+// or their dependencies have errors (cannot be built).
 func packagesForBuild(args []string) []*Package {
 	pkgs := packagesAndErrors(args)
 	printed := map[*PackageError]bool{}

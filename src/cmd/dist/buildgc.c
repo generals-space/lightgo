@@ -12,8 +12,7 @@
 // It finds the OXXX enum, pulls out all the constants
 // from OXXX to OEND, and writes a table mapping
 // op to string.
-void
-gcopnames(char *dir, char *file)
+void gcopnames(char *dir, char *file)
 {
 	char *p, *q;
 	int i, j, end;
@@ -65,8 +64,7 @@ gcopnames(char *dir, char *file)
 
 // mkenam reads [568].out.h and writes enam.c
 // The format is much the same as the Go opcodes above.
-void
-mkenam(char *dir, char *file)
+void mkenam(char *dir, char *file)
 {
 	int i, ch;
 	Buf in, b, out;

@@ -5,8 +5,8 @@
 #include "a.h"
 
 /*
- * Translate a .goc file into a .c file.  A .goc file is a combination
- * of a limited form of Go with C.
+ * Translate a .goc file into a .c file. 
+ * A .goc file is a combination of a limited form of Go with C.
  */
 
 /*
@@ -31,32 +31,29 @@ enum
 	use64bitint = 1,
 };
 
-static int
-xgetchar(void)
+static int xgetchar(void)
 {
 	int c;
 	
 	c = *input;
-	if(c == 0)
+	if(c == 0) {
 		return EOF;
+	}
 	input++;
 	return c;
 }
 
-static void
-xungetc(void)
+static void xungetc(void)
 {
 	input--;
 }
 
-static void
-xputchar(char c)
+static void xputchar(char c)
 {
 	bwrite(output, &c, 1);
 }
 
-static int
-xisspace(int c)
+static int xisspace(int c)
 {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
@@ -87,6 +84,7 @@ enum {
 	Eface,
 };
 
+// 这里的变量大小是基于 32位系统的, 如果是 64位系统, 会在 goc2c() 函数中进行覆写.
 static struct {
 	char *name;
 	int size;
@@ -99,7 +97,7 @@ static struct {
 	 */
 	{"bool",	1},
 	{"float",	4},
-	{"intgo",		4},
+	{"intgo",	4},
 	{"uintgo",	4},
 	{"uintptr",	4},
 	{"String",	8},
@@ -127,15 +125,13 @@ static struct {
 int structround = 4;
 
 /* Unexpected EOF.  */
-static void
-bad_eof(void)
+static void bad_eof(void)
 {
 	fatal("%s:%ud: unexpected EOF\n", file, lineno);
 }
 
 /* Free a list of parameters.  */
-static void
-free_params(struct params *p)
+static void free_params(struct params *p)
 {
 	while (p != nil) {
 		struct params *next;
@@ -149,32 +145,31 @@ free_params(struct params *p)
 }
 
 /* Read a character, tracking lineno.  */
-static int
-getchar_update_lineno(void)
+static int getchar_update_lineno(void)
 {
 	int c;
 
 	c = xgetchar();
-	if (c == '\n')
+	if (c == '\n') {
 		++lineno;
+	}
 	return c;
 }
 
 /* Read a character, giving an error on EOF, tracking lineno.  */
-static int
-getchar_no_eof(void)
+static int getchar_no_eof(void)
 {
 	int c;
 
 	c = getchar_update_lineno();
-	if (c == EOF)
+	if (c == EOF) {
 		bad_eof();
+	}
 	return c;
 }
 
 /* Read a character, skipping comments.  */
-static int
-getchar_skipping_comments(void)
+static int getchar_skipping_comments(void)
 {
 	int c;
 
@@ -214,8 +209,7 @@ getchar_skipping_comments(void)
  * or else delimited by whitespace or by [(),{}].
  * The latter are all returned as single characters.
  */
-static char *
-read_token(void)
+static char* read_token(void)
 {
 	int c, q;
 	char *buf;
@@ -278,34 +272,38 @@ read_token(void)
 }
 
 /* Read a token, giving an error on EOF.  */
-static char *
-read_token_no_eof(void)
+static char* read_token_no_eof(void)
 {
 	char *token = read_token();
-	if (token == nil)
+	if (token == nil) {
 		bad_eof();
+	}
 	return token;
 }
 
+// caller:
+// 	1. process_file() 只有这一处
+//
 /* Read the package clause, and return the package name.  */
-static char *
-read_package(void)
+static char* read_package(void)
 {
 	char *token;
 
 	token = read_token_no_eof();
-	if (token == nil)
+	if (token == nil) {
 		fatal("%s:%ud: no token\n", file, lineno);
+	}
 	if (!streq(token, "package")) {
-		fatal("%s:%ud: expected \"package\", got \"%s\"\n",
-			file, lineno, token);
+		fatal(
+			"%s:%ud: expected \"package\", got \"%s\"\n",
+			file, lineno, token
+		);
 	}
 	return read_token_no_eof();
 }
 
 /* Read and copy preprocessor lines.  */
-static void
-read_preprocessor_lines(void)
+static void read_preprocessor_lines(void)
 {
 	while (1) {
 		int c;
@@ -326,11 +324,10 @@ read_preprocessor_lines(void)
 }
 
 /*
- * Read a type in Go syntax and return a type in C syntax.  We only
- * permit basic types and pointers.
+ * Read a type in Go syntax and return a type in C syntax. 
+ * We only permit basic types and pointers.
  */
-static char *
-read_type(void)
+static char* read_type(void)
 {
 	char *p, *op, *q;
 	int pointer_count;
@@ -364,8 +361,7 @@ read_type(void)
 }
 
 /* Return the size of the given type. */
-static int
-type_size(char *p)
+static int type_size(char *p)
 {
 	int i;
 
@@ -383,8 +379,7 @@ type_size(char *p)
  * Read a list of parameters.  Each parameter is a name and a type.
  * The list ends with a ')'.  We have already read the '('.
  */
-static struct params *
-read_params(int *poffset)
+static struct params* read_params(int *poffset)
 {
 	char *token;
 	struct params *ret, **pp, *p;
@@ -430,8 +425,7 @@ read_params(int *poffset)
  * Read a function header.  This reads up to and including the initial
  * '{' character.  Returns 1 if it read a header, 0 at EOF.
  */
-static int
-read_func_header(char **name, struct params **params, int *paramwid, struct params **rets)
+static int read_func_header(char **name, struct params **params, int *paramwid, struct params **rets)
 {
 	int lastline;
 	char *token;
@@ -480,8 +474,7 @@ read_func_header(char **name, struct params **params, int *paramwid, struct para
 }
 
 /* Write out parameters.  */
-static void
-write_params(struct params *params, int *first)
+static void write_params(struct params *params, int *first)
 {
 	struct params *p;
 
@@ -495,8 +488,7 @@ write_params(struct params *params, int *first)
 }
 
 /* Write a 6g function header.  */
-static void
-write_6g_func_header(char *package, char *name, struct params *params,
+static void write_6g_func_header(char *package, char *name, struct params *params,
 		     int paramwid, struct params *rets)
 {
 	int first, n;
@@ -521,8 +513,7 @@ write_6g_func_header(char *package, char *name, struct params *params,
 }
 
 /* Write a 6g function trailer.  */
-static void
-write_6g_func_trailer(struct params *rets)
+static void write_6g_func_trailer(struct params *rets)
 {
 	struct params *p;
 
@@ -532,8 +523,7 @@ write_6g_func_trailer(struct params *rets)
 }
 
 /* Define the gcc function return type if necessary.  */
-static void
-define_gcc_return_type(char *package, char *name, struct params *rets)
+static void define_gcc_return_type(char *package, char *name, struct params *rets)
 {
 	struct params *p;
 
@@ -546,8 +536,7 @@ define_gcc_return_type(char *package, char *name, struct params *rets)
 }
 
 /* Write out the gcc function return type.  */
-static void
-write_gcc_return_type(char *package, char *name, struct params *rets)
+static void write_gcc_return_type(char *package, char *name, struct params *rets)
 {
 	if (rets == nil)
 		bwritef(output, "void");
@@ -558,8 +547,7 @@ write_gcc_return_type(char *package, char *name, struct params *rets)
 }
 
 /* Write out a gcc function header.  */
-static void
-write_gcc_func_header(char *package, char *name, struct params *params,
+static void write_gcc_func_header(char *package, char *name, struct params *params,
 		      struct params *rets)
 {
 	int first;
@@ -581,8 +569,7 @@ write_gcc_func_header(char *package, char *name, struct params *params,
 }
 
 /* Write out a gcc function trailer.  */
-static void
-write_gcc_func_trailer(char *package, char *name, struct params *rets)
+static void write_gcc_func_trailer(char *package, char *name, struct params *rets)
 {
 	if (rets == nil) {
 		// nothing to do
@@ -601,8 +588,7 @@ write_gcc_func_trailer(char *package, char *name, struct params *rets)
 }
 
 /* Write out a function header.  */
-static void
-write_func_header(char *package, char *name,
+static void write_func_header(char *package, char *name,
 		  struct params *params, int paramwid,
 		  struct params *rets)
 {
@@ -614,8 +600,7 @@ write_func_header(char *package, char *name,
 }
 
 /* Write out a function trailer.  */
-static void
-write_func_trailer(char *package, char *name, struct params *rets)
+static void write_func_trailer(char *package, char *name, struct params *rets)
 {
 	if (gcc)
 		write_gcc_func_trailer(package, name, rets);
@@ -627,8 +612,7 @@ write_func_trailer(char *package, char *name, struct params *rets)
  * Read and write the body of the function, ending in an unnested }
  * (which is read but not written).
  */
-static void
-copy_body(void)
+static void copy_body(void)
 {
 	int nesting = 0;
 	while (1) {
@@ -690,11 +674,10 @@ copy_body(void)
 }
 
 // caller:
-// 	1. goc2c()
+// 	1. goc2c() 只有这一处
 //
 /* Process the entire file.  */
-static void
-process_file(void)
+static void process_file(void)
 {
 	char *package, *name, *p, *n;
 	struct params *params, *rets;
@@ -725,16 +708,15 @@ process_file(void)
 	xfree(package);
 }
 
-// param goc: goc 文件的绝对路径
-// param c: 输出的 c 文件的绝对路径
+// 	@param goc: goc 文件的绝对路径
+// 	@param c: 输出的 c 文件的绝对路径
 //
 // caller:
-// 	1. src/cmd/dist/build.c -> install()
+// 	1. src/cmd/dist/build.c -> install() 只有这一处
 //
 // malloc.goc -> zmalloc_linux_amd64.c
 //
-void
-goc2c(char *goc, char *c)
+void goc2c(char *goc, char *c)
 {
 	Buf in, out;
 	

@@ -235,8 +235,7 @@ timerproc(void)
 
 // heap maintenance algorithms.
 
-static void
-siftup(int32 i)
+static void siftup(int32 i)
 {
 	int32 p;
 	int64 when;
@@ -257,8 +256,7 @@ siftup(int32 i)
 	}
 }
 
-static void
-siftdown(int32 i)
+static void siftdown(int32 i)
 {
 	int32 c, c3, len;
 	int64 when, w, w3;
@@ -300,8 +298,7 @@ siftdown(int32 i)
 	}
 }
 
-static void
-dumptimers(int8 *msg)
+static void dumptimers(int8 *msg)
 {
 	Timer *t;
 	int32 i;

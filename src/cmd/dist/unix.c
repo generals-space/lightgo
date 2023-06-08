@@ -27,8 +27,7 @@
 
 // bprintf replaces the buffer with the result of the printf formatting
 // and returns a pointer to the NUL-terminated buffer contents.
-char*
-bprintf(Buf *b, char *fmt, ...)
+char* bprintf(Buf *b, char *fmt, ...)
 {
 	va_list arg;
 	char buf[4096];
@@ -43,8 +42,7 @@ bprintf(Buf *b, char *fmt, ...)
 
 // bpathf is the same as bprintf (on windows it turns / into \ after the printf).
 // It returns a pointer to the NUL-terminated buffer contents.
-char*
-bpathf(Buf *b, char *fmt, ...)
+char* bpathf(Buf *b, char *fmt, ...)
 {
 	va_list arg;
 	char buf[4096];
@@ -59,8 +57,7 @@ bpathf(Buf *b, char *fmt, ...)
 
 // bwritef is like bprintf but does not reset the buffer
 // and does not return the NUL-terminated string.
-void
-bwritef(Buf *b, char *fmt, ...)
+void bwritef(Buf *b, char *fmt, ...)
 {
 	va_list arg;
 	char buf[4096];
@@ -72,8 +69,7 @@ bwritef(Buf *b, char *fmt, ...)
 }
 
 // breadfrom appends to b all the data that can be read from fd.
-static void
-breadfrom(Buf *b, int fd)
+static void breadfrom(Buf *b, int fd)
 {
 	int n;
 
@@ -89,15 +85,15 @@ breadfrom(Buf *b, int fd)
 }
 
 // xgetenv replaces b with the value of the named environment variable.
-void
-xgetenv(Buf *b, char *name)
+void xgetenv(Buf *b, char *name)
 {
 	char *p;
 	
 	breset(b);
 	p = getenv(name);
-	if(p != NULL)
+	if(p != NULL) {
 		bwritestr(b, p);
+	}
 }
 
 static void genrun(Buf *b, char *dir, int mode, Vec *argv, int bg);
@@ -106,8 +102,7 @@ static void genrun(Buf *b, char *dir, int mode, Vec *argv, int bg);
 // If b is not nil, run replaces b with the output of the command.
 // If dir is not nil, run runs the command in that directory.
 // If mode is CheckExit, run calls fatal if the command is not successful.
-void
-run(Buf *b, char *dir, int mode, char *cmd, ...)
+void run(Buf *b, char *dir, int mode, char *cmd, ...)
 {
 	va_list arg;
 	Vec argv;
@@ -126,8 +121,7 @@ run(Buf *b, char *dir, int mode, char *cmd, ...)
 }
 
 // runv is like run but takes a vector.
-void
-runv(Buf *b, char *dir, int mode, Vec *argv)
+void runv(Buf *b, char *dir, int mode, Vec *argv)
 {
 	genrun(b, dir, mode, argv, 1);
 }
@@ -137,8 +131,7 @@ runv(Buf *b, char *dir, int mode, Vec *argv)
 //
 // bgrunv is like run but runs the command in the background.
 // bgwait waits for pending bgrunv to finish.
-void
-bgrunv(char *dir, int mode, Vec *argv)
+void bgrunv(char *dir, int mode, Vec *argv)
 {
 	genrun(nil, dir, mode, argv, 0);
 }
@@ -157,8 +150,7 @@ static int maxnbg = nelem(bg);
 static void bgwait1(void);
 
 // genrun is the generic run implementation.
-static void
-genrun(Buf *b, char *dir, int mode, Vec *argv, int wait)
+static void genrun(Buf *b, char *dir, int mode, Vec *argv, int wait)
 {
 	int i, p[2], pid;
 	Buf cmd;
@@ -234,8 +226,7 @@ genrun(Buf *b, char *dir, int mode, Vec *argv, int wait)
 }
 
 // bgwait1 waits for a single background job.
-static void
-bgwait1(void)
+static void bgwait1(void)
 {
 	int i, pid, status, mode;
 	char *cmd;
@@ -268,16 +259,15 @@ ok:
 }
 
 // bgwait waits for all the background jobs.
-void
-bgwait(void)
+void bgwait(void)
 {
-	while(nbg > 0)
+	while(nbg > 0) {
 		bgwait1();
+	}
 }
 
 // xgetwd replaces b with the current directory.
-void
-xgetwd(Buf *b)
+void xgetwd(Buf *b)
 {
 	char buf[MAXPATHLEN];
 	
@@ -289,8 +279,7 @@ xgetwd(Buf *b)
 
 // xrealwd replaces b with the 'real' name for the given path.
 // real is defined as what getcwd returns in that directory.
-void
-xrealwd(Buf *b, char *path)
+void xrealwd(Buf *b, char *path)
 {
 	int fd;
 	
@@ -306,8 +295,7 @@ xrealwd(Buf *b, char *path)
 }
 
 // isdir reports whether p names an existing directory.
-bool
-isdir(char *p)
+bool isdir(char *p)
 {
 	struct stat st;
 	
@@ -315,8 +303,7 @@ isdir(char *p)
 }
 
 // isfile reports whether p names an existing file.
-bool
-isfile(char *p)
+bool isfile(char *p)
 {
 	struct stat st;
 	
@@ -324,8 +311,7 @@ isfile(char *p)
 }
 
 // mtime returns the modification time of the file p.
-Time
-mtime(char *p)
+Time mtime(char *p)
 {
 	struct stat st;
 	
@@ -335,15 +321,13 @@ mtime(char *p)
 }
 
 // isabs reports whether p is an absolute path.
-bool
-isabs(char *p)
+bool isabs(char *p)
 {
 	return hasprefix(p, "/");
 }
 
 // readfile replaces b with the content of the named file.
-void
-readfile(Buf *b, char *file)
+void readfile(Buf *b, char *file)
 {
 	int fd;
 	
@@ -357,8 +341,7 @@ readfile(Buf *b, char *file)
 
 // writefile writes b to the named file, creating it if needed.  if
 // exec is non-zero, marks the file as executable.
-void
-writefile(Buf *b, char *file, int exec)
+void writefile(Buf *b, char *file, int exec)
 {
 	int fd;
 	
@@ -373,16 +356,14 @@ writefile(Buf *b, char *file, int exec)
 }
 
 // xmkdir creates the directory p.
-void
-xmkdir(char *p)
+void xmkdir(char *p)
 {
 	if(mkdir(p, 0777) < 0)
 		fatal("mkdir %s: %s", p, strerror(errno));
 }
 
 // xmkdirall creates the directory p and its parents, as needed.
-void
-xmkdirall(char *p)
+void xmkdirall(char *p)
 {
 	char *q;
 
@@ -398,8 +379,7 @@ xmkdirall(char *p)
 }
 
 // xremove removes the file p.
-void
-xremove(char *p)
+void xremove(char *p)
 {
 	if(vflag > 2)
 		errprintf("rm %s\n", p);
@@ -407,8 +387,7 @@ xremove(char *p)
 }
 
 // xremoveall removes the file or directory tree rooted at p.
-void
-xremoveall(char *p)
+void xremoveall(char *p)
 {
 	int i;
 	Buf b;
@@ -438,8 +417,7 @@ xremoveall(char *p)
 
 // xreaddir replaces dst with a list of the names of the files in dir.
 // The names are relative to dir; they are not full paths.
-void
-xreaddir(Vec *dst, char *dir)
+void xreaddir(Vec *dst, char *dir)
 {
 	DIR *d;
 	struct dirent *dp;
@@ -458,8 +436,7 @@ xreaddir(Vec *dst, char *dir)
 
 // xworkdir creates a new temporary directory to hold object files
 // and returns the name of that directory.
-char*
-xworkdir(void)
+char* xworkdir(void)
 {
 	Buf b;
 	char *p;
@@ -483,8 +460,7 @@ xworkdir(void)
 }
 
 // fatal prints an error message to standard error and exits.
-void
-fatal(char *msg, ...)
+void fatal(char *msg, ...)
 {
 	va_list arg;
 	
@@ -501,8 +477,7 @@ fatal(char *msg, ...)
 
 // xmalloc returns a newly allocated zeroed block of n bytes of memory.
 // It calls fatal if it runs out of memory.
-void*
-xmalloc(int n)
+void* xmalloc(int n)
 {
 	void *p;
 	
@@ -515,8 +490,7 @@ xmalloc(int n)
 
 // xstrdup returns a newly allocated copy of p.
 // It calls fatal if it runs out of memory.
-char*
-xstrdup(char *p)
+char* xstrdup(char *p)
 {
 	p = strdup(p);
 	if(p == nil)
@@ -527,8 +501,7 @@ xstrdup(char *p)
 // xrealloc grows the allocation p to n bytes and
 // returns the new (possibly moved) pointer.
 // It calls fatal if it runs out of memory.
-void*
-xrealloc(void *p, int n)
+void* xrealloc(void *p, int n)
 {
 	p = realloc(p, n);
 	if(p == nil)
@@ -537,15 +510,13 @@ xrealloc(void *p, int n)
 }
 
 // xfree frees the result returned by xmalloc, xstrdup, or xrealloc.
-void
-xfree(void *p)
+void xfree(void *p)
 {
 	free(p);
 }
 
 // hassuffix reports whether p ends with suffix.
-bool
-hassuffix(char *p, char *suffix)
+bool hassuffix(char *p, char *suffix)
 {
 	int np, ns;
 	
@@ -555,30 +526,26 @@ hassuffix(char *p, char *suffix)
 }
 
 // hasprefix reports whether p begins with prefix.
-bool
-hasprefix(char *p, char *prefix)
+bool hasprefix(char *p, char *prefix)
 {
 	return strncmp(p, prefix, strlen(prefix)) == 0;
 }
 
 // contains reports whether sep appears in p.
-bool
-contains(char *p, char *sep)
+bool contains(char *p, char *sep)
 {
 	return strstr(p, sep) != nil;
 }
 
 // streq reports whether p and q are the same string.
-bool
-streq(char *p, char *q)
+bool streq(char *p, char *q)
 {
 	return strcmp(p, q) == 0;
 }
 
 // 获取目标路径中的文件名, 类似于 linux 的 basename 命令.
 // lastelem returns the final path element in p.
-char*
-lastelem(char *p)
+char* lastelem(char *p)
 {
 	char *out;
 
@@ -590,43 +557,37 @@ lastelem(char *p)
 }
 
 // xmemmove copies n bytes from src to dst.
-void
-xmemmove(void *dst, void *src, int n)
+void xmemmove(void *dst, void *src, int n)
 {
 	memmove(dst, src, n);
 }
 
 // xmemcmp compares the n-byte regions starting at a and at b.
-int
-xmemcmp(void *a, void *b, int n)
+int xmemcmp(void *a, void *b, int n)
 {
 	return memcmp(a, b, n);
 }
 
 // xstrlen returns the length of the NUL-terminated string at p.
-int
-xstrlen(char *p)
+int xstrlen(char *p)
 {
 	return strlen(p);
 }
 
 // xexit exits the process with return code n.
-void
-xexit(int n)
+void xexit(int n)
 {
 	exit(n);
 }
 
 // xatexit schedules the exit-handler f to be run when the program exits.
-void
-xatexit(void (*f)(void))
+void xatexit(void (*f)(void))
 {
 	atexit(f);
 }
 
 // xprintf prints a message to standard output.
-void
-xprintf(char *fmt, ...)
+void xprintf(char *fmt, ...)
 {
 	va_list arg;
 	
@@ -636,29 +597,25 @@ xprintf(char *fmt, ...)
 }
 
 // errprintf prints a message to standard output.
-void
-errprintf(char *fmt, ...)
+void errprintf(char *fmt, ...)
 {
 	va_list arg;
-	
+
 	va_start(arg, fmt);
 	vfprintf(stderr, fmt, arg);
 	va_end(arg);
 }
 
 // xsetenv sets the environment variable $name to the given value.
-void
-xsetenv(char *name, char *value)
+void xsetenv(char *name, char *value)
 {
 	setenv(name, value, 1);
 }
 
 // main takes care of OS-specific startup and dispatches to xmain.
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	Buf b;
-	int osx;
 	struct utsname u;
 
 	setvbuf(stdout, nil, _IOLBF, 0);
@@ -670,26 +627,8 @@ main(int argc, char **argv)
 	
 	slash = "/";
 
-#if defined(__APPLE__)
-	gohostos = "darwin";
-	// Even on 64-bit platform, darwin uname -m prints i386.
-	run(&b, nil, 0, "sysctl", "machdep.cpu.extfeatures", nil);
-	if(contains(bstr(&b), "EM64T"))
-		gohostarch = "amd64";
-#elif defined(__linux__)
+#if defined(__linux__)
 	gohostos = "linux";
-#elif defined(__DragonFly__)
-	gohostos = "dragonfly";
-#elif defined(__FreeBSD__)
-	gohostos = "freebsd";
-#elif defined(__FreeBSD_kernel__)
-	// detect debian/kFreeBSD. 
-	// http://wiki.debian.org/Debian_GNU/kFreeBSD_FAQ#Q._How_do_I_detect_kfreebsd_with_preprocessor_directives_in_a_C_program.3F
-	gohostos = "freebsd";	
-#elif defined(__OpenBSD__)
-	gohostos = "openbsd";
-#elif defined(__NetBSD__)
-	gohostos = "netbsd";
 #else
 	fatal("unknown operating system");
 #endif
@@ -702,32 +641,8 @@ main(int argc, char **argv)
 			gohostarch = "amd64";
 		else if(hassuffix(u.machine, "86"))
 			gohostarch = "386";
-		else if(contains(u.machine, "arm"))
-			gohostarch = "arm";
 		else
 			fatal("unknown architecture: %s", u.machine);
-	}
-
-	if(strcmp(gohostarch, "arm") == 0)
-		maxnbg = 1;
-
-	// The OS X 10.6 linker does not support external linking mode.
-	// See golang.org/issue/5130.
-	//
-	// OS X 10.6 does not work with clang either, but OS X 10.9 requires it.
-	// It seems to work with OS X 10.8, so we default to clang for 10.8 and later.
-	// See golang.org/issue/5822.
-	//
-	// Roughly, OS X 10.N shows up as uname release (N+4),
-	// so OS X 10.6 is uname version 10 and OS X 10.8 is uname version 12.
-	if(strcmp(gohostos, "darwin") == 0) {
-		if(uname(&u) < 0)
-			fatal("uname: %s", strerror(errno));
-		osx = atoi(u.release) - 4;
-		if(osx <= 6)
-			goextlinkenabled = "0";
-		if(osx >= 8)
-			defaultclang = 1;
 	}
 
 	init();
@@ -737,37 +652,32 @@ main(int argc, char **argv)
 }
 
 // xqsort is a wrapper for the C standard qsort.
-void
-xqsort(void *data, int n, int elemsize, int (*cmp)(const void*, const void*))
+void xqsort(void *data, int n, int elemsize, int (*cmp)(const void*, const void*))
 {
 	qsort(data, n, elemsize, cmp);
 }
 
 // xstrcmp compares the NUL-terminated strings a and b.
-int
-xstrcmp(char *a, char *b)
+int xstrcmp(char *a, char *b)
 {
 	return strcmp(a, b);
 }
 
 // xstrstr returns a pointer to the first occurrence of b in a.
-char*
-xstrstr(char *a, char *b)
+char* xstrstr(char *a, char *b)
 {
 	return strstr(a, b);
 }
 
 // 返回 p 字符串中最后一个 c 出现的位置
 // xstrrchr returns a pointer to the final occurrence of c in p.
-char*
-xstrrchr(char *p, int c)
+char* xstrrchr(char *p, int c)
 {
 	return strrchr(p, c);
 }
 
 // xsamefile reports whether f1 and f2 are the same file (or dir)
-int
-xsamefile(char *f1, char *f2)
+int xsamefile(char *f1, char *f2)
 {
 	return streq(f1, f2); // suffice for now
 }
@@ -781,8 +691,7 @@ static void sigillhand(int);
 // Some systems (notably NetBSD) will spin and spin when executing VFPv3
 // instructions on VFPv2 system (e.g. Raspberry Pi) without ever triggering
 // SIGILL, so we set a 1-second alarm to catch that case.
-int
-xtryexecfunc(void (*f)(void))
+int xtryexecfunc(void (*f)(void))
 {
 	int r;
 	r = 0;
@@ -800,15 +709,13 @@ xtryexecfunc(void (*f)(void))
 }
 
 // SIGILL handler helper
-static void
-sigillhand(int signum)
+static void sigillhand(int signum)
 {
 	USED(signum);
 	siglongjmp(sigill_jmpbuf, 1);
 }
 
-static void
-__cpuid(int dst[4], int ax)
+static void __cpuid(int dst[4], int ax)
 {
 #ifdef __i386__
 	// we need to avoid ebx on i386 (esp. when -fPIC).
@@ -827,8 +734,7 @@ __cpuid(int dst[4], int ax)
 #endif
 }
 
-bool
-cansse2(void)
+bool cansse2(void)
 {
 	int info[4];
 	

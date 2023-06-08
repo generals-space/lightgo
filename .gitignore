@@ -6,3 +6,6 @@ src/cmd/dist/dist
 *.gobin
 6.out
 main.6
+*.test
+*.a
+core.*

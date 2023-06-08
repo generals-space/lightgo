@@ -18,8 +18,7 @@
 //
 // It is invoked to write cmd/go/zdefaultcc.go
 // but we also write cmd/cgo/zdefaultcc.go.
-void
-mkzdefaultcc(char *dir, char *file)
+void mkzdefaultcc(char *dir, char *file)
 {
 	Buf b, out;
 	
@@ -33,7 +32,8 @@ mkzdefaultcc(char *dir, char *file)
 		"\n"
 		"const defaultCC = `%s`\n"
 		"const defaultCXX = `%s`\n",
-		defaultcc, defaultcxx);
+		defaultcc, defaultcxx
+	);
 
 	writefile(&out, file, 0);
 
