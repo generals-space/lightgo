@@ -81,6 +81,17 @@ extern char *tooldir;
 extern char *slash;
 extern bool rebuildall;
 extern bool defaultclang;
+extern char *go386;
+extern char *gochars;
+
+// sizeof() 无法计算 extern 修饰的数组, 因此 okgoos 和 okgoarch 不能像上面那样声明.
+char *okgoos[1];
+char *okgoarch[2];
+struct gentab_struct {
+	char *nameprefix;
+	void (*gen)(char*, char*);
+};
+struct gentab_struct gentab[10];
 
 int	find(char*, char**, int);
 void	init(void);
@@ -90,6 +101,16 @@ void	cmdclean(int, char**);
 void	cmdenv(int, char**);
 void	cmdinstall(int, char**);
 void	cmdversion(int, char**);
+
+void rmworkdir(void);
+void chomp(Buf *b);
+bool matchfield(char *f);
+bool shouldbuild(char *file, char *dir);
+void copy(char *dst, char *src, int exec);
+void clean(void);
+void install(char *dir);
+char* findgoversion(void);
+void setup(void);
 
 // buildgc.c
 void	gcopnames(char*, char*);

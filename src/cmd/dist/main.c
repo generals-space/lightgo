@@ -24,6 +24,9 @@ static struct {
 	{"version", cmdversion},
 };
 
+// caller:
+// 	1. src/cmd/dist/unix.c -> main()
+//
 // The OS-specific main calls into the portable code here.
 void xmain(int argc, char **argv)
 {
