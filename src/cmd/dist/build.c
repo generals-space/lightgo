@@ -324,6 +324,78 @@ struct gentab_struct gentab[10] = {
 	{"zaexperiment.h", mkzexperiment},
 };
 
+// buildorder 这里表示 golang 的核心工具及标准库, 在 make 的第2阶段开始构建.
+//
+// 见"# Building compilers and Go bootstrap tool for host"一节
+//
+// buildorder records the order of builds for the 'go bootstrap' command.
+static char *buildorder[] = {
+	"lib9",
+	"libbio",
+	"libmach",
+
+	"misc/pprof",
+
+	"cmd/addr2line",
+	"cmd/nm",
+	"cmd/objdump",
+	"cmd/pack",
+	"cmd/prof",
+
+	"cmd/cc",  // must be before c
+	"cmd/gc",  // must be before g
+	"cmd/%sl",  // must be before a, c, g
+	"cmd/%sa",
+	"cmd/%sc",
+	"cmd/%sg",
+
+	// The dependency order here was copied from a buildscript
+	// back when there were build scripts. 
+	// Will have to be maintained by hand, but shouldn't change very often.
+	"pkg/runtime",
+	"pkg/errors",
+	"pkg/sync/atomic",
+	"pkg/sync",
+	"pkg/io",
+	"pkg/unicode",
+	"pkg/unicode/utf8",
+	"pkg/unicode/utf16",
+	"pkg/bytes",
+	"pkg/math",
+	"pkg/strings",
+	"pkg/strconv",
+	"pkg/bufio",
+	"pkg/sort",
+	"pkg/container/heap",
+	"pkg/encoding/base64",
+	"pkg/syscall",
+	"pkg/time",
+	"pkg/os",
+	"pkg/reflect",
+	"pkg/fmt",
+	"pkg/encoding",
+	"pkg/encoding/json",
+	"pkg/flag",
+	"pkg/path/filepath",
+	"pkg/path",
+	"pkg/io/ioutil",
+	"pkg/log",
+	"pkg/regexp/syntax",
+	"pkg/regexp",
+	"pkg/go/token",
+	"pkg/go/scanner",
+	"pkg/go/ast",
+	"pkg/go/parser",
+	"pkg/os/exec",
+	"pkg/os/signal",
+	"pkg/net/url",
+	"pkg/text/template/parse",
+	"pkg/text/template",
+	"pkg/go/doc",
+	"pkg/go/build",
+	"cmd/go",
+};
+
 // 每次调用都构建一个目录.
 //
 // 	@param *dir: buildorder[]数组中的成员
@@ -894,78 +966,6 @@ out:
 	vfree(&lib);
 	vfree(&extra);
 }
-
-// buildorder 这里表示 golang 的核心工具及标准库, 在 make 的第2阶段开始构建.
-//
-// 见"# Building compilers and Go bootstrap tool for host"一节
-//
-// buildorder records the order of builds for the 'go bootstrap' command.
-static char *buildorder[] = {
-	"lib9",
-	"libbio",
-	"libmach",
-
-	"misc/pprof",
-
-	"cmd/addr2line",
-	"cmd/nm",
-	"cmd/objdump",
-	"cmd/pack",
-	"cmd/prof",
-
-	"cmd/cc",  // must be before c
-	"cmd/gc",  // must be before g
-	"cmd/%sl",  // must be before a, c, g
-	"cmd/%sa",
-	"cmd/%sc",
-	"cmd/%sg",
-
-	// The dependency order here was copied from a buildscript
-	// back when there were build scripts. 
-	// Will have to be maintained by hand, but shouldn't change very often.
-	"pkg/runtime",
-	"pkg/errors",
-	"pkg/sync/atomic",
-	"pkg/sync",
-	"pkg/io",
-	"pkg/unicode",
-	"pkg/unicode/utf8",
-	"pkg/unicode/utf16",
-	"pkg/bytes",
-	"pkg/math",
-	"pkg/strings",
-	"pkg/strconv",
-	"pkg/bufio",
-	"pkg/sort",
-	"pkg/container/heap",
-	"pkg/encoding/base64",
-	"pkg/syscall",
-	"pkg/time",
-	"pkg/os",
-	"pkg/reflect",
-	"pkg/fmt",
-	"pkg/encoding",
-	"pkg/encoding/json",
-	"pkg/flag",
-	"pkg/path/filepath",
-	"pkg/path",
-	"pkg/io/ioutil",
-	"pkg/log",
-	"pkg/regexp/syntax",
-	"pkg/regexp",
-	"pkg/go/token",
-	"pkg/go/scanner",
-	"pkg/go/ast",
-	"pkg/go/parser",
-	"pkg/os/exec",
-	"pkg/os/signal",
-	"pkg/net/url",
-	"pkg/text/template/parse",
-	"pkg/text/template",
-	"pkg/go/doc",
-	"pkg/go/build",
-	"cmd/go",
-};
 
 // 构建并生成 pkg/tool/linux_amd64{6g, 6l, 6c, go_bootstrap} 等工具.
 // 每调用一次 install() 方法, 就构建1个命令.
