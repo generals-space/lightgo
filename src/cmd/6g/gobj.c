@@ -455,8 +455,7 @@ duintxx(Sym *s, int off, uint64 v, int wid)
 	return off;
 }
 
-int
-dsymptr(Sym *s, int off, Sym *x, int xoff)
+int dsymptr(Sym *s, int off, Sym *x, int xoff)
 {
 	Prog *p;
 

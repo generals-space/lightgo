@@ -44,6 +44,8 @@ struct Type
 	Type *ptrto;
 };
 
+// 见 src/pkg/reflect/type.go -> method{}
+//
 struct Method
 {
 	String *name;
@@ -68,6 +70,8 @@ struct UncommonType
 
 // IMethod 是"接口(interface)类型"中的方法列表,
 // 与 Method{} 类型相比, 这里是只有声明没有实现的.
+//
+// 见 src/pkg/reflect/type.go -> imethod{}
 struct IMethod
 {
 	String *name;
@@ -77,6 +81,8 @@ struct IMethod
 
 // InterfaceType 一般只属于"接口(interface)"类型,
 // 这里存储着当前接口需要实现的方法, 是一个列表, 且是有序的.
+//
+// 见 src/pkg/reflect/type.go -> interfaceType{}
 struct InterfaceType
 {
 	Type;
@@ -86,6 +92,9 @@ struct InterfaceType
 
 // MapType 是编译器级别的对象类型, 其中包含开发者通过 make(map[key]elem) 创建的 map
 // key/value 类型信息(类型名称, 占用空间大小等), 以及实际的 Hmap 底层对象.
+//
+// 见 src/pkg/reflect/type.go -> mapType{}
+//
 struct MapType
 {
 	Type;
@@ -100,6 +109,8 @@ struct MapType
 	Type *hmap;
 };
 
+// 见 src/pkg/reflect/type.go -> chanType{}
+//
 struct ChanType
 {
 	Type;
@@ -107,12 +118,16 @@ struct ChanType
 	uintptr dir;
 };
 
+// 见 src/pkg/reflect/type.go -> sliceType{}
+//
 struct SliceType
 {
 	Type;
 	Type *elem;
 };
 
+// 见 src/pkg/reflect/type.go -> chanType{}
+//
 struct FuncType
 {
 	Type;
@@ -121,6 +136,8 @@ struct FuncType
 	Slice out;
 };
 
+// 见 src/pkg/reflect/type.go -> chanType{}
+//
 struct PtrType
 {
 	Type;

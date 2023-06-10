@@ -1180,8 +1180,7 @@ isifacemethod(Type *f)
  * turn a parsed function declaration
  * into a type
  */
-Type*
-functype(Node *this, NodeList *in, NodeList *out)
+Type* functype(Node *this, NodeList *in, NodeList *out)
 {
 	Type *t;
 	NodeList *rcvr;

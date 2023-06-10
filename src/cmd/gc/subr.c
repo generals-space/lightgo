@@ -652,8 +652,7 @@ algtype1(Type *t, Type **bad)
 	return 0;
 }
 
-int
-algtype(Type *t)
+int algtype(Type *t)
 {
 	int a;
 	
