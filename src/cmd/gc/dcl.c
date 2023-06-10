@@ -365,8 +365,7 @@ constiter(NodeList *vl, Node *t, NodeList *cl)
  * this generates a new name node,
  * typically for labels or other one-off names.
  */
-Node*
-newname(Sym *s)
+Node* newname(Sym *s)
 {
 	Node *n;
 
@@ -386,8 +385,7 @@ newname(Sym *s)
  * this generates a new name node for a name
  * being declared.
  */
-Node*
-dclname(Sym *s)
+Node* dclname(Sym *s)
 {
 	Node *n;
 
@@ -1176,10 +1174,7 @@ isifacemethod(Type *f)
 	return 1;
 }
 
-/*
- * turn a parsed function declaration
- * into a type
- */
+// turn a parsed function declaration into a type
 Type* functype(Node *this, NodeList *in, NodeList *out)
 {
 	Type *t;
@@ -1217,8 +1212,7 @@ Type* functype(Node *this, NodeList *in, NodeList *out)
 	return t;
 }
 
-Sym*
-methodsym(Sym *nsym, Type *t0, int iface)
+Sym* methodsym(Sym *nsym, Type *t0, int iface)
 {
 	Sym *s;
 	char *p;

@@ -192,9 +192,27 @@ struct	Type
 
 	// most nodes
 	
+	// Type 类型的 type 成员属性, 一般 Type 类型为 Array, Map, Channel 等,
+	// 可以称为"复合类型", 而 type 成员则表示ta们的成员的类型.
+	// 有一个 issimple 字典, 就存放着各类型是否为复合类型的信息.
+	//
+	// 有一些特殊情况, 如
+	// Interface 类型的 type 可以是 Func 类型
+	// Func 类型的 type 可以是其参数的类型, 但 Func 有入参和返回值两类, 因此还要更复杂一些.
+	//
+	//                             入参类型[0]    入参类型[1]
+	//                             Type(type) -> Type(down) ...
+	//               返回值         |
+	// Type(Func) -> Type(down) -> Type(down)
+	//               |             入参
+	//               |
+	//               Type(type) -> Type(down) ...
+	//               返回值类型[0]   返回值类型[1]
+	//
 	// actual type for TFIELD, element type for TARRAY, TCHAN, TMAP, TPTRxx
 	Type*	type;
-	// 当前类型所占空间的大小, 单位为字节. 如 int8 的 width 为 1.
+	// 复杂类型的 type 成员的所属类型所占空间的大小, 单位为字节.
+	// 如 int8 的 width 为 1.
 	//
 	// offset in TFIELD, width in all others
 	vlong	width;
@@ -553,7 +571,10 @@ enum
 	OPTRLIT,	// &T{x:3, y:4}
 	OCONV,	// var i int; var u uint; i = int(u)
 	OCONVIFACE,	// I(t)
-	OCONVNOP,	// type Int int; var i int; var j Int; i = int(j)
+	// 类型转换并赋值时发现, 两者本来就是同一类型, 无需做底层转换.
+	// 下面的语句是同一场景下的一段连续的表达式.
+	// type Int int; var i int; var j Int; i = int(j)
+	OCONVNOP,
 	// copy()函数
 	OCOPY,
 	ODCL,	// var x int
@@ -750,7 +771,7 @@ enum
 	TFUNCARGS,
 	TCHANARGS,
 	TINTERMETH,
-
+	// NTYPE 可以表示已知的所有类型的数量.
 	NTYPE,
 };
 
@@ -1038,21 +1059,38 @@ EXTERN	char*	myimportpath;
 EXTERN	Idir*	idirs;
 EXTERN	char*	localimport;
 
-// 与 simtype 类型, 不过这里直接是 Type 数组, 每个成员都是一种类型的 Type 表示.
-EXTERN	Type*	types[NTYPE];
 EXTERN	Type*	idealstring;
 EXTERN	Type*	idealbool;
 EXTERN	Type*	bytetype;
 EXTERN	Type*	runetype;
 EXTERN	Type*	errortype;
+
+////////////////////////////////////////////////////////////////////////////////
+// 以下所有 NTYPE 的数组的初始化, 都可以见 src/cmd/gc/align.c -> typeinit()
+
+// 与 simtype 类型, 不过这里直接是 Type 数组, 每个成员都是一种类型的 Type 表示.
+EXTERN	Type*	types[NTYPE];
 // simtype 数组中的成员都是 NTYPE 所在的枚举列表的成员类型
 EXTERN	uchar	simtype[NTYPE];
+// isptr 中保存着各类型是否为"指针类型"的信息, 貌似只有 TPTR64 TPTR32 两种类型.
+// 需要注意的是, TPTR64 和 TPTR32 也是"复合"类型, Type(TPTR64)->type 成员表示
+// 该指针指向的变量所属的真正类型.
 EXTERN	uchar	isptr[NTYPE];
 EXTERN	uchar	isforw[NTYPE];
 EXTERN	uchar	isint[NTYPE];
 EXTERN	uchar	isfloat[NTYPE];
 EXTERN	uchar	iscomplex[NTYPE];
 EXTERN	uchar	issigned[NTYPE];
+// issimple 存放着各类型是否为"复合类型"的信息.
+// int, float, bool 等为 simple 简单类型(貌似只有这3个), 
+// 而 String, Array, Map, Channel 等, 可以称为"复合类型".
+// 
+// 作用在于, 简单类型的 Type 对象, 只表示自身,
+// 而复合类型的 Type 对象, 还有一个 type 成员属性, 可以表示ta的成员类型.
+// 如 []int 的 Type 对象, etype 成员为 Type(Array/Slice), 而 type 成员则为 Type(int).
+//
+// 需要注意的是, TPTR64 和 TPTR32 也是"复合"类型, Type(TPTR64)->type 成员表示
+// 该指针指向的变量所属的真正类型.
 EXTERN	uchar	issimple[NTYPE];
 
 EXTERN	uchar	okforeq[NTYPE];
@@ -1072,6 +1110,8 @@ EXTERN	Mpint*	minintval[NTYPE];
 EXTERN	Mpint*	maxintval[NTYPE];
 EXTERN	Mpflt*	minfltval[NTYPE];
 EXTERN	Mpflt*	maxfltval[NTYPE];
+//
+////////////////////////////////////////////////////////////////////////////////
 
 // 貌似是所有 Node 的父节点, 类似于 gc 中的根节点.
 // 由 src/cmd/gc/y.tab.c -> yyparse() 完成初始化.

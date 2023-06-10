@@ -118,8 +118,7 @@ static char* typekind(Type *t)
  * It is used by typecheck in the case of OLITERAL nodes
  * to print constant definition loops.
  */
-static void
-sprint_depchain(Fmt *fmt, NodeList *stack, Node *cur, Node *first)
+static void sprint_depchain(Fmt *fmt, NodeList *stack, Node *cur, Node *first)
 {
 	NodeList *l;
 
@@ -244,8 +243,7 @@ Node* typecheck(Node **np, int top)
  */
 static int callrecvlist(NodeList*);
 
-static int
-callrecv(Node *n)
+static int callrecv(Node *n)
 {
 	if(n == nil)
 		return 0;
@@ -276,8 +274,7 @@ callrecv(Node *n)
 		callrecvlist(n->rlist);
 }
 
-static int
-callrecvlist(NodeList *l)
+static int callrecvlist(NodeList *l)
 {
 	for(; l; l=l->next)
 		if(callrecv(l->n))
@@ -289,8 +286,7 @@ callrecvlist(NodeList *l)
 // array/slice indexes. It is equivalent to defaultlit
 // except for constants of numerical kind, which are acceptable
 // whenever they can be represented by a value of type int.
-static void
-indexlit(Node **np)
+static void indexlit(Node **np)
 {
 	Node *n;
 
@@ -1820,7 +1816,7 @@ error:
 
 out:
 	*np = n;
-}
+} // typecheck1() 结束
 
 static int checksliceindex(Node *r, Type *tp)
 {
@@ -3342,8 +3338,7 @@ markbreak(Node *n, Node *implicit)
 	}
 }
 
-static void
-markbreaklist(NodeList *l, Node *implicit)
+static void markbreaklist(NodeList *l, Node *implicit)
 {
 	Node *n;
 	Label *lab;
@@ -3370,8 +3365,7 @@ markbreaklist(NodeList *l, Node *implicit)
 	}
 }
 
-static int
-isterminating(NodeList *l, int top)
+static int isterminating(NodeList *l, int top)
 {
 	int def;
 	Node *n;
@@ -3436,8 +3430,7 @@ isterminating(NodeList *l, int top)
 	return 0;
 }
 
-void
-checkreturn(Node *fn)
+void checkreturn(Node *fn)
 {
 	if(fn->type->outtuple && fn->nbody != nil)
 		if(!isterminating(fn->nbody, 1))

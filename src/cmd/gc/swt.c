@@ -828,8 +828,7 @@ walkswitch(Node *sw)
 /*
  * type check switch statement
  */
-void
-typecheckswitch(Node *n)
+void typecheckswitch(Node *n)
 {
 	int top, lno, ptr;
 	char *nilonly;

@@ -76,16 +76,40 @@ int haspointers(Type *t)
 	return ret;
 }
 
-/*
- * f is method type, with receiver.
- * return function type, receiver as first argument (or not).
- */
+// 将一个 method 方法, 转换成一个常规 function 函数.
+// (将 method 的 receiver 作为第0个入参).
+//
+// 	@param f: 一个函数类型对象
+// 	@param receiver: 如果 f 是某个对象的成员方法, 那 receiver 则为其所属对象, T 或 T*.
+// 	如果 f 是某个接口的成员方法, receiver 可以是 0(即 nil)
+//
+// caller:
+// 	1. implements()
+//
+// f is method type, with receiver.
+// return function type, receiver as first argument (or not).
+// 
 Type* methodfunc(Type *f, Type *receiver)
 {
 	NodeList *in, *out;
 	Node *d;
 	Type *t;
 
+	// Type 类型的 type 成员属性, 一般 Type 类型为 Array, Map, Channel 等,
+	// 可以称为"复合类型", 而 type 成员则表示ta们的成员的类型.
+	// 有一些特殊情况, 如
+	// Interface 类型的 type 可以是 Func 类型
+	// Func 类型的 type 可以是其参数的类型, 但 Func 有入参和返回值两类, 因此还要更复杂一些.
+	//
+	//                             入参类型[0]    入参类型[1]
+	//                             Type(type) -> Type(down) ...
+	//               返回值         |
+	// Type(Func) -> Type(down) -> Type(down)
+	//               |             入参
+	//               |
+	//               Type(type) -> Type(down) ...
+	//               返回值类型[0]   返回值类型[1]
+	//
 	in = nil;
 	if(receiver) {
 		d = nod(ODCLFIELD, N, N);

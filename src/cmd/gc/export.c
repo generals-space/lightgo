@@ -35,7 +35,9 @@ void exportsym(Node *n)
 	exportlist = list(exportlist, n);
 }
 
-// 可以被暴露的两个情况之一: 大写字母开头
+// 	@param s: 目标函数名
+//
+// 函数可以被暴露的两个情况之一: 大写字母开头
 int exportname(char *s)
 {
 	Rune r;
@@ -47,7 +49,9 @@ int exportname(char *s)
 	return isupperrune(r);
 }
 
-// 可以被暴露的两个情况之一: 函数名为 init
+// 	@param s: 目标函数名
+//
+// 函数可以被暴露的两个情况之一: 函数名为 init
 static int initname(char *s)
 {
 	return strcmp(s, "init") == 0;
