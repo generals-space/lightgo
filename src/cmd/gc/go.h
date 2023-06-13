@@ -183,7 +183,7 @@ struct	Type
 
 	Type*	method;
 	Type*	xmethod;
-
+	// Type->sym 成员表示该类型的标记, 应该是 "bool", "int", "struct 名称"等东西.
 	Sym*	sym;
 	int32	vargen;		// unique name for OTYPE/ONAME
 
@@ -987,7 +987,11 @@ EXTERN	int	sizeof_Array;	// runtime sizeof(Array)
  */
 EXTERN	int	sizeof_String;	// runtime sizeof(String)
 
-EXTERN	Dlist	dotlist[10];	// size is max depth of embeddeds
+// golang 的结构体对象是可以组合的, 对于一个成员方法, 可能出现 A.B.C.D.method() 的情况,
+// 不过有最大嵌套层数的限制, 即 dotlist.
+//
+// size is max depth of embeddeds
+EXTERN	Dlist	dotlist[10];
 
 EXTERN	Io	curio;
 EXTERN	Io	pushedio;

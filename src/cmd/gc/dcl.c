@@ -7,6 +7,8 @@
 #include	"go.h"
 #include	"y.tab.h"
 
+// dcl -> declare 声明
+
 static	void	funcargs(Node*);
 static	void	funcargs2(Type*);
 
@@ -977,8 +979,7 @@ interfacefield(Node *n)
 	return f;
 }
 
-Type*
-tointerface(NodeList *l)
+Type* tointerface(NodeList *l)
 {
 	Type *t, *f, **tp, *t1;
 
@@ -1150,14 +1151,18 @@ fakethis(void)
 	return n;
 }
 
-/*
- * Is this field a method on an interface?
- * Those methods have an anonymous
- * *struct{} as the receiver.
- * (See fakethis above.)
- */
-int
-isifacemethod(Type *f)
+// isifacemethod 判断目标 f 方法是否为某个 interface 的成员方法.
+//
+// 判断依据是: 普通对象的方法的 receiver 是其所属对象, 而 interface 方法的 receiver,
+// 则为匿名的 *struct{}
+//
+// 	@param f: 一个**方法类型**的 Type(不是单纯的函数, f 包含 receiver)
+//
+// Is this field a method on an interface?
+// Those methods have an anonymous *struct{} as the receiver.
+// (See fakethis above.)
+// 
+int isifacemethod(Type *f)
 {
 	Type *rcvr;
 	Type *t;

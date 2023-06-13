@@ -123,16 +123,18 @@ Node* liststmt(NodeList *l)
 	return n;
 }
 
-/*
- * return nelem of list
- */
+// count 计算并返回 nodelist 的长度(就是单纯遍历)
+//
+// return nelem of list
 int count(NodeList *l)
 {
 	vlong n;
 
 	n = 0;
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		n++;
+	}
+	// (int)n 为类型转换, 因为 n 是 vlong 类型, 是可以大于 int 上限的.
 	if((int)n != n) { // Overflow.
 		yyerror("too many elements in list");
 	}

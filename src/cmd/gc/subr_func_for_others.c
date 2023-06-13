@@ -3,6 +3,9 @@
 #include	"go.h"
 #include	"md5.h"
 
+// for others, 这里的函数 subr_xxx 源文件里根本没有引用, 是给其他文件用的,
+// 不知道为什么放在 subr.c 里.
+
 /*
  * return !(op)
  * eg == <=> !=
@@ -37,6 +40,61 @@ int brrev(int a)
 	}
 	fatal("brcom: no rev for %A\n", a);
 	return a;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// caller:
+// 	1. sortinter() 只有这一处
+static int methcmp(const void *va, const void *vb)
+{
+	Type *a, *b;
+	int i;
+
+	a = *(Type**)va;
+	b = *(Type**)vb;
+	if(a->sym == S && b->sym == S)
+		return 0;
+	if(a->sym == S)
+		return -1;
+	if(b->sym == S)
+		return 1;
+	i = strcmp(a->sym->name, b->sym->name);
+	if(i != 0)
+		return i;
+	if(!exportname(a->sym->name)) {
+		i = strcmp(a->sym->pkg->path->s, b->sym->pkg->path->s);
+		if(i != 0)
+			return i;
+	}
+	return 0;
+}
+
+// caller:
+// 	1. src/cmd/gc/dcl.c -> tointerface()
+Type* sortinter(Type *t)
+{
+	Type *f;
+	int i;
+	Type **a;
+	
+	if(t->type == nil || t->type->down == nil)
+		return t;
+
+	i=0;
+	for(f=t->type; f; f=f->down)
+		i++;
+	a = mal(i*sizeof f);
+	i = 0;
+	for(f=t->type; f; f=f->down)
+		a[i++] = f;
+	qsort(a, i, sizeof a[0], methcmp);
+	while(i-- > 0) {
+		a[i]->down = f;
+		f = a[i];
+	}
+	t->type = f;
+	return t;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,8 @@
 #include	<libc.h>
 #include	"go.h"
 
+// swt -> switch 语句
+
 enum
 {
 	Snorm		= 0,

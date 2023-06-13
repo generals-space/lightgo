@@ -1795,8 +1795,7 @@ loop:
 	return rune;
 }
 
-static int
-escchar(int e, int *escflg, vlong *val)
+static int escchar(int e, int *escflg, vlong *val)
 {
 	int i, u, c;
 	vlong l;

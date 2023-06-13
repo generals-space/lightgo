@@ -19,7 +19,7 @@ static int eqnote(Strlit *a, Strlit *b);
 //
 // Return 1 if t1 and t2 are identical(相同的), following the spec rules.
 //
-// Any cyclic type must go through a named type, and if one is
+// Any cyclic(循环的) type must go through a named type, and if one is
 // named, it is only identical to the other if they are the same
 // pointer (t1 == t2), so there's no chance of chasing cycles
 // ad infinitum, so no need for a depth counter.

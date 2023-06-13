@@ -3,8 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
- * portable half of code generator.
- * mainly statements and control flow.
+ * portable half of code generator. mainly statements and control flow.
  */
 
 #include <u.h>

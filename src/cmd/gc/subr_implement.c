@@ -163,6 +163,10 @@ ret:
 }
 
 // 在一个拥有方法的对象 t 中, 寻找名称为 s 的方法并返回.
+// 理论上返回的方法中, 入参是包含 receiver 的.
+//
+// 函数名中的 dot 点号, 这是因为 golang 的结构体对象是可以组合的, 对于一个成员方法, 
+// 可能出现 A.B.C.D.method() 的情况
 //
 // 	@param t: 一个拥有 method 方法的对象, 不一定是 struct(但此时一定不会是指针类型).
 //
@@ -178,7 +182,8 @@ static Type* ifacelookdot(Sym *s, Type *t, int *followptr, int ignorecase)
 	if(t == T) {
 		return T;
 	}
-
+	// golang 的结构体对象是可以组合的, 对于一个成员方法, 可能出现 A.B.C.D.method() 的情况,
+	// 不过有最大嵌套层数的限制, 即 dotlist.
 	for(d=0; d<nelem(dotlist); d++) {
 		c = adddot1(s, t, d, &m, ignorecase);
 		if(c > 1) {
@@ -271,8 +276,11 @@ int implements(Type *t, Type *iface, Type **m, Type **samename, int *ptr)
 			*ptr = 0;
 			return 0;
 		}
-		// if pointer receiver in method,
-		// the method does not exist for value types.
+		// 运行到这里, 说明 im->type 和 tm->type 所表示的方法是相同的, 但还有一个特殊情况.
+
+		// 如果 tm 方法的 receiver 是指针类型, 而 tm 本身不是指针, 那表示并不匹配.
+		//
+		// if pointer receiver in method, the method does not exist for value types.
 		rcvr = getthisx(tm->type)->type->type;
 		if(isptr[rcvr->etype] && !isptr[t0->etype] && !followptr && !isifacemethod(tm->type)) {
 			if(0 && debug['r']) {
