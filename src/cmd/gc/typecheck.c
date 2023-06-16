@@ -16,6 +16,7 @@
 
 // caller:
 // 	1. typecheck()
+// 	2. typecheckas()
 //
 // resolve ONONAME to definition, if any.
 Node* resolve(Node *n)
@@ -23,10 +24,12 @@ Node* resolve(Node *n)
 	Node *r;
 
 	if(n != N && n->op == ONONAME && n->sym != S && (r = n->sym->def) != N) {
-		if(r->op != OIOTA)
+		if(r->op != OIOTA) {
 			n = r;
-		else if(n->iota >= 0)
+		}
+		else if(n->iota >= 0) {
 			n = nodintconst(n->iota);
+		}
 	}
 	return n;
 }

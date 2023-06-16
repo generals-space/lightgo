@@ -1,5 +1,7 @@
 #include	"walk.h"
 
+// stmt -> statement, 像 if, for..range, break, return 等
+
 static int samelist(NodeList *a, NodeList *b);
 static int paramoutheap(Node *fn);
 
@@ -11,8 +13,9 @@ void walkstmt(Node **np)
 	Node *n, *f;
 
 	n = *np;
-	if(n == N)
+	if(n == N) {
 		return;
+	}
 
 	setlineno(n);
 
@@ -113,6 +116,7 @@ void walkstmt(Node **np)
 		break;
 
 	case OPROC:
+	{
 		switch(n->left->op) {
 		case OPRINT:
 		case OPRINTN:
@@ -124,8 +128,10 @@ void walkstmt(Node **np)
 			break;
 		}
 		break;
+	}
 
 	case ORETURN:
+	{
 		walkexprlist(n->list, &n->ninit);
 		if(n->list == nil)
 			break;
@@ -163,6 +169,7 @@ void walkstmt(Node **np)
 		ll = ascompatte(n->op, nil, 0, getoutarg(curfn->type), n->list, 1, &n->ninit);
 		n->list = ll;
 		break;
+	}
 
 	case ORETJMP:
 		break;

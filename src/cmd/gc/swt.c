@@ -803,8 +803,7 @@ typeswitch(Node *sw)
 	}
 }
 
-void
-walkswitch(Node *sw)
+void walkswitch(Node *sw)
 {
 	/*
 	 * reorder the body into (OLIST, cases, statements)
@@ -827,9 +826,11 @@ walkswitch(Node *sw)
 	sw->list = nil;
 }
 
-/*
- * type check switch statement
- */
+// caller:
+// 	1. src/cmd/gc/typecheck1.c -> typecheck1()
+// 
+// type check switch statement
+// 
 void typecheckswitch(Node *n)
 {
 	int top, lno, ptr;
@@ -843,6 +844,7 @@ void typecheckswitch(Node *n)
 	typechecklist(n->ninit, Etop);
 	nilonly = nil;
 
+	// switch err.(type) 类型断言的情况
 	if(n->ntest != N && n->ntest->op == OTYPESW) {
 		// type switch
 		top = Etype;

@@ -1,14 +1,9 @@
 #include "typecheck.h"
 
-// caller:
-// 	1. typechecklist()
-// 	2. typecheckas2()
-void typechecklist(NodeList *l, int top)
-{
-	for(; l; l=l->next) {
-		typecheck(&l->n, top);
-	}
-}
+// assign -> assignment 赋值语句, 包括简单赋值和多重赋值.
+//
+// 简单赋值: 如 x = y or x := y
+// 多重赋值: 如 x, y, z = xx, yy, zz
 
 // caller:
 //  1. typecheck1()
@@ -16,22 +11,14 @@ void typechecklist(NodeList *l, int top)
 //  1. typecheckas()
 void checkassign(Node *n)
 {
-	if(islvalue(n))
+	if(islvalue(n)) {
 		return;
+	}
 	if(n->op == OINDEXMAP) {
 		n->etype = 1;
 		return;
 	}
 	yyerror("cannot assign to %N", n);
-}
-
-// caller:
-//  1. typecheckas2() 只有这一处
-static void checkassignlist(NodeList *l)
-{
-	for(; l; l=l->next) {
-		checkassign(l->n);
-	}
 }
 
 /*
@@ -40,26 +27,33 @@ static void checkassignlist(NodeList *l)
  * fill in the var's type.
  */
 
+// as -> assignment 赋值(简单赋值, 如 x = y or x := y)
+// 与之相对的是多重赋值, 如 x, y, z = xx, yy, zz
+//
+// 	@param n: n->op = OAS
+//
 // caller:
 //  1. typecheck1() 只有这一处
 void typecheckas(Node *n)
 {
 	// delicate little dance.
-	// the definition of n may refer to this assignment
-	// as its definition, in which case it will call typecheckas.
+	// the definition of n may refer to this assignment as its definition,
+	// in which case it will call typecheckas.
 	// in that case, do not call typecheck back, or it will cycle.
 	// if the variable has a type (ntype) then typechecking
-	// will not look at defn, so it is okay (and desirable,
-	// so that the conversion below happens).
+	// will not look at defn,
+	// so it is okay (and desirable, so that the conversion below happens).
 	n->left = resolve(n->left);
-	if(n->left->defn != n || n->left->ntype)
+	if(n->left->defn != n || n->left->ntype) {
 		typecheck(&n->left, Erv | Easgn);
+	}
 
 	checkassign(n->left);
 	typecheck(&n->right, Erv);
 	if(n->right && n->right->type != T) {
-		if(n->left->type != T)
+		if(n->left->type != T) {
 			n->right = assignconv(n->right, n->left->type, "assignment");
+		}
 	}
 	if(n->left->defn == n && n->left->ntype == N) {
 		defaultlit(&n->right, T);
@@ -67,11 +61,24 @@ void typecheckas(Node *n)
 	}
 
 	// second half of dance.
-	// now that right is done, typecheck the left
-	// just to get it over with.  see dance above.
+	// now that right is done, typecheck the left just to get it over with. 
+	// see dance above.
 	n->typecheck = 1;
-	if(n->left->typecheck == 0)
+	if(n->left->typecheck == 0) {
 		typecheck(&n->left, Erv | Easgn);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// caller:
+// 	1. typechecklist()
+// 	2. typecheckas2()
+void typechecklist(NodeList *l, int top)
+{
+	for(; l; l=l->next) {
+		typecheck(&l->n, top);
+	}
 }
 
 // caller:
@@ -86,6 +93,20 @@ static void checkassignto(Type *src, Node *dst)
 	}
 }
 
+// caller:
+//  1. typecheckas2() 只有这一处
+static void checkassignlist(NodeList *l)
+{
+	for(; l; l=l->next) {
+		checkassign(l->n);
+	}
+}
+
+// as -> assignment 赋值(多重赋值, 如 x, y, z = xx, yy, zz)
+// 与之相对的是简单赋值, 如 x = y or x := y
+//
+// 	@param n: n->op = OAS2
+//
 // caller:
 //  1. typecheck1() 只有这一处
 void typecheckas2(Node *n)

@@ -355,7 +355,9 @@ struct	Node
 
 	// ONAME
 	Node*	ntype;
-	Node*	defn;	// ONAME: initializing assignment; OLABEL: labeled statement
+	// ONAME: initializing assignment;
+	// OLABEL: labeled statement
+	Node*	defn;
 	Node*	pack;	// real package for import . names
 	Node*	curfn;	// function for local variables
 	Type*	paramfld; // TFIELD for this PPARAM; also for ODOT, curfn
@@ -541,8 +543,14 @@ enum
 	OARRAYRUNESTR,	// string(runes)
 	OSTRARRAYBYTE,	// []byte(s)
 	OSTRARRAYRUNE,	// []rune(s)
-	OAS,	// x = y or x := y
-	OAS2,	// x, y, z = xx, yy, zz
+	// AS -> assignment, 赋值语句
+	//
+	// x = y or x := y
+	OAS,
+	// AS -> assignment, 赋值语句
+	// 多重赋值
+	// x, y, z = xx, yy, zz
+	OAS2,
 	OAS2FUNC,	// x, y = f()
 	OAS2RECV,	// x, ok = <-c
 	OAS2MAPR,	// x, ok = m["foo"]

@@ -21,8 +21,9 @@ void typecheck1(Node **np, int top)
 		}
 
 		typecheckdef(n);
-		if(n->op == ONONAME)
+		if(n->op == ONONAME) {
 			goto error;
+		}
 	}
 	*np = n;
 
@@ -48,6 +49,8 @@ reswitch:
 		goto ret;
 
 	case ONAME:
+	{
+
 		if(n->etype != 0) {
 			ok |= Ecall;
 			goto ret;
@@ -66,6 +69,7 @@ reswitch:
 		}
 		ok |= Erv;
 		goto ret;
+	}
 
 	case OPACK:
 		yyerror("use of package %S not in selector", n->sym);
@@ -555,6 +559,7 @@ reswitch:
 		goto ret;
 
 	case OINDEX:
+	{
 		ok |= Erv;
 		typecheck(&n->left, Erv);
 		defaultlit(&n->left, T);
@@ -562,74 +567,83 @@ reswitch:
 		l = n->left;
 		typecheck(&n->right, Erv);
 		r = n->right;
-		if((t = l->type) == T || r->type == T)
+		if((t = l->type) == T || r->type == T) {
 			goto error;
+		}
 		switch(t->etype) {
-		default:
-			yyerror("invalid operation: %N (index of type %T)", n, t);
-			goto error;
-
-
-		case TSTRING:
-		case TARRAY:
-			indexlit(&n->right);
-			if(t->etype == TSTRING) {
-				n->type = types[TUINT8];
+			default:
+			{
+				yyerror("invalid operation: %N (index of type %T)", n, t);
+				goto error;
 			}
-			else {
-				n->type = t->type;
-			}
-			why = "string";
-			if(t->etype == TARRAY) {
-				if(isfixedarray(t)) {
-					why = "array";
+
+			case TSTRING:
+			case TARRAY:
+			{
+
+				indexlit(&n->right);
+				if(t->etype == TSTRING) {
+					n->type = types[TUINT8];
 				}
 				else {
-					why = "slice";
+					n->type = t->type;
 				}
-			}
-			// 数组/切片/字符串的索引, 必须是整型数值, 否则报错
-			if(n->right->type != T && !isint[n->right->type->etype]) {
-				yyerror("non-integer %s index %N", why, n->right);
+				why = "string";
+				if(t->etype == TARRAY) {
+					if(isfixedarray(t)) {
+						why = "array";
+					}
+					else {
+						why = "slice";
+					}
+				}
+				// 数组/切片/字符串的索引, 必须是整型数值, 否则报错
+				if(n->right->type != T && !isint[n->right->type->etype]) {
+					yyerror("non-integer %s index %N", why, n->right);
+					break;
+				}
+				// 如果索引值是整型数值, 那么在编译期就可以确认其合法性
+				// (如果是变量就不行了, 比如 array[i]).
+				if(isconst(n->right, CTINT)) {
+					if(mpgetfix(n->right->val.u.xval) < 0) {
+						// 数组/切片/字符串的索引, 必须大于等于0(不可为负值), 否则报错
+						yyerror("invalid %s index %N (index must be non-negative)", why, n->right);
+					}
+					else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound) {
+						// 数组/切片/字符串的索引, 访问越界.
+						yyerror(
+							"invalid array index %N (out of bounds for %d-element array)", 
+							n->right, t->bound
+						);
+					}
+					else if(isconst(n->left, CTSTR) && mpgetfix(n->right->val.u.xval) >= n->left->val.u.sval->len) {
+						yyerror(
+							"invalid string index %N (out of bounds for %d-byte string)", 
+							n->right, n->left->val.u.sval->len
+						);
+					}
+					else if(mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0) {
+						yyerror("invalid %s index %N (index too large)", why, n->right);
+					}
+				}
 				break;
 			}
-			// 如果索引值是整型数值, 那么在编译期就可以确认其合法性
-			// (如果是变量就不行了, 比如 array[i]).
-			if(isconst(n->right, CTINT)) {
-				if(mpgetfix(n->right->val.u.xval) < 0) {
-					// 数组/切片/字符串的索引, 必须大于等于0(不可为负值), 否则报错
-					yyerror("invalid %s index %N (index must be non-negative)", why, n->right);
-				}
-				else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound) {
-					// 数组/切片/字符串的索引, 访问越界.
-					yyerror(
-						"invalid array index %N (out of bounds for %d-element array)", 
-						n->right, t->bound
-					);
-				}
-				else if(isconst(n->left, CTSTR) && mpgetfix(n->right->val.u.xval) >= n->left->val.u.sval->len) {
-					yyerror(
-						"invalid string index %N (out of bounds for %d-byte string)", 
-						n->right, n->left->val.u.sval->len
-					);
-				}
-				else if(mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0) {
-					yyerror("invalid %s index %N (index too large)", why, n->right);
-				}
-			}
-			break;
 
-		case TMAP:
-			n->etype = 0;
-			defaultlit(&n->right, t->down);
-			if(n->right->type != T) {
-				n->right = assignconv(n->right, t->down, "map index");
+			case TMAP:
+			{
+
+				n->etype = 0;
+				defaultlit(&n->right, t->down);
+				if(n->right->type != T) {
+					n->right = assignconv(n->right, t->down, "map index");
+				}
+				n->type = t->type;
+				n->op = OINDEXMAP;
+				break;
 			}
-			n->type = t->type;
-			n->op = OINDEXMAP;
-			break;
 		}
 		goto ret;
+	}
 
 	case ORECV:
 		ok |= Etop | Erv;
@@ -1340,18 +1354,21 @@ reswitch:
 		typecheck(&n->left, Erv);
 		goto ret;
 
-	/*
-	 * statements
-	 */
+	////////////////////////////////////////////////////////////////////////////
+	// statements
 	case OAS:
+	{
 		ok |= Etop;
 		typecheckas(n);
 		goto ret;
+	}
 
 	case OAS2:
+	{
 		ok |= Etop;
 		typecheckas2(n);
 		goto ret;
+	}
 
 	case OBREAK:
 	case OCONTINUE:
@@ -1366,8 +1383,9 @@ reswitch:
 	case ODEFER:
 		ok |= Etop;
 		typecheck(&n->left, Etop|Erv);
-		if(!n->left->diag)
+		if(!n->left->diag) {
 			checkdefergo(n);
+		}
 		goto ret;
 
 	case OPROC:
@@ -1376,15 +1394,17 @@ reswitch:
 		checkdefergo(n);
 		goto ret;
 
-	case OFOR:
+	case OFOR: {
 		ok |= Etop;
 		typechecklist(n->ninit, Etop);
 		typecheck(&n->ntest, Erv);
-		if(n->ntest != N && (t = n->ntest->type) != T && t->etype != TBOOL)
+		if(n->ntest != N && (t = n->ntest->type) != T && t->etype != TBOOL) {
 			yyerror("non-bool %lN used as for condition", n->ntest);
+		}
 		typecheck(&n->nincr, Etop);
 		typechecklist(n->nbody, Etop);
 		goto ret;
+	}
 
 	case OIF:
 		ok |= Etop;
@@ -1397,6 +1417,8 @@ reswitch:
 		goto ret;
 
 	case ORETURN:
+	{
+
 		ok |= Etop;
 		if(count(n->list) == 1)
 			typechecklist(n->list, Erv | Efnstruct);
@@ -1410,6 +1432,7 @@ reswitch:
 			goto ret;
 		typecheckaste(ORETURN, nil, 0, getoutargx(curfn->type), n->list, "return argument");
 		goto ret;
+	}
 	
 	case ORETJMP:
 		ok |= Etop;
@@ -1421,18 +1444,23 @@ reswitch:
 		goto ret;
 
 	case OSWITCH:
+	{
 		ok |= Etop;
 		typecheckswitch(n);
 		goto ret;
+	}
 
 	case ORANGE:
+	{
 		ok |= Etop;
 		typecheckrange(n);
 		goto ret;
+	}
 
-	case OTYPESW:
+	case OTYPESW: {
 		yyerror("use of .(type) outside type switch");
 		goto error;
+	}
 
 	case OXCASE:
 		ok |= Etop;

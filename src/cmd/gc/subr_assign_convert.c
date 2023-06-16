@@ -231,6 +231,9 @@ int convertop(Type *src, Type *dst, char **why)
 	return 0;
 }
 
+// caller:
+// 	1. src/cmd/gc/typecheck_assign.c -> typecheckas()
+//
 // Convert node n for assignment to type t.
 Node* assignconv(Node *n, Type *t, char *context)
 {
@@ -238,18 +241,21 @@ Node* assignconv(Node *n, Type *t, char *context)
 	Node *r, *old;
 	char *why;
 	
-	if(n == N || n->type == T || n->type->broke)
+	if(n == N || n->type == T || n->type->broke) {
 		return n;
+	}
 
-	if(t->etype == TBLANK && n->type->etype == TNIL)
+	if(t->etype == TBLANK && n->type->etype == TNIL) {
 		yyerror("use of untyped nil");
+	}
 
 	old = n;
 	old->diag++;  // silence errors about n; we'll issue one below
 	defaultlit(&n, t);
 	old->diag--;
-	if(t->etype == TBLANK)
+	if(t->etype == TBLANK) {
 		return n;
+	}
 
 	// Convert ideal bool from comparison to plain bool
 	// if the next step is non-bool (like interface{}).
@@ -263,8 +269,9 @@ Node* assignconv(Node *n, Type *t, char *context)
 		}
 	}
 
-	if(eqtype(n->type, t))
+	if(eqtype(n->type, t)) {
 		return n;
+	}
 
 	op = assignop(n->type, t, &why);
 	if(op == 0) {

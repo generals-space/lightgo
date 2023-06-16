@@ -118,6 +118,8 @@ int checksliceconst(Node *lo, Node *hi)
 	return 0;
 }
 
+// 处理 defer() 语句.
+//
 // caller:
 //  1. typecheck1() 只有这一处
 void checkdefergo(Node *n)

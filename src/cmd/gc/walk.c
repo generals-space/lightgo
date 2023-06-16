@@ -6,7 +6,7 @@
 /*
  * walk the whole tree of the body of an expression or simple statement.
  * the types expressions are calculated.
- * compile-time constants are evaluated.
+ * compile-time constants are evaluated(评估).
  * complex side effects like statements are appended to init
  */
 

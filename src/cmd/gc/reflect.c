@@ -91,8 +91,6 @@ void dumptypestructs(void)
 	}
 }
 
-// 一个超...长的函数
-//
 // caller:
 // 	1. dumptypestructs() 唯一的主调函数.
 // 	2. dcommontype() 由 dtypesym -> dcommontype -> dtypesym 形式的嵌套调用,
