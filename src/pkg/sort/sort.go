@@ -287,6 +287,10 @@ func Ints(a []int) { Sort(IntSlice(a)) }
 // Float64s sorts a slice of float64s in increasing order.
 func Float64s(a []float64) { Sort(Float64Slice(a)) }
 
+// Strings 该函数实现的是对字符串数组的排序, 而非单个字符串的排序.
+//
+// 	@param a: 注意, 接受的是一个 []string 数组, 而非单个字符串.
+//
 // Strings sorts a slice of strings in increasing order.
 func Strings(a []string) { Sort(StringSlice(a)) }
 

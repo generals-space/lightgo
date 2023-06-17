@@ -6,10 +6,18 @@ package reflect
 
 import "unsafe"
 
+// Swapper 接受 slice 参数, 并返回该 slice 类型对应的 swap 函数.
+// 这个函数可以接收两个参数 i, j, 并交换ta们在切片中的位置, 用于切片类型的通用排序.
+//
 // 	@compatible: 该函数在 v1.8 版本初次出现.
 //
-// Swapper returns a function that swaps the elements in the provided
-// slice.
+// 	@param slice: 必须是切片类型
+//
+// caller:
+// 	1. src/pkg/sort/sort_compatible.go -> Slice()
+// 	2. src/pkg/sort/sort_compatible.go -> SliceStable()
+//
+// Swapper returns a function that swaps the elements in the provided slice.
 //
 // Swapper panics if the provided interface is not a slice.
 func Swapper(slice interface{}) func(i, j int) {
@@ -17,6 +25,7 @@ func Swapper(slice interface{}) func(i, j int) {
 	if v.Kind() != Slice {
 		panic(&ValueError{Method: "Swapper", Kind: v.Kind()})
 	}
+	// 如果目标 slice 切片只有 1 个甚至 0 个元素, 根本不需要交换, 直接返回一个糊弄的函数.
 	// Fast path for slices of size 0 and 1. Nothing to swap.
 	switch v.Len() {
 	case 0:
