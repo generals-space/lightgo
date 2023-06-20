@@ -3,6 +3,10 @@
 // license that can be found in the LICENSE file.
 
 /*
+ * 本文件定义了 golang 的语法规则, 经过处理得到可编译的 y.tab.c 文件.
+ *
+ * bison go.y --output=y.tab.c --defines=y.tab.h
+ *
  * Go language grammar.
  *
  * The Go semicolon rules are:
@@ -301,14 +305,25 @@ xdcl:
 	}
 
 common_dcl:
+	// 3种情况:
+	//
+	// 1. var a, b, c int
+	// 2. var a, b, c int = 1, 2, 3
+	// 3. var a, b, c = function()
 	LVAR vardcl
 	{
 		$$ = $2;
 	}
+	// var (
+	// 	a, b, c int = 1, 2, 3;
+	//  str string = "hello world";
+	// )
 |	LVAR '(' vardcl_list osemi ')'
 	{
 		$$ = $3;
 	}
+	// var () 
+	// 无任何变量定义
 |	LVAR '(' ')'
 	{
 		$$ = nil;
@@ -336,10 +351,15 @@ common_dcl:
 		$$ = nil;
 		iota = -100000;
 	}
+	// type myType int
 |	LTYPE typedcl
 	{
 		$$ = list1($2);
 	}
+	// type (
+	// 	myInt int;
+	// 	myBool bool;
+	// )
 |	LTYPE '(' typedcl_list osemi ')'
 	{
 		$$ = $3;
@@ -355,15 +375,20 @@ lconst:
 		iota = 0;
 	}
 
+// var 变量声明语法
+// 注意: 如下规则中不包含 var 关键字, var 关键字可见 vardcl() 的主调函数, 用 LVAR 表示.
 vardcl:
+	// var a, b, c int
 	dcl_name_list ntype
 	{
 		$$ = variter($1, $2, nil);
 	}
+	// var a, b, c int = 1, 2, 3
 |	dcl_name_list ntype '=' expr_list
 	{
 		$$ = variter($1, $2, $4);
 	}
+	// var a, b, c = function()
 |	dcl_name_list '=' expr_list
 	{
 		$$ = variter($1, nil, $3);
@@ -399,10 +424,18 @@ typedclname:
 		$$ = typedcl0($1);
 	}
 
+// type 类型定义(别名)
+// 注意: 如下规则中不包含 type 关键字, type 关键字可见 typedcl() 的主调函数, 用 LTYPE 表示.
 typedcl:
+	// type myType int
 	typedclname ntype
 	{
 		$$ = typedcl1($1, $2, 1);
+	}
+|	// type myType int
+	typedclname '=' ntype
+	{
+		$$ = typedcl1($1, $3, 1);
 	}
 
 simple_stmt:
@@ -1496,8 +1529,15 @@ xdcl_list:
 		noescape = 0;
 	}
 
+// vardcl_list 其实就是常规的 (vardcl;vardcl;) 的组合.
+//
+// var (
+// 	a, b, c int = 1, 2, 3;
+//  str string = "hello world";
+// )
 vardcl_list:
 	vardcl
+	// 下面这一句有点像递归, 但最终的组成元素还是 vardcl.
 |	vardcl_list ';' vardcl
 	{
 		$$ = concat($1, $3);
