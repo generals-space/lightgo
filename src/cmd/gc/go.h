@@ -505,7 +505,8 @@ enum
 	OAS2MAPR,	// x, ok = m["foo"]
 	OAS2DOTTYPE,	// x, ok = I.(int)
 	OASOP,	// x += y
-	OCALL,	// function call, method call or type conversion, possibly preceded by defer or go.
+	// function call, method call or type conversion, possibly preceded by defer or go.
+	OCALL,
 	OCALLFUNC,	// f()
 	OCALLMETH,	// t.Method()
 	OCALLINTER,	// err.Error()
@@ -526,16 +527,26 @@ enum
 	OSTRUCTLIT,	// T{x:3, y:4}
 	OARRAYLIT,	// [2]int{3, 4}
 	OPTRLIT,	// &T{x:3, y:4}
-	OCONV,	// var i int; var u uint; i = int(u)
-	OCONVIFACE,	// I(t)
-	OCONVNOP,	// type Int int; var i int; var j Int; i = int(j)
+	// 普通类型转换
+	// var i int; var u uint; i = int(u)
+	OCONV,
+	// 接口类型转换
+	// I(t)
+	OCONVIFACE,
+	// 类型转换的特殊情况, 两者本来就是同一类型, 无需做底层转换.
+	// 下面的语句是同一场景下的一段连续的表达式.
+	// type Int int; var i int; var j Int; i = int(j)
+	OCONVNOP,
 	// copy()函数
 	OCOPY,
-	ODCL,	// var x int
+	// 指定类型的变量声明
+	// var x int
+	ODCL,
 	ODCLFUNC,	// func f() or func (r) f()
 	ODCLFIELD,	// struct field, interface field, or func/method argument/return value.
 	ODCLCONST,	// const pi = 3.14
-	ODCLTYPE,	// type Int int
+	// type Int int
+	ODCLTYPE,
 	// delete()函数
 	ODELETE,
 	ODOT,	// t.x
