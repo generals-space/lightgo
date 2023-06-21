@@ -10,8 +10,9 @@
 #include <libc.h>
 #include "go.h"
 
-void
-typecheckrange(Node *n)
+// caller:
+// 	1. src/cmd/gc/typecheck1.c -> typecheck1()
+void typecheckrange(Node *n)
 {
 	char *why;
 	Type *t, *t1, *t2;
@@ -102,8 +103,9 @@ out:
 			typecheck(&ll->n, Erv | Easgn);
 }
 
-void
-walkrange(Node *n)
+// caller:
+// 	1. src/cmd/gc/walk_stmt.c -> walkstmt() 只有这一处
+void walkrange(Node *n)
 {
 	Node *ohv1, *hv1, *hv2;	// hidden (old) val 1, 2
 	Node *ha, *hit;	// hidden aggregate, iterator

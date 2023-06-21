@@ -28,11 +28,12 @@ THE SOFTWARE.
 #include <libc.h>
 
 /*
+ * 处理目标路径字符串 name, 将路径中出现的连续斜杠//, ./, ../ 等元素移除
+ * 
  * In place, rewrite name to compress multiple /, eliminate ., and process ..
  */
 #define SEP(x)	((x)=='/' || (x) == 0)
-char*
-cleanname(char *name)
+char* cleanname(char *name)
 {
 	char *p, *q, *dotdot;
 	int rooted;
@@ -48,31 +49,49 @@ cleanname(char *name)
 	 */
 	p = q = dotdot = name+rooted;
 	while(*p) {
-		if(p[0] == '/')	/* null element */
+		if(p[0] == '/') {
+			/* null element */
+
 			p++;
-		else if(p[0] == '.' && SEP(p[1]))
-			p += 1;	/* don't count the separator in case it is nul */
+		}
+		else if(p[0] == '.' && SEP(p[1])) {
+			/* don't count the separator in case it is nul */
+
+			p += 1;
+		}
 		else if(p[0] == '.' && p[1] == '.' && SEP(p[2])) {
 			p += 2;
-			if(q > dotdot) {	/* can backtrack */
-				while(--q > dotdot && *q != '/')
+			if(q > dotdot) {
+				/* can backtrack */
+
+				while(--q > dotdot && *q != '/') {
 					;
-			} else if(!rooted) {	/* /.. is / but ./../ is .. */
-				if(q != name)
+				}
+			} else if(!rooted) {
+				/* /.. is / but ./../ is .. */
+
+				if(q != name) {
 					*q++ = '/';
+				}
 				*q++ = '.';
 				*q++ = '.';
 				dotdot = q;
 			}
-		} else {	/* real path element */
-			if(q != name+rooted)
+		} else {
+			/* real path element */
+
+			if(q != name+rooted) {
 				*q++ = '/';
-			while((*q = *p) != '/' && *q != 0)
+			}
+			while((*q = *p) != '/' && *q != 0) {
 				p++, q++;
+			}
 		}
 	}
-	if(q == name)	/* empty string is really ``.'' */
+	/* empty string is really ``.'' */
+	if(q == name) {
 		*q++ = '.';
+	}
 	*q = '\0';
 	return name;
 }

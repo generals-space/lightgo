@@ -345,9 +345,7 @@ var (
 func init() {
 	goarch = buildContext.GOARCH
 	goos = buildContext.GOOS
-	if goos == "windows" {
-		exeSuffix = ".exe"
-	}
+
 	var err error
 	archChar, err = build.ArchChar(goarch)
 	if err != nil {
@@ -1934,8 +1932,6 @@ func (b *builder) ccompilerCmd(envvar, defcmd, objdir string) []string {
 	// for multithreading with pthread library.
 	if buildContext.CgoEnabled {
 		switch goos {
-		case "windows":
-			a = append(a, "-mthreads")
 		default:
 			a = append(a, "-pthread")
 		}
@@ -2103,11 +2099,6 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string, gxxfile
 	}
 
 	var staticLibs []string
-	if goos == "windows" {
-		// libmingw32 and libmingwex might also use libgcc, so libgcc must come last,
-		// and they also have some inter-dependencies, so must use linker groups.
-		staticLibs = []string{"-Wl,--start-group", "-lmingwex", "-lmingw32", "-Wl,--end-group"}
-	}
 	if cgoLibGccFile != "" {
 		staticLibs = append(staticLibs, cgoLibGccFile)
 	}
@@ -2341,10 +2332,7 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 
 	// create shared library
 	osldflags := map[string][]string{
-		"darwin":  {"-dynamiclib", "-Wl,-undefined,dynamic_lookup"},
-		"freebsd": {"-shared", "-lpthread", "-lm"},
 		"linux":   {"-shared", "-lpthread", "-lm"},
-		"windows": {"-shared", "-lm", "-mthreads"},
 	}
 	var cxxlib []string
 	if cxx {
@@ -2402,10 +2390,6 @@ func raceInit() {
 // current os environment.
 func defaultSuffix() string {
 	switch runtime.GOOS {
-	case "windows":
-		return ".bat"
-	case "plan9":
-		return ".rc"
 	default:
 		return ".bash"
 	}

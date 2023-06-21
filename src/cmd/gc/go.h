@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #include	<bio.h>
+#include	<fmt.h>
 
 #undef OAPPEND
 
@@ -70,8 +71,9 @@ enum
 extern vlong	MAXWIDTH;
 
 /*
- * note this is the representation
- * of the compilers string literals,
+ * Strlit 编译器层面的字符串字面量(非 runtime 层面)
+ * 
+ * note this is the representation of the compilers string literals,
  * it is not the runtime representation
  */
 typedef	struct	Strlit	Strlit;
@@ -181,7 +183,7 @@ struct	Type
 
 	Type*	method;
 	Type*	xmethod;
-
+	// Type->sym 成员表示该类型的标记, 应该是 "bool", "int", "struct 名称"等东西.
 	Sym*	sym;
 	int32	vargen;		// unique name for OTYPE/ONAME
 
@@ -189,8 +191,28 @@ struct	Type
 	vlong	argwid;
 
 	// most nodes
-	Type*	type;   	// actual type for TFIELD, element type for TARRAY, TCHAN, TMAP, TPTRxx
-	// 当前类型所占空间的大小, 单位为字节. 如 int8 的 width 为 1.
+	
+	// Type 类型的 type 成员属性, 一般 Type 类型为 Array, Map, Channel 等,
+	// 可以称为"复合类型", 而 type 成员则表示ta们的成员的类型.
+	// 有一个 issimple 字典, 就存放着各类型是否为复合类型的信息.
+	//
+	// 有一些特殊情况, 如
+	// Interface 类型的 type 可以是 Func 类型
+	// Func 类型的 type 可以是其参数的类型, 但 Func 有入参和返回值两类, 因此还要更复杂一些.
+	//
+	//                             入参类型[0]    入参类型[1]
+	//                             Type(type) -> Type(down) ...
+	//               返回值         |
+	// Type(Func) -> Type(down) -> Type(down)
+	//               |             入参
+	//               |
+	//               Type(type) -> Type(down) ...
+	//               返回值类型[0]   返回值类型[1]
+	//
+	// actual type for TFIELD, element type for TARRAY, TCHAN, TMAP, TPTRxx
+	Type*	type;
+	// 复杂类型的 type 成员的所属类型所占空间的大小, 单位为字节.
+	// 如 int8 的 width 为 1.
 	//
 	// offset in TFIELD, width in all others
 	vlong	width;
@@ -272,6 +294,7 @@ struct	Node
 	NodeList*	list;
 	NodeList*	rlist;
 
+	// op 字段取值可见下面的 "Node ops" 部分
 	uchar	op;
 	uchar	nointerface;
 	uchar	ullman;		// sethi/ullman number
@@ -332,7 +355,9 @@ struct	Node
 
 	// ONAME
 	Node*	ntype;
-	Node*	defn;	// ONAME: initializing assignment; OLABEL: labeled statement
+	// ONAME: initializing assignment;
+	// OLABEL: labeled statement
+	Node*	defn;
 	Node*	pack;	// real package for import . names
 	Node*	curfn;	// function for local variables
 	Type*	paramfld; // TFIELD for this PPARAM; also for ODOT, curfn
@@ -404,7 +429,7 @@ struct	NodeList
 
 enum
 {
-	SymExport	= 1<<0,	// to be exported
+	SymExport	= 1<<0,	// to be exported, 见 src/cmd/gc/export.c -> exportsym()
 	SymPackage	= 1<<1,
 	SymExported	= 1<<2,	// already written out by export
 	SymUniq		= 1<<3,
@@ -445,9 +470,18 @@ struct	Pkg
 	Sym*	pathsym;
 	char*	prefix;		// escaped path for use in symbol table
 	Pkg*	link;
-	uchar	imported;	// export data of this package was parsed
+	// imported 表示当前 package 是否已经**被** localpkg 加载过了, 也是个 bool 类型.
+	//
+	// export data of this package was parsed
+	uchar	imported;
 	char	exported;	// import line written in export data
-	char	direct;	// imported directly
+	// 这是是一个 bool 类型.
+	// 从目前来看, 表示当前 pkg 对象是否**被** localpkg 直接引用.
+	//
+	// 因为 package 之间是嵌套引用的, 而只有被 localpkg 直接引用的 pkg 才会将该字段设置为 1.
+	//
+	// imported directly
+	char	direct;
 	char	safe;	// whether the package is marked as safe
 };
 
@@ -476,14 +510,25 @@ enum
 {
 	OXXX,
 
-	// names
-	ONAME,	// var, const or func name
-	ONONAME,	// unnamed arg or return value: f(int, string) (int, error) { etc }
+	// Node ops 分为好几个类型
+
+	////////////////////////////////////////////////////////////////////////////
+	// names 通过类型关键字声明的变量(bool, int 等)
+
+	// 变量定义
+	// var, const or func name
+	ONAME,
+	// 匿名参数或返回值
+	// unnamed arg or return value: f(int, string) (int, error) { etc }
+	ONONAME,
 	OTYPE,	// type name
-	OPACK,	// import
+	// 包引用
+	// import
+	OPACK,
 	OLITERAL, // literal
 
-	// expressions
+	////////////////////////////////////////////////////////////////////////////
+	// expressions 表达式
 	OADD,	// x + y
 	OSUB,	// x - y
 	OOR,	// x | y
@@ -498,8 +543,14 @@ enum
 	OARRAYRUNESTR,	// string(runes)
 	OSTRARRAYBYTE,	// []byte(s)
 	OSTRARRAYRUNE,	// []rune(s)
-	OAS,	// x = y or x := y
-	OAS2,	// x, y, z = xx, yy, zz
+	// AS -> assignment, 赋值语句
+	//
+	// x = y or x := y
+	OAS,
+	// AS -> assignment, 赋值语句
+	// 多重赋值
+	// x, y, z = xx, yy, zz
+	OAS2,
 	OAS2FUNC,	// x, y = f()
 	OAS2RECV,	// x, ok = <-c
 	OAS2MAPR,	// x, ok = m["foo"]
@@ -627,7 +678,8 @@ enum
 	OIMAG,	// imag
 	OCOMPLEX,	// complex
 
-	// statements
+	////////////////////////////////////////////////////////////////////////////
+	// statements 声明, 包含多数流程关键字(排除其他类型定义关键字)
 	OBLOCK,	// block of code
 	OBREAK,	// break
 	OCASE,	// case, after being verified by swt.c's casebody.
@@ -648,6 +700,7 @@ enum
 	OSWITCH,	// switch x
 	OTYPESW,	// switch err.(type)
 
+	////////////////////////////////////////////////////////////////////////////
 	// types
 	OTCHAN,	// chan int
 	OTMAP,	// map[string]int
@@ -659,6 +712,7 @@ enum
 	OTARRAY,
 	OTPAREN,	// (T)
 
+	////////////////////////////////////////////////////////////////////////////
 	// misc
 	ODDD,	// func f(args ...int) or f(l...) or var a = [...]int{0, 1, 2}.
 	ODDDARG,	// func f(args ...int), introduced by escape analysis.
@@ -670,10 +724,12 @@ enum
 	OCFUNC,	// reference to c function pointer (not go func value)
 	OCHECKNIL, // emit code to ensure pointer/interface not nil
 
+	////////////////////////////////////////////////////////////////////////////
 	// arch-specific registers
 	OREGISTER,	// a register, such as AX.
 	OINDREG,	// offset plus indirect of a register, such as 8(SP).
 
+	////////////////////////////////////////////////////////////////////////////
 	// 386/amd64-specific opcodes
 	OCMP,	// compare: ACMP.
 	ODEC,	// decrement: ADEC.
@@ -731,7 +787,7 @@ enum
 	TFUNCARGS,
 	TCHANARGS,
 	TINTERMETH,
-
+	// NTYPE 可以表示已知的所有类型的数量.
 	NTYPE,
 };
 
@@ -947,7 +1003,11 @@ EXTERN	int	sizeof_Array;	// runtime sizeof(Array)
  */
 EXTERN	int	sizeof_String;	// runtime sizeof(String)
 
-EXTERN	Dlist	dotlist[10];	// size is max depth of embeddeds
+// golang 的结构体对象是可以组合的, 对于一个成员方法, 可能出现 A.B.C.D.method() 的情况,
+// 不过有最大嵌套层数的限制, 即 dotlist.
+//
+// size is max depth of embeddeds
+EXTERN	Dlist	dotlist[10];
 
 EXTERN	Io	curio;
 EXTERN	Io	pushedio;
@@ -974,47 +1034,83 @@ EXTERN	char	namebuf[NSYMB];
 EXTERN	char	lexbuf[NSYMB];
 EXTERN	char	litbuf[NSYMB];
 EXTERN	int	debug[256];
+// 全局变量, 6g 命令中, 通过 -d 选项指定的参数, 见 src/cmd/gc/lex.c -> main()
 EXTERN	char*	debugstr;
 EXTERN	int	debug_checknil;
 EXTERN	Sym*	hash[NHASH];
 EXTERN	Sym*	importmyname;	// my name for package
-EXTERN	Pkg*	localpkg;	// package being compiled
-EXTERN	Pkg*	importpkg;	// package being imported
-EXTERN	Pkg*	structpkg;	// package that declared struct, during import
+
+////////////////////////////////////////////////////////////////////////////////
+// 全局变量, 表示 go run/build, 或是 6g 编译的目标 package, 一般为 main 包.
+// package being compiled
+EXTERN	Pkg*	localpkg;
 EXTERN	Pkg*	builtinpkg;	// fake package for builtins
 EXTERN	Pkg*	gostringpkg;	// fake pkg for Go strings
 EXTERN	Pkg*	itabpkg;	// fake pkg for itab cache
 EXTERN	Pkg*	runtimepkg;	// package runtime
-EXTERN	Pkg*	racepkg;	// package runtime/race
 EXTERN	Pkg*	stringpkg;	// fake package for C strings
 EXTERN	Pkg*	typepkg;	// fake package for runtime type info (headers)
 EXTERN	Pkg*	typelinkpkg;	// fake package for runtime type info (data)
 EXTERN	Pkg*	weaktypepkg;	// weak references to runtime type info
 EXTERN	Pkg*	unsafepkg;	// package unsafe
 EXTERN	Pkg*	trackpkg;	// fake package for field tracking
+
+EXTERN	Pkg*	racepkg;	// package runtime/race
+// 在 src/cmd/gc/subr.c -> mkpkg() 中初始化,
+// 不过主调函数还是在 src/cmd/gc/lex.c -> main() 开头, 加载了多个 golang package.
+// 包含上面提到的所有 xxxpkg 
 EXTERN	Pkg*	phash[128];
-EXTERN	int	tptr;		// either TPTR32 or TPTR64
+
+// 全局变量, 表示当前编译过程中, 直接引入的 package
+// package being imported
+EXTERN	Pkg*	importpkg;
+
+EXTERN	Pkg*	structpkg;	// package that declared struct, during import
+////////////////////////////////////////////////////////////////////////////////
+
+// 全局变量, 当前编译过程中遇到的对象的地址(可视为指向自己的指针)
+// either TPTR32 or TPTR64
+EXTERN	int	tptr;
 extern	char*	runtimeimport;
 extern	char*	unsafeimport;
 EXTERN	char*	myimportpath;
+// 这是一个链表, 其中每个成员应该都是类似于 gopath 的目录, 可以在这些目录中搜索 import 的包.
+// 通过 6g -I 参数传入
 EXTERN	Idir*	idirs;
 EXTERN	char*	localimport;
 
-// 与 simtype 类型, 不过这里直接是 Type 数组, 每个成员都是一种类型的 Type 表示.
-EXTERN	Type*	types[NTYPE];
 EXTERN	Type*	idealstring;
 EXTERN	Type*	idealbool;
 EXTERN	Type*	bytetype;
 EXTERN	Type*	runetype;
 EXTERN	Type*	errortype;
+
+////////////////////////////////////////////////////////////////////////////////
+// 以下所有 NTYPE 的数组的初始化, 都可以见 src/cmd/gc/align.c -> typeinit()
+
+// 与 simtype 类型, 不过这里直接是 Type 数组, 每个成员都是一种类型的 Type 表示.
+EXTERN	Type*	types[NTYPE];
 // simtype 数组中的成员都是 NTYPE 所在的枚举列表的成员类型
 EXTERN	uchar	simtype[NTYPE];
+// isptr 中保存着各类型是否为"指针类型"的信息, 貌似只有 TPTR64 TPTR32 两种类型.
+// 需要注意的是, TPTR64 和 TPTR32 也是"复合"类型, Type(TPTR64)->type 成员表示
+// 该指针指向的变量所属的真正类型.
 EXTERN	uchar	isptr[NTYPE];
 EXTERN	uchar	isforw[NTYPE];
 EXTERN	uchar	isint[NTYPE];
 EXTERN	uchar	isfloat[NTYPE];
 EXTERN	uchar	iscomplex[NTYPE];
 EXTERN	uchar	issigned[NTYPE];
+// issimple 存放着各类型是否为"复合类型"的信息.
+// int, float, bool 等为 simple 简单类型(貌似只有这3个), 
+// 而 String, Array, Map, Channel 等, 可以称为"复合类型".
+// 
+// 作用在于, 简单类型的 Type 对象, 只表示自身,
+// 而复合类型的 Type 对象, 还有一个 type 成员属性, 可以表示ta的成员类型.
+// 如 []int 的 Type 对象, etype 成员为 Type(Array/Slice), 而 type 成员则为 Type(int).
+//
+// 需要注意的是, TPTR64 和 TPTR32 也是"复合"类型, Type(TPTR64)->type 成员表示
+// 该指针指向的变量所属的真正类型.
 EXTERN	uchar	issimple[NTYPE];
 
 EXTERN	uchar	okforeq[NTYPE];
@@ -1034,12 +1130,17 @@ EXTERN	Mpint*	minintval[NTYPE];
 EXTERN	Mpint*	maxintval[NTYPE];
 EXTERN	Mpflt*	minfltval[NTYPE];
 EXTERN	Mpflt*	maxfltval[NTYPE];
+//
+////////////////////////////////////////////////////////////////////////////////
 
+// 貌似是所有 Node 的父节点, 类似于 gc 中的根节点.
 // 由 src/cmd/gc/y.tab.c -> yyparse() 完成初始化.
 EXTERN	NodeList*	xtop;
 // 由 src/cmd/gc/dcl.c -> declare() 完成初始化.
 EXTERN	NodeList*	externdcl;
 EXTERN	NodeList*	closures;
+// 全局变量, 表示当前正在编译的 package 中, 可以暴露出来的对象链表.
+// 可以是大写字母开头的变量, 函数, 或是 package 级别的 init() 方法.
 EXTERN	NodeList*	exportlist;
 EXTERN	NodeList*	importlist;	// imported functions and methods with inlinable bodies
 EXTERN	NodeList*	funcsyms;

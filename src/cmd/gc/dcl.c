@@ -7,6 +7,8 @@
 #include	"go.h"
 #include	"y.tab.h"
 
+// dcl -> declare 声明
+
 static	void	funcargs(Node*);
 static	void	funcargs2(Type*);
 
@@ -366,8 +368,7 @@ constiter(NodeList *vl, Node *t, NodeList *cl)
  * this generates a new name node,
  * typically for labels or other one-off names.
  */
-Node*
-newname(Sym *s)
+Node* newname(Sym *s)
 {
 	Node *n;
 
@@ -387,8 +388,7 @@ newname(Sym *s)
  * this generates a new name node for a name
  * being declared.
  */
-Node*
-dclname(Sym *s)
+Node* dclname(Sym *s)
 {
 	Node *n;
 
@@ -978,8 +978,7 @@ interfacefield(Node *n)
 	return f;
 }
 
-Type*
-tointerface(NodeList *l)
+Type* tointerface(NodeList *l)
 {
 	Type *t, *f, **tp, *t1;
 
@@ -1151,14 +1150,18 @@ fakethis(void)
 	return n;
 }
 
-/*
- * Is this field a method on an interface?
- * Those methods have an anonymous
- * *struct{} as the receiver.
- * (See fakethis above.)
- */
-int
-isifacemethod(Type *f)
+// isifacemethod 判断目标 f 方法是否为某个 interface 的成员方法.
+//
+// 判断依据是: 普通对象的方法的 receiver 是其所属对象, 而 interface 方法的 receiver,
+// 则为匿名的 *struct{}
+//
+// 	@param f: 一个**方法类型**的 Type(不是单纯的函数, f 包含 receiver)
+//
+// Is this field a method on an interface?
+// Those methods have an anonymous *struct{} as the receiver.
+// (See fakethis above.)
+// 
+int isifacemethod(Type *f)
 {
 	Type *rcvr;
 	Type *t;
@@ -1175,12 +1178,8 @@ isifacemethod(Type *f)
 	return 1;
 }
 
-/*
- * turn a parsed function declaration
- * into a type
- */
-Type*
-functype(Node *this, NodeList *in, NodeList *out)
+// turn a parsed function declaration into a type
+Type* functype(Node *this, NodeList *in, NodeList *out)
 {
 	Type *t;
 	NodeList *rcvr;
@@ -1217,8 +1216,7 @@ functype(Node *this, NodeList *in, NodeList *out)
 	return t;
 }
 
-Sym*
-methodsym(Sym *nsym, Type *t0, int iface)
+Sym* methodsym(Sym *nsym, Type *t0, int iface)
 {
 	Sym *s;
 	char *p;
@@ -1416,21 +1414,26 @@ addmethod(Sym *sf, Type *t, int local, int nointerface)
 	return;
 }
 
-void
-funccompile(Node *n, int isclosure)
+// 	@param isclosure: 从目前来看, 好像所有主调函数传入的都是 0 啊...
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main()
+// 	2. src/cmd/gc/init.c -> fninit()
+void funccompile(Node *n, int isclosure)
 {
 	stksize = BADWIDTH;
 	maxarg = 0;
 
 	if(n->type == T) {
-		if(nerrors == 0)
+		if(nerrors == 0) {
 			fatal("funccompile missing type");
+		}
 		return;
 	}
 
 	// assign parameter offsets
 	checkwidth(n->type);
-	
+
 	// record offset to actual frame pointer.
 	// for closure, have to skip over leading pointers and PC slot.
 	nodfp->xoffset = 0;
@@ -1443,8 +1446,9 @@ funccompile(Node *n, int isclosure)
 		}
 	}
 
-	if(curfn)
+	if(curfn) {
 		fatal("funccompile %S inside %S", n->nname->sym, curfn->nname->sym);
+	}
 
 	stksize = 0;
 	dclcontext = PAUTO;
@@ -1455,8 +1459,7 @@ funccompile(Node *n, int isclosure)
 	dclcontext = PEXTERN;
 }
 
-Sym*
-funcsym(Sym *s)
+Sym* funcsym(Sym *s)
 {
 	char *p;
 	Sym *s1;

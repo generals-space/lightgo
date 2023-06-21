@@ -433,8 +433,12 @@ resumecheckwidth(void)
 	defercalc = 0;
 }
 
-void
-typeinit(void)
+// typeinit 初始化所有已知 type 类型的相关信息, 如哪些为指针类型, 复合类型等.
+//
+// caller:
+// 	1. src/cmd/gc/lex.c -> main() 只有这一处
+// 	6g 命令执行初期被调用.
+void typeinit(void)
 {
 	int i, etype, sameas;
 	Type *t;
@@ -676,8 +680,7 @@ typeinit(void)
 /*
  * compute total size of f's in/out arguments.
  */
-int
-argsize(Type *t)
+int argsize(Type *t)
 {
 	Iter save;
 	Type *fp;

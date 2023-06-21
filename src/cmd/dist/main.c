@@ -4,6 +4,9 @@
 
 #include "a.h"
 
+// vflag 是一个数值, 每出现一次 -v 参数, 就会加1, 如 -vvv 时, 该值为 3.
+// 在 src/cmd/dist/build.c -> cmdbootstrap() 中进行赋值.
+//
 int vflag;
 int sflag;
 char *argv0;
@@ -21,14 +24,17 @@ static struct {
 	{"version", cmdversion},
 };
 
+// caller:
+// 	1. src/cmd/dist/unix.c -> main()
+//
 // The OS-specific main calls into the portable code here.
-void
-xmain(int argc, char **argv)
+void xmain(int argc, char **argv)
 {
 	int i;
 
-	if(argc <= 1)
+	if(argc <= 1) {
 		usage();
+	}
 	
 	for(i=0; i<nelem(cmdtab); i++) {
 		if(streq(cmdtab[i].name, argv[1])) {

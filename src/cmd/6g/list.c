@@ -33,10 +33,10 @@
 #include "gg.h"
 
 static	int	sconsize;
-void
-listinit(void)
+// caller:
+// 	1. src/cmd/6g/galign.c -> betypeinit()
+void listinit(void)
 {
-
 	fmtinstall('A', Aconv);		// as
 	fmtinstall('P', Pconv);		// Prog*
 	fmtinstall('D', Dconv);		// Addr*
@@ -44,8 +44,7 @@ listinit(void)
 	fmtinstall('Y', Yconv);		// sconst
 }
 
-int
-Pconv(Fmt *fp)
+int Pconv(Fmt *fp)
 {
 	char str[STRINGSZ];
 	Prog *p;
@@ -54,30 +53,37 @@ Pconv(Fmt *fp)
 	p = va_arg(fp->args, Prog*);
 	sconsize = 8;
 	scale[0] = '\0';
-	if(p->from.scale != 0 && (p->as == AGLOBL || p->as == ATEXT))
+	if(p->from.scale != 0 && (p->as == AGLOBL || p->as == ATEXT)) {
 		snprint(scale, sizeof scale, "%d,", p->from.scale);
+	}
+
 	switch(p->as) {
 	default:
-		snprint(str, sizeof(str), "%.4d (%L) %-7A %D,%s%D",
-			p->loc, p->lineno, p->as, &p->from, scale, &p->to);
+		snprint(
+			str, sizeof(str), "%.4d (%L) %-7A %D,%s%D",
+			p->loc, p->lineno, p->as, &p->from, scale, &p->to
+		);
 		break;
 
 	case ADATA:
 		sconsize = p->from.scale;
-		snprint(str, sizeof(str), "%.4d (%L) %-7A %D/%d,%D",
-			p->loc, p->lineno, p->as, &p->from, sconsize, &p->to);
+		snprint(
+			str, sizeof(str), "%.4d (%L) %-7A %D/%d,%D",
+			p->loc, p->lineno, p->as, &p->from, sconsize, &p->to
+		);
 		break;
 
 	case ATEXT:
-		snprint(str, sizeof(str), "%.4d (%L) %-7A %D,%s%lD",
-			p->loc, p->lineno, p->as, &p->from, scale, &p->to);
+		snprint(
+			str, sizeof(str), "%.4d (%L) %-7A %D,%s%lD",
+			p->loc, p->lineno, p->as, &p->from, scale, &p->to
+		);
 		break;
 	}
 	return fmtstrcpy(fp, str);
 }
 
-int
-Dconv(Fmt *fp)
+int Dconv(Fmt *fp)
 {
 	char str[STRINGSZ], s[STRINGSZ];
 	Addr *a;
@@ -294,8 +300,7 @@ static	char*	regstr[] =
 	"NONE",		/* [D_NONE] */
 };
 
-int
-Rconv(Fmt *fp)
+int Rconv(Fmt *fp)
 {
 	char str[STRINGSZ];
 	int r;
@@ -308,8 +313,7 @@ Rconv(Fmt *fp)
 	return fmtstrcpy(fp, regstr[r]);
 }
 
-int
-Aconv(Fmt *fp)
+int Aconv(Fmt *fp)
 {
 	int i;
 
@@ -317,9 +321,7 @@ Aconv(Fmt *fp)
 	return fmtstrcpy(fp, anames[i]);
 }
 
-
-int
-Yconv(Fmt *fp)
+int Yconv(Fmt *fp)
 {
 	int i, c;
 	char str[STRINGSZ], *p, *a;

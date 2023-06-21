@@ -134,11 +134,18 @@ func main() {
 			// in the middle of directory elements, such as /tmp/git-1.8.2~rc3
 			// or C:\PROGRA~1. Only ~ as a path prefix has meaning to the shell.
 			if strings.HasPrefix(p, "~") {
-				fmt.Fprintf(os.Stderr, "go: GOPATH entry cannot start with shell metacharacter '~': %q\n", p)
+				fmt.Fprintf(os.Stderr, 
+					"go: GOPATH entry cannot start with shell metacharacter '~': %q\n",
+					p,
+				)
 				os.Exit(2)
 			}
 			if build.IsLocalImport(p) {
-				fmt.Fprintf(os.Stderr, "go: GOPATH entry is relative; must be absolute path: %q.\nRun 'go help gopath' for usage.\n", p)
+				fmt.Fprintf(os.Stderr, 
+					"go: GOPATH entry is relative; must be absolute path: %q.\n"+
+					"Run 'go help gopath' for usage.\n", 
+					p,
+				)
 				os.Exit(2)
 			}
 		}

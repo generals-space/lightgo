@@ -7,8 +7,7 @@
 #include "a.h"
 
 // binit prepares an uninitialized buffer for use.
-void
-binit(Buf *b)
+void binit(Buf *b)
 {
 	b->p = nil;
 	b->len = 0;
@@ -16,15 +15,13 @@ binit(Buf *b)
 }
 
 // breset truncates the buffer back to zero length.
-void
-breset(Buf *b)
+void breset(Buf *b)
 {
 	b->len = 0;
 }
 
 // bfree frees the storage associated with a buffer.
-void
-bfree(Buf *b)
+void bfree(Buf *b)
 {
 	xfree(b->p);
 	binit(b);
@@ -32,8 +29,7 @@ bfree(Buf *b)
 
 // bgrow ensures that the buffer has at least n more bytes
 // between its len and cap.
-void
-bgrow(Buf *b, int n)
+void bgrow(Buf *b, int n)
 {
 	int want;
 	
@@ -47,8 +43,7 @@ bgrow(Buf *b, int n)
 }
 
 // bwrite appends the n bytes at v to the buffer.
-void
-bwrite(Buf *b, void *v, int n)
+void bwrite(Buf *b, void *v, int n)
 {
 	bgrow(b, n);
 	xmemmove(b->p+b->len, v, n);
@@ -56,16 +51,14 @@ bwrite(Buf *b, void *v, int n)
 }
 
 // bwritestr appends the string p to the buffer.
-void
-bwritestr(Buf *b, char *p)
+void bwritestr(Buf *b, char *p)
 {
 	bwrite(b, p, xstrlen(p));
 }
 
 // bstr returns a pointer to a NUL-terminated string of the
 // buffer contents.  The pointer points into the buffer.
-char*
-bstr(Buf *b)
+char* bstr(Buf *b)
 {
 	bgrow(b, 1);
 	b->p[b->len] = '\0';
@@ -75,33 +68,29 @@ bstr(Buf *b)
 // btake takes ownership of the string form of the buffer.
 // After this call, the buffer has zero length and does not
 // refer to the memory that btake returned.
-char*
-btake(Buf *b)
+char* btake(Buf *b)
 {
 	char *p;
-	
+
 	p = bstr(b);
 	binit(b);
 	return p;
 }
 
 // bwriteb appends the src buffer to the dst buffer.
-void
-bwriteb(Buf *dst, Buf *src)
+void bwriteb(Buf *dst, Buf *src)
 {
 	bwrite(dst, src->p, src->len);
 }
 
 // bequal reports whether the buffers have the same content.
-bool
-bequal(Buf *s, Buf *t)
+bool bequal(Buf *s, Buf *t)
 {
 	return s->len == t->len && xmemcmp(s->p, t->p, s->len) == 0;
 }
 
 // bsubst rewites b to replace all occurrences of x with y.
-void
-bsubst(Buf *b, char *x, char *y)
+void bsubst(Buf *b, char *x, char *y)
 {
 	char *p;
 	int nx, ny, pos;
@@ -133,8 +122,7 @@ bsubst(Buf *b, char *x, char *y)
 // be garbage.
 
 // vinit prepares an uninitialized vector for use.
-void
-vinit(Vec *v)
+void vinit(Vec *v)
 {
 	v->p = nil;
 	v->len = 0;
@@ -142,8 +130,7 @@ vinit(Vec *v)
 }
 
 // vreset truncates the vector back to zero length.
-void
-vreset(Vec *v)
+void vreset(Vec *v)
 {
 	int i;
 	
@@ -155,19 +142,16 @@ vreset(Vec *v)
 }
 
 // vfree frees the storage associated with the vector.
-void
-vfree(Vec *v)
+void vfree(Vec *v)
 {
 	vreset(v);
 	xfree(v->p);
 	vinit(v);
 }
 
-
 // vgrow ensures that the vector has room for at least 
 // n more entries between len and cap.
-void
-vgrow(Vec *v, int n)
+void vgrow(Vec *v, int n)
 {
 	int want;
 	
@@ -181,8 +165,7 @@ vgrow(Vec *v, int n)
 }
 
 // vcopy copies the srclen strings at src into the vector.
-void
-vcopy(Vec *dst, char **src, int srclen)
+void vcopy(Vec *dst, char **src, int srclen)
 {
 	int i;
 	
@@ -192,18 +175,17 @@ vcopy(Vec *dst, char **src, int srclen)
 }
 
 // vadd adds a copy of the string p to the vector.
-void
-vadd(Vec *v, char *p)
+void vadd(Vec *v, char *p)
 {
 	vgrow(v, 1);
-	if(p != nil)
+	if(p != nil) {
 		p = xstrdup(p);
+	}
 	v->p[v->len++] = p;
 }
 
 // vaddn adds a string consisting of the n bytes at p to the vector.
-void
-vaddn(Vec *v, char *p, int n)
+void vaddn(Vec *v, char *p, int n)
 {
 	char *q;
 
@@ -214,16 +196,14 @@ vaddn(Vec *v, char *p, int n)
 	v->p[v->len++] = q;
 }
 
-static int
-strpcmp(const void *a, const void *b)
+static int strpcmp(const void *a, const void *b)
 {
 	return xstrcmp(*(char**)a, *(char**)b);
 }
 
 // vuniq sorts the vector and then discards duplicates,
 // in the manner of sort | uniq.
-void
-vuniq(Vec *v)
+void vuniq(Vec *v)
 {
 	int i, n;
 
@@ -240,8 +220,7 @@ vuniq(Vec *v)
 
 // splitlines replaces the vector v with the result of splitting
 // the input p after each \n.
-void
-splitlines(Vec *v, char *p)
+void splitlines(Vec *v, char *p)
 {
 	int i;
 	char *start;
@@ -260,8 +239,7 @@ splitlines(Vec *v, char *p)
 
 // splitfields replaces the vector v with the result of splitting
 // the input p into non-empty fields containing no spaces.
-void
-splitfields(Vec *v, char *p)
+void splitfields(Vec *v, char *p)
 {
 	char *start;
 

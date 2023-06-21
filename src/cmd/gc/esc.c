@@ -4,6 +4,8 @@
 
 // Escape analysis.
 
+// esc -> escape 逃逸分析
+
 #include <u.h>
 #include <libc.h>
 #include "go.h"

@@ -223,7 +223,8 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 	return
 }
 
-// testFlag sees if argument i is a known flag and returns its definition, value, and whether it consumed an extra word.
+// testFlag sees if argument i is a known flag and returns its definition, value,
+// and whether it consumed an extra word.
 func testFlag(args []string, i int) (f *testFlagSpec, value string, extra bool) {
 	arg := args[i]
 	if strings.HasPrefix(arg, "--") { // reduce two minuses to one

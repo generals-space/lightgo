@@ -1614,23 +1614,6 @@ int (*reader[256])(Biobuf*, Prog*) = {
 #define isdelim(c) ((c) == '/' || (c) == '\\')
 
 /*
- *	check if p is start of windows full path, like C:\ or c:/.
- *	return 1 if so. also set drive parameter to its
- *	upper-case drive letter.
- */
-int
-iswinpathstart(char *p, char *drive)
-{
-	if('A' <= p[0] || p[0] <= 'Z')
-		*drive = p[0];
-	else if('a' <= p[0] || p[0] <= 'z')
-		*drive = p[0] - ('a' - 'A');
-	else
-		return 0;
-	return p[1] == ':' && isdelim(p[2]);
-}
-
-/*
  *	copy b into bp->member but rewrite object
  *	during copy to drop prefix from all file names.
  *	return 1 if b was recognized as an object file
@@ -1642,7 +1625,7 @@ arread_cutprefix(Biobuf *b, Armember *bp)
 	vlong offset, o, end;
 	int n, t;
 	int (*rd)(Biobuf*, Prog*);
-	char *w, *inprefix, d1, d2;
+	char *w, *inprefix;
 	Prog p;
 	
 	offset = Boffset(b);
@@ -1678,9 +1661,6 @@ arread_cutprefix(Biobuf *b, Armember *bp)
 			if(inprefix == nil && prefix[0] == '/' && p.id[1] == '/' && p.id[2] == '\0') {
 				// leading /
 				inprefix = prefix+1;
-			} else if(inprefix == nil && iswinpathstart(prefix, &d1) && iswinpathstart(p.id + 1, &d2) && d1 == d2 && p.id[4] == '\0') {
-				// leading c:\ ...
-				inprefix = prefix+3;
 			} else if(inprefix != nil) {
 				// handle subsequent elements
 				n = strlen(p.id+1);

@@ -7,8 +7,8 @@
 /*
 
 Gc is the generic label for the family of Go compilers
-that function as part of the (modified) Plan 9 tool chain.  The C compiler
-documentation at
+that function as part of the (modified) Plan 9 tool chain. 
+The C compiler documentation at
 
 	http://plan9.bell-labs.com/sys/doc/comp.pdf     (Tools overview)
 	http://plan9.bell-labs.com/sys/doc/compiler.pdf (C compiler architecture)

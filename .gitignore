@@ -1,8 +1,11 @@
 /bin/
-/pkg/
+/pkg/linux_amd64
+/pkg/obj
+/pkg/tool
 src/cmd/dist/dist
 *.gobin
 6.out
 main.6
 *.test
 *.a
+core.*

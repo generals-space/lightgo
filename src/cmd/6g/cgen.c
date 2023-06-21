@@ -1469,13 +1469,11 @@ cadable(Node *n)
 /*
  * copy a composite value by moving its individual components.
  * Slices, strings and interfaces are supported.
- * Small structs or arrays with elements of basic type are
- * also supported.
+ * Small structs or arrays with elements of basic type are also supported.
  * nr is N when assigning a zero value.
  * return 1 if can do, 0 if can't.
  */
-int
-componentgen(Node *nr, Node *nl)
+int componentgen(Node *nr, Node *nl)
 {
 	Node nodl, nodr;
 	Type *t;

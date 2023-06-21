@@ -70,6 +70,8 @@ typedef	struct	FixAlloc	FixAlloc;
 // Iface 与 Eface 有所不同, 前者表示包含方法的接口类型, 后者表示不包含方法的变量类型.
 typedef	struct	Iface		Iface;
 typedef	struct	Itab		Itab;
+// InterfaceType 一般只属于"接口(interface)"类型,
+// 这里存储着当前接口需要实现的方法, 是一个列表, 且是有序的.
 typedef	struct	InterfaceType	InterfaceType;
 // Eface 与 Iface 有所不同, 后者表示包含方法的接口类型, 前者表示不包含方法的变量类型.
 typedef	struct	Eface		Eface;
@@ -1269,8 +1271,7 @@ void	runtime·parfordo(ParFor *desc);
 
 /*
  * This is consistent across Linux and BSD.
- * If a new OS is added that is different, move this to
- * $GOOS/$GOARCH/defs.h.
+ * If a new OS is added that is different, move this to $GOOS/$GOARCH/defs.h.
  */
 #define EACCES		13
 
