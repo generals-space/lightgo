@@ -171,6 +171,7 @@ func TestBuilderWriteByte(t *testing.T) {
 	check(t, &b, "a\x00")
 }
 
+// 	@todo: 测试未通过
 func TestBuilderAllocs(t *testing.T) {
 	var b Builder
 	b.Grow(5)
