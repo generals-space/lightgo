@@ -28,13 +28,9 @@ func Is(err, target error) bool {
 	if target == nil {
 		return err == target
 	}
-	// 	@compatible: 由于 errors 作为核心标准库, 优先级排第2位(仅在 runtime 之后),
-	//  是不能直接引用 reflect 库的(会出现循环引用), 这里暂时把 reflect 相关代码注释掉.
-	//
-	// isComparable := reflect.TypeOf(target).Comparable()
+	isComparable := reflect.TypeOf(target).Comparable()
 	for {
-		// if isComparable && err == target {
-		if err == target {
+		if isComparable && err == target {
 			return true
 		}
 		if x, ok := err.(interface {
