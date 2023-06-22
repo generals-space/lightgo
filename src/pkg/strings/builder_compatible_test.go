@@ -101,7 +101,6 @@ func TestBuilderGrow(t *testing.T) {
 	}
 }
 
-// 	@todo: testing 包中缺少 Run() 方法, 后续补充
 func TestBuilderWrite2(t *testing.T) {
 	const s0 = "hello 世界"
 	for _, tt := range []struct {
