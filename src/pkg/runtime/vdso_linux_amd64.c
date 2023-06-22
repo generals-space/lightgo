@@ -171,8 +171,7 @@ static symbol_key sym_keys[] = {
 	{ (byte*)"__vdso_clock_gettime", &runtime·__vdso_clock_gettime_sym },
 };
 
-static void
-vdso_init_from_sysinfo_ehdr(struct vdso_info *vdso_info, Elf64_Ehdr* hdr)
+static void vdso_init_from_sysinfo_ehdr(struct vdso_info *vdso_info, Elf64_Ehdr* hdr)
 {
 	uint64 i;
 	bool found_vaddr = false;
@@ -202,46 +201,44 @@ vdso_init_from_sysinfo_ehdr(struct vdso_info *vdso_info, Elf64_Ehdr* hdr)
 		}
 	}
 
-	if(found_vaddr == false || dyn == nil)
+	if(found_vaddr == false || dyn == nil) {
 		return;  // Failed
+	}
 
 	// Fish out the useful bits of the dynamic table.
 	for(i=0; dyn[i].d_tag!=DT_NULL; i++) {
 		switch(dyn[i].d_tag) {
 		case DT_STRTAB:
 			vdso_info->symstrings = (const byte *)
-				((uintptr)dyn[i].d_un.d_ptr
-				 + vdso_info->load_offset);
+				((uintptr)dyn[i].d_un.d_ptr + vdso_info->load_offset);
 			break;
 		case DT_SYMTAB:
 			vdso_info->symtab = (Elf64_Sym *)
-				((uintptr)dyn[i].d_un.d_ptr
-				 + vdso_info->load_offset);
+				((uintptr)dyn[i].d_un.d_ptr + vdso_info->load_offset);
 			break;
 		case DT_VERSYM:
 			vdso_info->versym = (Elf64_Versym *)
-				((uintptr)dyn[i].d_un.d_ptr
-				 + vdso_info->load_offset);
+				((uintptr)dyn[i].d_un.d_ptr + vdso_info->load_offset);
 			break;
 		case DT_VERDEF:
 			vdso_info->verdef = (Elf64_Verdef *)
-				((uintptr)dyn[i].d_un.d_ptr
-				 + vdso_info->load_offset);
+				((uintptr)dyn[i].d_un.d_ptr + vdso_info->load_offset);
 			break;
 		}
 	}
-	if(vdso_info->symstrings == nil || vdso_info->symtab == nil)
+	if(vdso_info->symstrings == nil || vdso_info->symtab == nil) {
 		return;  // Failed
+	}
 
-	if(vdso_info->verdef == nil)
+	if(vdso_info->verdef == nil) {
 		vdso_info->versym = 0;
+	}
 
 	// That's all we need.
 	vdso_info->valid = true;
 }
 
-static int32
-vdso_find_version(struct vdso_info *vdso_info, version_key* ver)
+static int32 vdso_find_version(struct vdso_info *vdso_info, version_key* ver)
 {
 	if(vdso_info->valid == false) {
 		return 0;
@@ -264,42 +261,56 @@ vdso_find_version(struct vdso_info *vdso_info, version_key* ver)
 	return 0;
 }
 
-static void
-vdso_parse_symbols(struct vdso_info *vdso_info, int32 version)
+static void vdso_parse_symbols(struct vdso_info *vdso_info, int32 version)
 {
 	int32 i, j;
 
-	if(vdso_info->valid == false)
+	if(vdso_info->valid == false) {
 		return;
+	}
 
 	for(i=0; i<vdso_info->num_sym; i++) {
 		Elf64_Sym *sym = &vdso_info->symtab[i];
 
 		// Check for a defined global or weak function w/ right name.
-		if(ELF64_ST_TYPE(sym->st_info) != STT_FUNC)
+		if(ELF64_ST_TYPE(sym->st_info) != STT_FUNC) {
 			continue;
+		}
 		if(ELF64_ST_BIND(sym->st_info) != STB_GLOBAL &&
-			ELF64_ST_BIND(sym->st_info) != STB_WEAK)
+			ELF64_ST_BIND(sym->st_info) != STB_WEAK) {
 			continue;
-		if(sym->st_shndx == SHN_UNDEF)
+		}
+		if(sym->st_shndx == SHN_UNDEF) {
 			continue;
+		}
 
 		for(j=0; j<SYM_KEYS_COUNT; j++) {
-			if(runtime·strcmp(sym_keys[j].name, vdso_info->symstrings + sym->st_name) != 0)
+			if(runtime·strcmp(sym_keys[j].name, vdso_info->symstrings + sym->st_name) != 0) {
 				continue;
+			}
 
 			// Check symbol version.
 			if(vdso_info->versym != nil && version != 0
-				&& vdso_info->versym[i] & 0x7fff != version)
+				&& vdso_info->versym[i] & 0x7fff != version) {
 				continue;
+			}
 
 			*sym_keys[j].var_ptr = (void *)(vdso_info->load_offset + sym->st_value);
 		}
 	}
 }
 
-static void
-runtime·linux_setup_vdso(int32 argc, uint8** argv)
+// runtime·linux_setup_vdso 从 ELK 可执行文件中获取参数列表.
+//
+// 	@todo: 具体实现还需要研究, 毕竟参数是从命令行传入的, 而非写在可执行文件中的.
+//
+// 	@param argc: 参数数量
+// 	@param argv: 参数列表地址
+//
+// caller:
+// 	1. src/pkg/runtime/runtime.c -> runtime·args() 只有这一处
+// 	作为 runtime·sysargs() 函数, 在 hashinit 和 schedinit 之前被调用.
+static void runtime·linux_setup_vdso(int32 argc, uint8** argv)
 {
 	struct vdso_info vdso_info;
 
@@ -327,8 +338,8 @@ runtime·linux_setup_vdso(int32 argc, uint8** argv)
 			continue;
 		}
 		if(elf_auxv[i].a_type == AT_RANDOM) {
-		        runtime·startup_random_data = (byte*)elf_auxv[i].a_un.a_val;
-		        runtime·startup_random_data_len = 16;
+		    runtime·startup_random_data = (byte*)elf_auxv[i].a_un.a_val;
+		    runtime·startup_random_data_len = 16;
 			continue;
 		}
 	}

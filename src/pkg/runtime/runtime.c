@@ -75,6 +75,8 @@ static uint8**	argv;
 Slice os·Args; // 命令行执行时的参数列表
 Slice syscall·envs;
 
+// runtime·sysargs 的函数定义在 
+// src/pkg/runtime/vdso_linux_amd64.c -> runtime·sysargs()
 void (*runtime·sysargs)(int32, uint8**);
 
 // caller: 
@@ -98,13 +100,14 @@ uint32 runtime·cpuid_ecx;
 uint32 runtime·cpuid_edx;
 
 // 将命令行传入的参数列表填充入os·Args列表.
+//
+// caller:
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 只有这一处
 void runtime·goargs(void)
 {
 	String *s; // 参数列表, 按照字符串类型处理
 	int32 i;
 
-	// for windows implementation see "os" package
-	if(Windows) return;
 	// 为s参数列表分配空间
 	s = runtime·malloc(argc*sizeof s[0]);
 	for(i=0; i<argc; i++) {
@@ -424,13 +427,12 @@ static struct {
 	{"scheddetail", &runtime·debug.scheddetail},
 };
 
-// runtime·parsedebugvars ...
+// runtime·parsedebugvars 处理程序启动时传入的 GODEBUG 调试参数.
 //
 // caller: 
 // 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 在初始化调度器时被调用.
 //
-void
-runtime·parsedebugvars(void)
+void runtime·parsedebugvars(void)
 {
 	byte *p;
 	intgo i, n;
@@ -460,8 +462,7 @@ runtime·parsedebugvars(void)
 // 这是一个十分特殊的函数, 谨慎使用.
 // 
 #pragma textflag NOSPLIT
-int32
-runtime·timediv(int64 v, int32 div, int32 *rem)
+int32 runtime·timediv(int64 v, int32 div, int32 *rem)
 {
 	int32 res, bit;
 

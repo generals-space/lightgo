@@ -1083,6 +1083,10 @@ EXTERN	Type*	idealstring;
 EXTERN	Type*	idealbool;
 EXTERN	Type*	bytetype;
 EXTERN	Type*	runetype;
+// errortype 就是 golang 的 error 类型的底层实现
+//
+// 在编译期 src/cmd/gc/lex.c -> lexinit1() 函数中, 被赋值.
+// 其实对应的是 src/pkg/builtin/builtin.go -> error 接口类型
 EXTERN	Type*	errortype;
 
 ////////////////////////////////////////////////////////////////////////////////

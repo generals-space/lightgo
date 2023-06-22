@@ -79,6 +79,8 @@ func efaceeq(i1 any, i2 any) (ret bool)
 func ifacethash(i1 any) (ret uint32)
 func efacethash(i1 any) (ret uint32)
 
+// 函数定义在 src/pkg/runtime/alg.c -> runtime·equal()
+//
 func equal(typ *byte, x1, x2 any) (ret bool)
 
 // *byte is really *runtime.Type
