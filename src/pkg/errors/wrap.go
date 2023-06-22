@@ -2,6 +2,8 @@ package errors
 
 import "reflect"
 
+// 	@compatible: 本文件在 v1.13 版本初始添加, 用于实现错误链能力.
+
 // Unwrap returns the result of calling the Unwrap method on err,
 // if err's type contains an Unwrap method returning error.
 // Otherwise, Unwrap returns nil.
