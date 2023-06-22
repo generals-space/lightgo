@@ -5,7 +5,7 @@
 package os
 
 import (
-	"errors"
+	errors "internal/errors"
 )
 
 // Portable analogs of some common system call errors.

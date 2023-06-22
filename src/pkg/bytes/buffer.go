@@ -7,7 +7,7 @@ package bytes
 // Simple byte buffer for marshaling data.
 
 import (
-	"errors"
+	errors "internal/errors"
 	"io"
 	"unicode/utf8"
 )

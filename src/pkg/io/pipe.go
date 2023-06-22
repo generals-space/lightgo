@@ -8,7 +8,7 @@
 package io
 
 import (
-	"errors"
+	errors "internal/errors"
 	"sync"
 )
 

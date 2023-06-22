@@ -6,7 +6,7 @@ package bufio
 
 import (
 	"bytes"
-	"errors"
+	errors "internal/errors"
 	"io"
 	"unicode/utf8"
 )
