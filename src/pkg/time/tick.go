@@ -4,7 +4,7 @@
 
 package time
 
-import "errors"
+import errors "internal/errors"
 
 // A Ticker holds a channel that delivers `ticks' of a clock
 // at intervals.

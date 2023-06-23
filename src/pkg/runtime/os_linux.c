@@ -198,13 +198,21 @@ void runtime·osinit(void)
 	runtime·ncpu = getproccount();
 }
 
-// Random bytes initialized at startup.  These come
-// from the ELF AT_RANDOM auxiliary vector (vdso_linux_amd64.c).
+// 在如下函数中初始化
+// src/pkg/runtime/vdso_linux_amd64.c -> runtime·linux_setup_vdso()
+//
+// Random bytes initialized at startup. 
+// These come from the ELF AT_RANDOM auxiliary vector (vdso_linux_amd64.c).
 byte*	runtime·startup_random_data;
 uint32	runtime·startup_random_data_len;
 
+// caller:
+// 	1. src/pkg/runtime/alg.c -> runtime·hashinit() 只有这一处
+// 	程序初始启动时被调用(初始化调度器之前)
 void runtime·get_random_data(byte **rnd, int32 *rnd_len)
 {
+	// 一般进入这个 if 块, 因为 runtime·startup_random_data 已经在如下函数中初始化过了.
+	// 
 	if(runtime·startup_random_data != nil) {
 		*rnd = runtime·startup_random_data;
 		*rnd_len = runtime·startup_random_data_len;

@@ -13,7 +13,7 @@
 package io
 
 import (
-	"errors"
+	errors "internal/errors"
 )
 
 // ErrShortWrite means that a write accepted fewer bytes than requested

@@ -7,7 +7,7 @@
 package big
 
 import (
-	"errors"
+	errors "internal/errors"
 	"fmt"
 	"io"
 	"math/rand"

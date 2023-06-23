@@ -353,7 +353,7 @@ static char *buildorder[] = {
 	// back when there were build scripts. 
 	// Will have to be maintained by hand, but shouldn't change very often.
 	"pkg/runtime",
-	"pkg/errors",
+	"pkg/internal/errors",
 	"pkg/sync/atomic",
 	"pkg/sync",
 	"pkg/io",
@@ -372,6 +372,7 @@ static char *buildorder[] = {
 	"pkg/time",
 	"pkg/os",
 	"pkg/reflect",
+	"pkg/errors",
 	"pkg/fmt",
 	"pkg/encoding",
 	"pkg/encoding/json",

@@ -7,7 +7,7 @@
 package os
 
 import (
-	"errors"
+	errors "internal/errors"
 	"runtime"
 	"syscall"
 	"time"

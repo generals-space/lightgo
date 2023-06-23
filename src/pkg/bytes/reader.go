@@ -5,7 +5,7 @@
 package bytes
 
 import (
-	"errors"
+	errors "internal/errors"
 	"io"
 	"unicode/utf8"
 )

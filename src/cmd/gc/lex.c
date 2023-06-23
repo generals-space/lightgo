@@ -2011,16 +2011,18 @@ static void lexinit(void)
 
 		etype = syms[i].etype;
 		if(etype != Txxx) {
-			if(etype < 0 || etype >= nelem(types))
+			if(etype < 0 || etype >= nelem(types)) {
 				fatal("lexinit: %s bad etype", s->name);
+			}
 			s1 = pkglookup(syms[i].name, builtinpkg);
 			t = types[etype];
 			if(t == T) {
 				t = typ(etype);
 				t->sym = s1;
 
-				if(etype != TANY && etype != TSTRING)
+				if(etype != TANY && etype != TSTRING) {
 					dowidth(t);
+				}
 				types[etype] = t;
 			}
 			s1->lexical = LNAME;

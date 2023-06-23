@@ -274,16 +274,11 @@ func callMethod(ctxt *methodValue, frame unsafe.Pointer) {
 	memmove(unsafe.Pointer(uintptr(frame)+outOffset-ptrSize), unsafe.Pointer(uintptr(base)+outOffset), out)
 }
 
-func (t *rtype) AssignableTo(u Type) bool {
-	if u == nil {
-		panic("reflect: nil type passed to Type.AssignableTo")
-	}
-	uu := u.(*rtype)
-	return directlyAssignable(uu, t) || implements(uu, t)
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
+// caller:
+// 	1. callReflect() 只有这一处
+//
 // funcName returns the name of f, for use in error messages.
 func funcName(f func([]Value) []Value) string {
 	pc := *(*uintptr)(unsafe.Pointer(&f))

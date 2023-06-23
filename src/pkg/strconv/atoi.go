@@ -4,7 +4,7 @@
 
 package strconv
 
-import "errors"
+import errors "internal/errors"
 
 // ErrRange indicates that a value is out of range for the target type.
 var ErrRange = errors.New("value out of range")

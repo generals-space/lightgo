@@ -349,6 +349,12 @@ func (v Value) Pointer() uintptr {
 	panic(&ValueError{"reflect.Value.Pointer", k})
 }
 
+// Type 貌似与直接用 TypeOf() 得到的 Type 是同一个类型.
+//
+// var err *error
+// fmt.Printf("%s\n", reflect.TypeOf(err))          // *error
+// fmt.Printf("%s\n", reflect.ValueOf(err).Type())  // *error
+//
 // Type returns v's type.
 func (v Value) Type() Type {
 	f := v.flag

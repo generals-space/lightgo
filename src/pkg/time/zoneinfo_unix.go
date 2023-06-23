@@ -12,7 +12,7 @@
 package time
 
 import (
-	"errors"
+	errors "internal/errors"
 	"runtime"
 	"syscall"
 )

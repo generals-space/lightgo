@@ -29,10 +29,12 @@ int dextratype(Sym *sym, int off, Type *t, int ptroff)
 	s = sym;
 	if(t->sym) {
 		ot = dgostringptr(s, ot, t->sym->name);
-		if(t != types[t->etype] && t != errortype)
+		if(t != types[t->etype] && t != errortype) {
 			ot = dgopkgpath(s, ot, t->sym->pkg);
-		else
+		}
+		else {
 			ot = dgostringptr(s, ot, nil);
+		}
 	} else {
 		ot = dgostringptr(s, ot, nil);
 		ot = dgostringptr(s, ot, nil);
@@ -51,14 +53,18 @@ int dextratype(Sym *sym, int off, Type *t, int ptroff)
 		ot = dgopkgpath(s, ot, a->pkg);
 		ot = dsymptr(s, ot, dtypesym(a->mtype), 0);
 		ot = dsymptr(s, ot, dtypesym(a->type), 0);
-		if(a->isym)
+		if(a->isym) {
 			ot = dsymptr(s, ot, a->isym, 0);
-		else
+		}
+		else {
 			ot = duintptr(s, ot, 0);
-		if(a->tsym)
+		}
+		if(a->tsym) {
 			ot = dsymptr(s, ot, a->tsym, 0);
-		else
+		}
+		else {
 			ot = duintptr(s, ot, 0);
+		}
 	}
 
 	return ot;
@@ -68,8 +74,9 @@ static Sig* lsort(Sig *l, int(*f)(Sig*, Sig*))
 {
 	Sig *l1, *l2, *le;
 
-	if(l == 0 || l->link == 0)
+	if(l == 0 || l->link == 0) {
 		return l;
+	}
 
 	l1 = l;
 	l2 = l;

@@ -25,7 +25,7 @@ package big
 // and rationals.
 
 import (
-	"errors"
+	errors "internal/errors"
 	"io"
 	"math"
 	"math/rand"

@@ -6,6 +6,8 @@ import (
 
 // Method represents a single method.
 type Method struct {
+	// Name 方法名, 即常规的函数名, 但是只有名称, 并不是函数声明.
+	//
 	// Name is the method name.
 	// PkgPath is the package path that qualifies a lower case (unexported)
 	// method name.  It is empty for upper case (exported) method names.
@@ -15,9 +17,16 @@ type Method struct {
 	Name    string
 	PkgPath string
 
-	Type  Type  // method type
-	Func  Value // func with receiver as first argument
-	Index int   // index for Type.Method
+	// Type 表示实际的函数声明, 如: func(string) string
+	//
+	// method type
+	Type  Type
+	// func with receiver as first argument
+	Func  Value
+	// 当前 Method 方法在其所属的 接口/对象 中的索引值.
+	//
+	// index for Type.Method
+	Index int
 }
 
 // TODO(rsc): 6g supplies these, but they are not as efficient as they could be:
@@ -66,9 +75,12 @@ func (t *rtype) Implements(u Type) bool {
 }
 
 // Implements 判断普通变量/对象的类型 V 是否实现了目标接口类型 T.
-//
+
 // 不管是接口类型还是普通实例类型, ta们拥有的方法(rtype.methods)都是经过字母排序的,
 // 只要按顺序比较即可.
+//
+// 	@param T: 必须是接口类型
+// 	@param V: 一个对象类型, 也可以是父接口
 //
 // caller:
 // 	1. rtype.Implements()
@@ -155,6 +167,9 @@ type interfaceType struct {
 	methods []imethod // sorted by hash
 }
 
+// caller:
+// 	1. rtype.Method()
+//
 // Method returns the i'th method in the type's method set.
 func (t *interfaceType) Method(i int) (m Method) {
 	if i < 0 || i >= len(t.methods) {
@@ -176,11 +191,17 @@ func (t *interfaceType) Method(i int) (m Method) {
 //
 // 注意: 目标类型对象必须是**结构体**, 否则会 panic.
 //
+// caller:
+// 	1. rtype.NumMethod()
+//
 // NumMethod returns the number of interface methods in the type's method set.
 func (t *interfaceType) NumMethod() int { 
 	return len(t.methods) 
 }
 
+// caller:
+// 	1. rtype.MethodByName()
+//
 // MethodByName method with the given name in the type's method set.
 func (t *interfaceType) MethodByName(name string) (m Method, ok bool) {
 	if t == nil {

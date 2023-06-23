@@ -396,6 +396,7 @@ void runtime·noequal(bool *eq, uintptr s, void *a, void *b)
 	runtime·panicstring("comparing uncomparable types");
 }
 
+// Alg 对象的4个成员函数: hash, equal, print, copy
 Alg runtime·algarray[] =
 {
 [AMEM]		{ runtime·memhash, runtime·memequal, runtime·memprint, runtime·memcopy },
@@ -427,6 +428,8 @@ Alg runtime·algarray[] =
 // used in asm_{386,amd64}.s
 byte runtime·aeskeysched[HashRandomBytes];
 
+// caller:
+// 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() 程序初始启动时被调用(在初始化调度器之前)
 void runtime·hashinit(void)
 {
 	// Install aes hash algorithm if we have the instructions we need
@@ -460,13 +463,15 @@ void runtime·hashinit(void)
 	}
 }
 
+// src/cmd/gc/runtime.go -> equal() 的具体实现
+//
 // func equal(t *Type, x T, y T) (ret bool)
 #pragma textflag NOSPLIT
 void runtime·equal(Type *t, ...)
 {
 	byte *x, *y;
 	uintptr ret;
-	
+
 	x = (byte*)(&t+1);
 	y = x + t->size;
 	ret = (uintptr)(y + t->size);
