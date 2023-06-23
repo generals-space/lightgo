@@ -195,3 +195,16 @@ func ExampleTrimPrefix() {
 	fmt.Print("Hello" + s)
 	// Output: Hello, world!
 }
+
+// 	@compatible: 该用例在 v1.10 版本初次添加
+//
+func ExampleBuilder() {
+	var b strings.Builder
+	for i := 3; i >= 1; i-- {
+		fmt.Fprintf(&b, "%d...", i)
+	}
+	b.WriteString("ignition")
+	fmt.Println(b.String())
+
+	// Output: 3...2...1...ignition
+}
