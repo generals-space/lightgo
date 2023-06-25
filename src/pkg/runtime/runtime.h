@@ -632,7 +632,7 @@ struct	Func
 	// 函数名称, 其实是距 pclntab(在symtab.c中定义) 的偏移量
 	// ...匿名函数的话, 这个值会不会是0???
 	int32	nameoff;
-	
+
 	int32	args;	// in/out args size
 	int32	frame;	// legacy frame size; use pcsp if possible
 
@@ -945,7 +945,10 @@ struct Stkframe
 	uintptr	arglen;
 };
 
-int32	runtime·gentraceback(uintptr, uintptr, uintptr, G*, int32, uintptr*, int32, void(*)(Stkframe*, void*), void*, bool);
+int32	runtime·gentraceback(
+	uintptr, uintptr, uintptr, G*, int32, uintptr*, int32, 
+	void(*)(Stkframe*, void*), void*, bool
+);
 void	runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G* gp);
 void	runtime·tracebackothers(G*);
 bool	runtime·haszeroargs(uintptr pc);
@@ -1093,7 +1096,6 @@ uintptr	runtime·efacehash(Eface, uintptr);
 void*	runtime·malloc(uintptr size);
 void	runtime·free(void *v);
 void	runtime·runpanic(Panic*);
-uintptr	runtime·getcallersp(void*);
 int32	runtime·mcount(void);
 int32	runtime·gcount(void);
 
@@ -1289,6 +1291,7 @@ void	runtime·madvise(byte*, uintptr, int32);
 void	runtime·memclr(byte*, uintptr);
 void	runtime·setcallerpc(void*, void*);
 void*	runtime·getcallerpc(void*);
+uintptr	runtime·getcallersp(void*);
 
 /*
  * runtime go-called

@@ -271,7 +271,11 @@ func callMethod(ctxt *methodValue, frame unsafe.Pointer) {
 	call(fn, unsafe.Pointer(&args[0]), uint32(total))
 
 	// Copy return values.
-	memmove(unsafe.Pointer(uintptr(frame)+outOffset-ptrSize), unsafe.Pointer(uintptr(base)+outOffset), out)
+	memmove(
+		unsafe.Pointer(uintptr(frame)+outOffset-ptrSize), 
+		unsafe.Pointer(uintptr(base)+outOffset), 
+		out,
+	)
 }
 
 func (t *rtype) AssignableTo(u Type) bool {
@@ -297,7 +301,9 @@ func funcName(f func([]Value) []Value) string {
 // methodReceiver returns information about the receiver described by v.
 // The Value v may or may not have the flagMethod bit set,
 // so the kind cached in v.flag should not be used.
-func methodReceiver(op string, v Value, methodIndex int) (t *rtype, fn unsafe.Pointer, rcvr iword) {
+func methodReceiver(
+	op string, v Value, methodIndex int,
+) (t *rtype, fn unsafe.Pointer, rcvr iword) {
 	i := methodIndex
 	if v.typ.Kind() == Interface {
 		tt := (*interfaceType)(unsafe.Pointer(v.typ))

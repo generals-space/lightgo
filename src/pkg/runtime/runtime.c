@@ -25,8 +25,7 @@ void	runtime·sigpanic(void);
 //	GOTRACEBACK=1   default behavior - show tracebacks but exclude runtime frames
 //	GOTRACEBACK=2   show tracebacks including runtime frames
 //	GOTRACEBACK=crash   show tracebacks including runtime frames, then crash (core dump etc)
-int32
-runtime·gotraceback(bool *crash)
+int32 runtime·gotraceback(bool *crash)
 {
 	byte *p;
 
@@ -41,8 +40,7 @@ runtime·gotraceback(bool *crash)
 	return runtime·atoi(p);
 }
 
-int32
-runtime·mcmp(byte *s1, byte *s2, uintptr n)
+int32 runtime·mcmp(byte *s1, byte *s2, uintptr n)
 {
 	uintptr i;
 	byte c1, c2;
@@ -56,9 +54,7 @@ runtime·mcmp(byte *s1, byte *s2, uintptr n)
 	return 0;
 }
 
-
-byte*
-runtime·mchr(byte *p, byte c, byte *ep)
+byte* runtime·mchr(byte *p, byte c, byte *ep)
 {
 	for(; p < ep; p++)
 		if(*p == c) return p;
@@ -80,8 +76,7 @@ void (*runtime·sysargs)(int32, uint8**);
 // caller: 
 // 	1. src/pkg/runtime/asm_amd64.s -> _rt0_go() (main()函数)
 //
-void
-runtime·args(int32 c, uint8 **v)
+void runtime·args(int32 c, uint8 **v)
 {
 	argc = c;
 	argv = v;
@@ -99,8 +94,7 @@ uint32 runtime·cpuid_ecx;
 uint32 runtime·cpuid_edx;
 
 // 将命令行传入的参数列表填充入os·Args列表.
-void
-runtime·goargs(void)
+void runtime·goargs(void)
 {
 	String *s; // 参数列表, 按照字符串类型处理
 	int32 i;
@@ -119,8 +113,7 @@ runtime·goargs(void)
 	os·Args.cap = argc;
 }
 
-void
-runtime·goenvs_unix(void)
+void runtime·goenvs_unix(void)
 {
 	String *s;
 	int32 i, n;
@@ -138,8 +131,7 @@ runtime·goenvs_unix(void)
 	syscall·envs.cap = n;
 }
 
-void
-runtime·getgoroot(String out)
+void runtime·getgoroot(String out)
 {
 	byte *p;
 
@@ -148,8 +140,7 @@ runtime·getgoroot(String out)
 	FLUSH(&out);
 }
 
-int32
-runtime·atoi(byte *p)
+int32 runtime·atoi(byte *p)
 {
 	int32 n;
 
@@ -160,8 +151,7 @@ runtime·atoi(byte *p)
 	return n;
 }
 
-static void
-TestAtomic64(void)
+static void TestAtomic64(void)
 {
 	uint64 z64, x64;
 
@@ -192,8 +182,7 @@ TestAtomic64(void)
 		runtime·throw("xchg64 failed");
 }
 
-void
-runtime·check(void)
+void runtime·check(void)
 {
 	int8 a;
 	uint8 b;
@@ -287,45 +276,57 @@ runtime·check(void)
 
 // golang原生: runtime.Caller() 直接指向这里.
 //
-// 但是其原型本来为 func Caller(skip int) (pc uintptr, file string, line int, ok bool)
-// 与这里的在参数和返回值上有出入, retXXX应该作为返回值出现, 但全出现在参数列表中.
-// 注意一下函数末尾的4处`FLUSH()`, 值得正视其作用. 
-// 不过实际上我在FLUSH()后面打印过这些返回值, 并没有得到有效输出, 所以ta的作用还是不明确的.
-void
-runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool retbool)
+// 	@param skip: 如果 skip 为 0, 打印的是 Caller() 的主调函数自身的信息, 可以表示当前函数.
+//
+// 	@return retpc: 这个值的含义待确定, 貌似是个地址.
+// 	@return retfile: 目标主调函数所在源文件的绝对路径
+// 	@return retline: 目标主调函数所在源文件的行号
+//
+// 	@implementOf: src/pkg/runtime/extern.go -> Caller()
+//
+void runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool retbool)
 {
-	// runtime·printf("skip: %d, retpc: %d, retfile: %s, retline: %d, retbool: %T \n", 
-	// 	skip, retpc, retfile, retline, retbool);
+	// runtime·printf(
+	// 	"skip: %d, retpc: %d, retfile: %s, retline: %d, retbool: %T \n", 
+	// 	skip, retpc, retfile, retline, retbool
+	// );
 	Func *f, *g;
 	uintptr pc;
+	// rpc 是一个长度为 2 的数组, 在下面执行完 runtime·callers() 函数后,
+	// rpc[1] 成员即为目标主调函数, 而 rpc[0] 则是ta的下一层函数.
 	uintptr rpc[2];
 
 	/*
-	 * Ask for two PCs: the one we were asked for
-	 * and what it called, so that we can see if it
-	 * "called" sigpanic.
+	 * Ask for two PCs: the one we were asked for and what it called,
+	 * so that we can see if it "called" sigpanic.
 	 */
 	retpc = 0;
-	// runtime·callers()得到, 在当前函数调用链上, 函数的个数, 
+	// runtime·callers() 可以得到在当前函数调用链上, 主调函数的个数, 
 	// 从最底层的主调函数开始, 跳过的数量.
-	if(runtime·callers(1+skip-1, rpc, 2) < 2) {
+	//
+	// 第3个参数"2", 指的是 rpc 的长度为 2.
+	//
+	// 开发者调用 runtime.Caller() 函数时, 该值一般为 2.
+	int32 callers = runtime·callers(1+skip-1, rpc, 2);
+
+	if(callers < 2) {
 		retfile = runtime·emptystring;
 		retline = 0;
 		retbool = false;
-		// 在进入else if块时, 说明 runtime·callers 的返回值 >= 2
 	} else if((f = runtime·findfunc(rpc[1])) == nil) {
+		// 进入该块, 说明 runtime·callers 的返回值 >= 2
 		retfile = runtime·emptystring;
 		retline = 0;
 		// have retpc at least
-		// bool 为true时至少会返回 pc
+		// bool 为 true 时至少会返回 pc
 		retbool = true; 
 	} else {
 		retpc = rpc[1];
 		pc = retpc;
 		g = runtime·findfunc(rpc[0]);
-		if(pc > f->entry && 
-			(g == nil || g->entry != (uintptr)runtime·sigpanic))
+		if(pc > f->entry && (g == nil || g->entry != (uintptr)runtime·sigpanic)) {
 			pc--;
+		}
 		retline = runtime·funcline(f, pc, &retfile);
 		retbool = true;
 	}
@@ -333,32 +334,34 @@ runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool r
 	FLUSH(&retfile);
 	FLUSH(&retline);
 	FLUSH(&retbool);
-	// runtime·printf("skip: %d, retpc: %d, retfile: %s, retline: %d, retbool: %T \n", 
-	// 	skip, retpc, retfile, retline, retbool);
+	// runtime·printf(
+	// 	"skip: %d, retpc: %d, retfile: %s, retline: %d, retbool: %T \n", 
+	// 	skip, retpc, retfile, retline, retbool
+	// );
 }
 
-void
-runtime·Callers(intgo skip, Slice pc, intgo retn)
+void runtime·Callers(intgo skip, Slice pc, intgo retn)
 {
 	// runtime.callers uses pc.array==nil as a signal
 	// to print a stack trace.  Pick off 0-length pc here
 	// so that we don't let a nil pc slice get to it.
-	if(pc.len == 0)
+	if(pc.len == 0) {
 		retn = 0;
-	else
+	}
+	else {
 		retn = runtime·callers(skip, (uintptr*)pc.array, pc.len);
+	}
 	FLUSH(&retn);
 }
 
-void
-runtime·FuncForPC(uintptr pc, void *retf)
+// 	@implementOf: src/pkg/runtime/extern.go -> runtime·FuncForPC()
+void runtime·FuncForPC(uintptr pc, void *retf)
 {
 	retf = runtime·findfunc(pc);
 	FLUSH(&retf);
 }
 
-uint32
-runtime·fastrand1(void)
+uint32 runtime·fastrand1(void)
 {
 	uint32 x;
 
@@ -374,14 +377,14 @@ runtime·fastrand1(void)
 static Lock ticksLock;
 static int64 ticks;
 
-int64
-runtime·tickspersecond(void)
+int64 runtime·tickspersecond(void)
 {
 	int64 res, t0, t1, c0, c1;
 
 	res = (int64)runtime·atomicload64((uint64*)&ticks);
-	if(res != 0)
+	if(res != 0) {
 		return ticks;
+	}
 	runtime·lock(&ticksLock);
 	res = ticks;
 	if(res == 0) {
@@ -390,19 +393,20 @@ runtime·tickspersecond(void)
 		runtime·usleep(100*1000);
 		t1 = runtime·nanotime();
 		c1 = runtime·cputicks();
-		if(t1 == t0)
+		if(t1 == t0) {
 			t1++;
+		}
 		res = (c1-c0)*1000*1000*1000/(t1-t0);
-		if(res == 0)
+		if(res == 0) {
 			res++;
+		}
 		runtime·atomicstore64((uint64*)&ticks, res);
 	}
 	runtime·unlock(&ticksLock);
 	return res;
 }
 
-void
-runtime∕pprof·runtime_cyclesPerSecond(int64 res)
+void runtime∕pprof·runtime_cyclesPerSecond(int64 res)
 {
 	res = runtime·tickspersecond();
 	FLUSH(&res);
@@ -430,8 +434,7 @@ static struct {
 // caller: 
 // 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 在初始化调度器时被调用.
 //
-void
-runtime·parsedebugvars(void)
+void runtime·parsedebugvars(void)
 {
 	byte *p;
 	intgo i, n;
@@ -461,13 +464,14 @@ runtime·parsedebugvars(void)
 // 这是一个十分特殊的函数, 谨慎使用.
 // 
 #pragma textflag NOSPLIT
-int32
-runtime·timediv(int64 v, int32 div, int32 *rem)
+int32 runtime·timediv(int64 v, int32 div, int32 *rem)
 {
 	int32 res, bit;
 
 	if(v >= (int64)div*0x7fffffffLL) {
-		if(rem != nil) *rem = 0;
+		if(rem != nil) {
+			*rem = 0;
+		} 
 		return 0x7fffffff;
 	}
 	
@@ -478,6 +482,8 @@ runtime·timediv(int64 v, int32 div, int32 *rem)
 			res += 1<<bit;
 		}
 	}
-	if(rem != nil) *rem = v;
+	if(rem != nil) {
+		*rem = v;
+	} 
 	return res;
 }

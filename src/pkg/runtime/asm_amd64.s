@@ -881,7 +881,7 @@ TEXT runtime·memclr(SB),NOSPLIT,$0-16
 
 /*
                 |------------------|                                                                         
-                | caller parsent bp|                                                                         
+                | caller pasent bp |                                                                         
  BP(pseudo SP)  -------------------|                                                                         
                 |   callee arg0    |                                                                         
                 ----------------------------------------------+   FP(virtual register)                       
@@ -891,8 +891,11 @@ TEXT runtime·memclr(SB),NOSPLIT,$0-16
                                    |  (caller frame pointer)  |                                              
                     BP(pseudo SP)  ----------------------------                                              
 */
+
 // 获取主调函数的pc地址, $0没有局部变量和调用函数, $8表示有一个参数/返回值
-// caller: traceback_x86.c -> runtime·callers()
+//
+// caller:
+// 	1. src/pkg/runtime/traceback_x86.c -> runtime·callers()
 TEXT runtime·getcallerpc(SB),NOSPLIT,$0-8
 	// addr of first arg
 	// 第一个参数的地址, 此处FP为虚拟寄存器
@@ -910,10 +913,12 @@ TEXT runtime·setcallerpc(SB),NOSPLIT,$0-16
 
 // 获取主调函数的sp地址, $0没有局部变量和调用函数, $8表示有一个参数/返回值
 // 返回的是伪sp, 实际上的fp, 用于定位局部变量
-// caller: traceback_x86.c -> runtime·callers()
+//
+// caller:
+// 	1. src/pkg/runtime/traceback_x86.c -> runtime·callers()
 TEXT runtime·getcallersp(SB),NOSPLIT,$0-8
-	// sp用来定位局部变量, 如果主调函数中没有局部变量, 也没有参数列表, 
-	// 那么callee的虚拟FP就等于caller的虚拟SP(见上图).
+	// sp 用来定位局部变量, 如果主调函数中没有局部变量, 也没有参数列表, 
+	// 那么 callee 的虚拟FP就等于caller的虚拟SP(见上图).
 	// 因为当前函数获取的是父函数的sp.
 	MOVQ	sp+0(FP), AX
 	RET
