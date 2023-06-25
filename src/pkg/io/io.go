@@ -16,6 +16,15 @@ import (
 	errors "internal/errors"
 )
 
+// 	@compatible: 此枚举列表在 v1.7 版本初次添加
+//
+// Seek whence values.
+const (
+	SeekStart   = 0 // seek relative to the origin of the file
+	SeekCurrent = 1 // seek relative to the current offset
+	SeekEnd     = 2 // seek relative to the end
+)
+
 // ErrShortWrite means that a write accepted fewer bytes than requested
 // but failed to return an explicit error.
 var ErrShortWrite = errors.New("short write")
@@ -434,11 +443,11 @@ func (s *SectionReader) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	default:
 		return 0, errWhence
-	case 0:
+	case SeekStart:
 		offset += s.base
-	case 1:
+	case SeekCurrent:
 		offset += s.off
-	case 2:
+	case SeekEnd:
 		offset += s.limit
 	}
 	if offset < s.base {
