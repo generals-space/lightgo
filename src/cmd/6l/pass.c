@@ -950,42 +950,58 @@ stacksplit(Prog *p, int32 framesize, Prog **jmpok)
 	return p;
 }
 
-vlong
-atolwhex(char *s)
+vlong atolwhex(char *s)
 {
 	vlong n;
 	int f;
 
 	n = 0;
 	f = 0;
-	while(*s == ' ' || *s == '\t')
+	while(*s == ' ' || *s == '\t') {
 		s++;
-	if(*s == '-' || *s == '+') {
-		if(*s++ == '-')
-			f = 1;
-		while(*s == ' ' || *s == '\t')
-			s++;
 	}
+	if(*s == '-' || *s == '+') {
+		if(*s++ == '-') {
+			f = 1;
+		}
+		while(*s == ' ' || *s == '\t') {
+			s++;
+		}
+	}
+	// 如果 c == '0', 则有可能是八进制(0755), 或十六进制数字(0xA1)
 	if(s[0]=='0' && s[1]){
 		if(s[1]=='x' || s[1]=='X'){
 			s += 2;
 			for(;;){
-				if(*s >= '0' && *s <= '9')
+				if(*s >= '0' && *s <= '9') {
 					n = n*16 + *s++ - '0';
-				else if(*s >= 'a' && *s <= 'f')
+				}
+				else if(*s >= 'a' && *s <= 'f') {
 					n = n*16 + *s++ - 'a' + 10;
-				else if(*s >= 'A' && *s <= 'F')
+				}
+				else if(*s >= 'A' && *s <= 'F') {
 					n = n*16 + *s++ - 'A' + 10;
-				else
+				}
+				else {
 					break;
+				}
 			}
-		} else
-			while(*s >= '0' && *s <= '7')
+		} else {
+			// 对于 0o755 这种八进制格式, 如遇到字符 o/O, 还要再将指针后移一位再处理.
+			if(s[1]=='o' || s[1]=='O') {
+				s += 2;
+			}
+			while(*s >= '0' && *s <= '7') {
 				n = n*8 + *s++ - '0';
-	} else
-		while(*s >= '0' && *s <= '9')
+			}
+		}
+	} else {
+		while(*s >= '0' && *s <= '9') {
 			n = n*10 + *s++ - '0';
-	if(f)
+		}
+	}
+	if(f) {
 		n = -n;
+	}
 	return n;
 }
