@@ -5,6 +5,8 @@
 static int samelist(NodeList *a, NodeList *b);
 static int paramoutheap(Node *fn);
 
+// caller:
+// 	1. src/cmd/gc/range.c -> walkrange()
 void walkstmt(Node **np)
 {
 	NodeList *init;
@@ -23,10 +25,12 @@ void walkstmt(Node **np)
 
 	switch(n->op) {
 	default:
-		if(n->op == ONAME)
+		if(n->op == ONAME) {
 			yyerror("%S is not a top level statement", n->sym);
-		else
+		}
+		else {
 			yyerror("%O is not a top level statement", n->op);
+		}
 		dump("nottop", n);
 		break;
 
@@ -51,6 +55,7 @@ void walkstmt(Node **np)
 	case OPANIC:
 	case OEMPTY:
 	case ORECOVER:
+	{
 		if(n->typecheck == 0)
 			fatal("missing typecheck: %+N", n);
 		init = n->ninit;
@@ -60,6 +65,7 @@ void walkstmt(Node **np)
 		if((*np)->op == OCOPY && n->op == OCONVNOP)
 			n->op = OEMPTY; // don't leave plain values as statements.
 		break;
+	}
 
 	case OBREAK:
 	case ODCL:
@@ -84,6 +90,7 @@ void walkstmt(Node **np)
 		break;
 
 	case ODEFER:
+	{
 		hasdefer = 1;
 		switch(n->left->op) {
 		case OPRINT:
@@ -96,8 +103,10 @@ void walkstmt(Node **np)
 			break;
 		}
 		break;
+	}
 
 	case OFOR:
+	{
 		if(n->ntest != N) {
 			walkstmtlist(n->ntest->ninit);
 			init = n->ntest->ninit;
@@ -108,12 +117,15 @@ void walkstmt(Node **np)
 		walkstmt(&n->nincr);
 		walkstmtlist(n->nbody);
 		break;
+	}
 
 	case OIF:
+	{
 		walkexpr(&n->ntest, &n->ninit);
 		walkstmtlist(n->nbody);
 		walkstmtlist(n->nelse);
 		break;
+	}
 
 	case OPROC:
 	{
@@ -190,11 +202,12 @@ void walkstmt(Node **np)
 		yyerror("fallthrough statement out of place");
 		n->op = OFALL;
 		break;
+	} // switch {} 结束
+
+	if(n->op == ONAME) {
+		fatal("walkstmt ended up with name: %+N", n);
 	}
 
-	if(n->op == ONAME)
-		fatal("walkstmt ended up with name: %+N", n);
-	
 	*np = n;
 }
 
