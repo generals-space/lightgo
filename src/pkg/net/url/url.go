@@ -51,6 +51,7 @@ type encoding int
 
 const (
 	encodePath encoding = 1 + iota
+	encodePathSegment // 	@compatible: 该变量在 v1.8 版本中初次添加.
 	encodeUserPassword
 	encodeQueryComponent
 	encodeFragment
@@ -85,6 +86,11 @@ func shouldEscape(c byte, mode encoding) bool {
 			// only manipulates the path as a whole, so we allow those
 			// last two as well. That leaves only ? to escape.
 			return c == '?'
+
+		case encodePathSegment: // §3.3
+			// The RFC allows : @ & = + $ but saves / ; , for assigning
+			// meaning to individual path segments.
+			return c == '/' || c == ';' || c == ',' || c == '?'
 
 		case encodeUserPassword: // §3.2.2
 			// The RFC allows ; : & = + $ , in userinfo, so we must escape only @ and /.

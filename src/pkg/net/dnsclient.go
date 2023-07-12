@@ -15,6 +15,8 @@ type DNSError struct {
 	Name      string // name looked for
 	Server    string // server used
 	IsTimeout bool
+	// 	@compatible: 此字段在 v1.6 版本添加
+	IsTemporary bool   // if true, error is temporary; not all errors set this
 }
 
 func (e *DNSError) Error() string {

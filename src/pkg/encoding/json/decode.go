@@ -125,7 +125,7 @@ func (e *InvalidUnmarshalError) Error() string {
 
 // 	@param v: 待解析到的目标对象, 必须为指针类型.
 //
-// caller: 
+// caller:
 // 	1. Unmarshal()
 func (d *decodeState) unmarshal(v interface{}) (err error) {
 	defer func() {
@@ -177,6 +177,9 @@ type decodeState struct {
 	savedError error
 	tempstr    string // scratch space to avoid some allocations
 	useNumber  bool
+
+	// 	@compatible: 此字段在 v1.10 版本添加
+	disallowUnknownFields bool
 }
 
 // errPhase is used for errors that should not happen unless

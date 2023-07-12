@@ -294,6 +294,13 @@ type OpError struct {
 
 	// Err is the error that occurred during the operation.
 	Err error
+
+	// 	@compatible: 该字段在 v1.5 版本初次添加
+	//
+	// For operations involving a remote network connection, like
+	// Dial, Read, or Write, Source is the corresponding local
+	// network address.
+	Source Addr
 }
 
 func (e *OpError) Error() string {
@@ -339,6 +346,10 @@ func (e *timeoutError) Temporary() bool { return true }
 
 var errTimeout error = &timeoutError{}
 
+// 	@compatible: 该错误在 v1.9 版本发生变化, 衍生出2个错误: ErrNetClosing, ErrFileClosing.
+// 	分别表示 close 状态的网络连接与常规文件被调用的情况.
+// [golang v1.9 errClosing](https://github.com/golang/go/tree/go1.9/src/internal/poll/fd.go)
+//
 var errClosing = errors.New("use of closed network connection")
 
 type AddrError struct {

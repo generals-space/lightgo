@@ -57,6 +57,33 @@ type Header struct {
 	Devminor   int64     // minor number of character or block device
 	AccessTime time.Time // access time
 	ChangeTime time.Time // status change time
+
+	// 	@compatible: 此字段在 v1.10 版本初次添加.
+	//
+	// PAXRecords is a map of PAX extended header records.
+	//
+	// User-defined records should have keys of the following form:
+	//	VENDOR.keyword
+	// Where VENDOR is some namespace in all uppercase, and keyword may
+	// not contain the '=' character (e.g., "GOLANG.pkg.version").
+	// The key and value should be non-empty UTF-8 strings.
+	//
+	// When Writer.WriteHeader is called, PAX records derived from the
+	// the other fields in Header take precedence over PAXRecords.
+	PAXRecords map[string]string
+
+	// 	@compatible: 此字段在 v1.10 版本初次添加.
+	//
+	// Format specifies the format of the tar header.
+	//
+	// This is set by Reader.Next as a best-effort guess at the format.
+	// Since the Reader liberally reads some non-compliant files,
+	// it is possible for this to be FormatUnknown.
+	//
+	// If the format is unspecified when Writer.WriteHeader is called,
+	// then it uses the first format (in the order of USTAR, PAX, GNU)
+	// capable of encoding this Header (see Format).
+	Format Format
 }
 
 // File name constants from the tar spec.

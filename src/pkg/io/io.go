@@ -325,6 +325,9 @@ func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 	return
 }
 
+// 	@compatible: Copy() 函数的内容在 v1.5 版本被拆分到 copyBuffer() 中.
+// 	@note: 这里为了改动最小, 没有对原本的 Copy() 函数做改动.
+//
 // Copy copies from src to dst until either EOF is reached
 // on src or an error occurs.  It returns the number of bytes
 // copied and the first error encountered while copying, if any.

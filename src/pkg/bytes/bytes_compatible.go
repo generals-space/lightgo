@@ -11,3 +11,10 @@ func LastIndexByte(s []byte, c byte) int {
 	}
 	return -1
 }
+
+// 	@compatible: 该函数在 v1.7 版本初次添加
+//
+// ContainsAny reports whether any of the UTF-8-encoded Unicode code points in chars are within b.
+func ContainsAny(b []byte, chars string) bool {
+	return IndexAny(b, chars) >= 0
+}

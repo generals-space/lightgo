@@ -153,6 +153,10 @@ type ConnectionState struct {
 	ServerName                 string                // server name requested by client, if any (server side only)
 	PeerCertificates           []*x509.Certificate   // certificate chain presented by remote peer
 	VerifiedChains             [][]*x509.Certificate // verified chains built from PeerCertificates
+
+	// 	@compatible: 此字段在 v1.3 版本添加
+	Version uint16 // TLS version used by the connection (e.g. VersionTLS12)
+
 }
 
 // ClientAuthType declares the policy the server will follow for
@@ -255,6 +259,119 @@ type Config struct {
 	MaxVersion uint16
 
 	serverInitOnce sync.Once // guards calling (*Config).serverInit
+
+	////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.3 版本添加
+	//
+	// SessionCache is a cache of ClientSessionState entries for TLS session
+	// resumption.
+	ClientSessionCache ClientSessionCache
+
+	// 	@compatible: 此字段在 v1.3 版本添加
+	//
+	// CurvePreferences contains the elliptic curves that will be used in
+	// an ECDHE handshake, in preference order. If empty, the default will
+	// be used.
+	CurvePreferences []CurveID
+
+	////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.4 版本添加
+	//
+	// GetCertificate returns a Certificate based on the given
+	// ClientHelloInfo. If GetCertificate is nil or returns nil, then the
+	// certificate is retrieved from NameToCertificate. If
+	// NameToCertificate is nil, the first element of Certificates will be
+	// used.
+	GetCertificate func(clientHello *ClientHelloInfo) (*Certificate, error)
+
+	////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.5 版本添加
+	//
+	// mutex protects sessionTicketKeys
+	mutex sync.RWMutex
+	// 	@compatible: 此字段在 v1.5 版本添加
+	//
+	// sessionTicketKeys contains zero or more ticket keys. If the length
+	// is zero, SessionTicketsDisabled must be true. The first key is used
+	// for new tickets and any subsequent keys can be used to decrypt old
+	// tickets.
+	sessionTicketKeys []ticketKey
+	////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.7 版本添加
+	//
+	// DynamicRecordSizingDisabled disables adaptive sizing of TLS records.
+	// When true, the largest possible TLS record size is always used. When
+	// false, the size of TLS records may be adjusted in an attempt to
+	// improve latency.
+	DynamicRecordSizingDisabled bool
+	// 	@compatible: 此字段在 v1.7 版本添加
+	//
+	// Renegotiation controls what types of renegotiation are supported.
+	// The default, none, is correct for the vast majority of applications.
+	Renegotiation RenegotiationSupport
+	////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.8 版本添加
+	//
+	// KeyLogWriter optionally specifies a destination for TLS master secrets
+	// in NSS key log format that can be used to allow external programs
+	// such as Wireshark to decrypt TLS connections.
+	// See https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format.
+	// Use of KeyLogWriter compromises security and should only be
+	// used for debugging.
+	KeyLogWriter io.Writer
+
+	// 	@compatible: 此字段在 v1.8 版本添加
+	//
+	// GetClientCertificate, if not nil, is called when a server requests a
+	// certificate from a client. If set, the contents of Certificates will
+	// be ignored.
+	//
+	// If GetClientCertificate returns an error, the handshake will be
+	// aborted and that error will be returned. Otherwise
+	// GetClientCertificate must return a non-nil Certificate. If
+	// Certificate.Certificate is empty then no certificate will be sent to
+	// the server. If this is unacceptable to the server then it may abort
+	// the handshake.
+	//
+	// GetClientCertificate may be called multiple times for the same
+	// connection if renegotiation occurs or if TLS 1.3 is in use.
+	GetClientCertificate func(*CertificateRequestInfo) (*Certificate, error)
+
+	// 	@compatible: 此字段在 v1.8 版本添加
+	//
+	// GetConfigForClient, if not nil, is called after a ClientHello is
+	// received from a client. It may return a non-nil Config in order to
+	// change the Config that will be used to handle this connection. If
+	// the returned Config is nil, the original Config will be used. The
+	// Config returned by this callback may not be subsequently modified.
+	//
+	// If GetConfigForClient is nil, the Config passed to Server() will be
+	// used for all connections.
+	//
+	// Uniquely for the fields in the returned Config, session ticket keys
+	// will be duplicated from the original Config if not set.
+	// Specifically, if SetSessionTicketKeys was called on the original
+	// config but not on the returned config then the ticket keys from the
+	// original config will be copied into the new config before use.
+	// Otherwise, if SessionTicketKey was set in the original config but
+	// not in the returned config then it will be copied into the returned
+	// config before use. If neither of those cases applies then the key
+	// material from the returned config will be used for session tickets.
+	GetConfigForClient func(*ClientHelloInfo) (*Config, error)
+
+	// 	@compatible: 此字段在 v1.8 版本添加
+	//
+	// VerifyPeerCertificate, if not nil, is called after normal
+	// certificate verification by either a TLS client or server. It
+	// receives the raw ASN.1 certificates provided by the peer and also
+	// any verified chains that normal processing found. If it returns a
+	// non-nil error, the handshake is aborted and that error results.
+	//
+	// If normal verification fails then the handshake will abort before
+	// considering this callback. If normal verification is disabled by
+	// setting InsecureSkipVerify then this callback will be considered but
+	// the verifiedChains argument will always be nil.
+	VerifyPeerCertificate func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 }
 
 func (c *Config) serverInit() {
