@@ -27,7 +27,7 @@ struct Ftab
 extern byte pclntab[];
 
 static Ftab *ftab;
-static uintptr nftab;
+static uintptr nftab; // 应该表示 ftab 数组的实际长度.
 static uint32 *filetab;
 static uint32 nfiletab;
 
@@ -66,8 +66,10 @@ void runtime·symtabinit(void)
 		pclntab[5] != 0 || 
 		pclntab[6] != PCQuantum || 
 		pclntab[7] != sizeof(void*)) {
-		runtime·printf("runtime: function symbol table header: 0x%x 0x%x\n", 
-			*(uint32*)pclntab, *(uint32*)(pclntab+4));
+		runtime·printf(
+			"runtime: function symbol table header: 0x%x 0x%x\n", 
+			*(uint32*)pclntab, *(uint32*)(pclntab+4)
+		);
 		runtime·throw("invalid function symbol table\n");
 	}
 
@@ -100,8 +102,7 @@ void runtime·symtabinit(void)
 	nfiletab = filetab[0];
 }
 
-static uint32
-readvarint(byte **pp)
+static uint32 readvarint(byte **pp)
 {
 	byte *p;
 	uint32 v;
@@ -124,8 +125,7 @@ readvarint(byte **pp)
 //
 // caller: 
 // 	1. mgc0.c -> addframeroots() (在这个函数中有两处调用)
-void*
-runtime·funcdata(Func *f, int32 i)
+void* runtime·funcdata(Func *f, int32 i)
 {
 	byte *p;
 
@@ -138,8 +138,7 @@ runtime·funcdata(Func *f, int32 i)
 	return ((void**)p)[i];
 }
 
-static bool
-step(byte **pp, uintptr *pc, int32 *value, bool first)
+static bool step(byte **pp, uintptr *pc, int32 *value, bool first)
 {
 	uint32 uvdelta, pcdelta;
 	int32 vdelta;
@@ -161,8 +160,7 @@ step(byte **pp, uintptr *pc, int32 *value, bool first)
 // Return associated data value for targetpc in func f.
 // (Source file is f->src.)
 // 获取函数f中指定指令 targetpc 相关的数据.
-static int32
-pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
+static int32 pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 {
 	byte *p;
 	uintptr pc;
@@ -184,28 +182,40 @@ pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 	pc = f->entry;
 	value = -1;
 
-	if(debug && !runtime·panicking)
-		runtime·printf("pcvalue start f=%s [%p] pc=%p targetpc=%p value=%d tab=%p\n",
-			runtime·funcname(f), f, pc, targetpc, value, p);
+	if(debug && !runtime·panicking) {
+		runtime·printf(
+			"pcvalue start f=%s [%p] pc=%p targetpc=%p value=%d tab=%p\n",
+			runtime·funcname(f), f, pc, targetpc, value, p
+		);
+	}
 	
 	while(step(&p, &pc, &value, pc == f->entry)) {
-		if(debug) runtime·printf("\tvalue=%d until pc=%p\n", value, pc);
+		if(debug) {
+			runtime·printf("\tvalue=%d until pc=%p\n", value, pc);
+		} 
 		
-		if(targetpc < pc) return value;
+		if(targetpc < pc) {
+			return value;
+		} 
 	}
 	
 	// If there was a table, it should have covered all program counters.
 	// If not, something is wrong.
-	if(runtime·panicking || !strict) return -1;
+	if(runtime·panicking || !strict) {
+		return -1;
+	} 
 
-	runtime·printf("runtime: invalid pc-encoded table f=%s pc=%p targetpc=%p tab=%p\n",
-		runtime·funcname(f), pc, targetpc, p);
+	runtime·printf(
+		"runtime: invalid pc-encoded table f=%s pc=%p targetpc=%p tab=%p\n",
+		runtime·funcname(f), pc, targetpc, p
+	);
 	p = (byte*)f + off;
 	pc = f->entry;
 	value = -1;
 	
-	while(step(&p, &pc, &value, pc == f->entry))
+	while(step(&p, &pc, &value, pc == f->entry)) {
 		runtime·printf("\tvalue=%d until pc=%p\n", value, pc);
+	}
 	
 	runtime·throw("invalid runtime symbol table");
 	return -1;
@@ -215,16 +225,18 @@ static String unknown = { (uint8*)"?", 1 };
 
 // 获取指定函数对象 f 的名称
 // 其实返回的是指向函数名的地址.
-int8*
-runtime·funcname(Func *f)
+int8* runtime·funcname(Func *f)
 {
-	if(f == nil || f->nameoff == 0) return nil;
+	if(f == nil || f->nameoff == 0) {
+		return nil;
+	} 
 	return (int8*)(pclntab + f->nameoff);
 }
 
-// caller: runtime·funcline(), runtime·funcline_go()
-static int32
-funcline(Func *f, uintptr targetpc, String *file, bool strict)
+// caller:
+// 	1. runtime·funcline()
+// 	2. runtime·funcline_go()
+static int32 funcline(Func *f, uintptr targetpc, String *file, bool strict)
 {
 	int32 line;
 	int32 fileno;
@@ -241,83 +253,90 @@ funcline(Func *f, uintptr targetpc, String *file, bool strict)
 	return line;
 }
 
-int32
-runtime·funcline(Func *f, uintptr targetpc, String *file)
+int32 runtime·funcline(Func *f, uintptr targetpc, String *file)
 {
 	return funcline(f, targetpc, file, true);
 }
 
-int32
-runtime·funcspdelta(Func *f, uintptr targetpc)
+int32 runtime·funcspdelta(Func *f, uintptr targetpc)
 {
 	int32 x;
 	
 	x = pcvalue(f, f->pcsp, targetpc, true);
-	if(x&(sizeof(void*)-1))
+	if(x&(sizeof(void*)-1)) {
 		runtime·printf("invalid spdelta %d %d\n", f->pcsp, x);
+	}
 	return x;
 }
 
-int32
-runtime·pcdatavalue(Func *f, int32 table, uintptr targetpc)
+int32 runtime·pcdatavalue(Func *f, int32 table, uintptr targetpc)
 {
-	if(table < 0 || table >= f->npcdata) return -1;
+	if(table < 0 || table >= f->npcdata) {
+		return -1;
+	} 
 	return pcvalue(f, (&f->nfuncdata)[1+table], targetpc, true);
 }
 
-int32
-runtime·funcarglen(Func *f, uintptr targetpc)
+int32 runtime·funcarglen(Func *f, uintptr targetpc)
 {
-	if(targetpc == f->entry) return 0;
+	if(targetpc == f->entry) {
+		return 0;
+	} 
 	return runtime·pcdatavalue(f, PCDATA_ArgSize, targetpc-PCQuantum);
 }
 
-void
-runtime·funcline_go(Func *f, uintptr targetpc, String retfile, intgo retline)
+// 	@implementOf: src/pkg/runtime/extern.go -> funcline_go()
+void runtime·funcline_go(Func *f, uintptr targetpc, String retfile, intgo retline)
 {
 	// Pass strict=false here, because anyone can call this function,
 	// and they might just be wrong about targetpc belonging to f.
 	retline = funcline(f, targetpc, &retfile, false);
 	FLUSH(&retline);
 }
-
-void
-runtime·funcname_go(Func *f, String ret)
+// 	@implementOf: src/pkg/runtime/extern.go -> funcname_go()
+void runtime·funcname_go(Func *f, String ret)
 {
 	ret = runtime·gostringnocopy((uint8*)runtime·funcname(f));
 	FLUSH(&ret);
 }
-
-void
-runtime·funcentry_go(Func *f, uintptr ret)
+// 	@implementOf: src/pkg/runtime/extern.go -> funcentry_go()
+void runtime·funcentry_go(Func *f, uintptr ret)
 {
 	ret = f->entry;
 	FLUSH(&ret);
 }
 
-// 参数 addr 一般为 pc 计数器 
+// runtime·findfunc 在符号表中查找目标 addr 所表示的函数并返回.
+//
+// 	@param addr: pc 计数器, 表示某个函数的地址
+//
 // 注意: 最终函数的 entry 不一定等于 addr, 这里只做一个大小的比较
-Func*
-runtime·findfunc(uintptr addr)
+Func* runtime·findfunc(uintptr addr)
 {
 	Ftab *f;
 	int32 nf, n;
 
-	if(nftab == 0) return nil;
-
-	if(addr < ftab[0].entry || addr >= ftab[nftab].entry)
+	if(nftab == 0) {
 		return nil;
+	} 
 
-	// binary search to find func with entry <= addr.
+	if(addr < ftab[0].entry || addr >= ftab[nftab].entry) {
+		return nil;
+	}
+
 	// 二分搜索 查找 ftab 链表中 entry 成员地址 <= addr 的 func 对象.
+	//
+	// binary search to find func with entry <= addr.
 	f = ftab;
 	nf = nftab;
 	while(nf > 0) {
 		n = nf/2;
-		if(f[n].entry <= addr && addr < f[n+1].entry)
+		if(f[n].entry <= addr && addr < f[n+1].entry) {
 			return (Func*)(pclntab + f[n].funcoff);
-		else if(addr < f[n].entry)
+		}
+		else if(addr < f[n].entry) {
 			nf = n;
+		}
 		else {
 			f += n+1;
 			nf -= n+1;
@@ -334,31 +353,37 @@ runtime·findfunc(uintptr addr)
 	return nil;
 }
 
-static bool
-hasprefix(String s, int8 *p)
+static bool hasprefix(String s, int8 *p)
 {
 	int32 i;
 
 	for(i=0; i<s.len; i++) {
-		if(p[i] == 0) return 1;
-
-		if(p[i] != s.str[i]) return 0;
+		if(p[i] == 0) {
+			return 1;
+		}
+		if(p[i] != s.str[i]) {
+			return 0;
+		}
 	}
 	return p[i] == 0;
 }
 
-static bool
-contains(String s, int8 *p)
+static bool contains(String s, int8 *p)
 {
 	int32 i;
 
-	if(p[0] == 0) return 1;
+	if(p[0] == 0) {
+		return 1;
+	} 
 
 	for(i=0; i<s.len; i++) {
-		if(s.str[i] != p[0]) continue;
+		if(s.str[i] != p[0]) {
+			continue;
+		} 
 
-		if(hasprefix((String){s.str + i, s.len - i}, p))
+		if(hasprefix((String){s.str + i, s.len - i}, p)) {
 			return 1;
+		}
 	}
 	return 0;
 }
@@ -368,17 +393,18 @@ contains(String s, int8 *p)
 // 或是gp正在执行的函数为 runtime·panic ,
 // 或是通过 GOTRACEBACK 环境变量设置显示追踪信息, 则返回 true
 // 默认不打印 runtime· 开头的函数(除了 panic).
-bool
-runtime·showframe(Func *f, G *gp)
+bool runtime·showframe(Func *f, G *gp)
 {
 	static int32 traceback = -1;
 	String name;
 
-	if(m->throwing > 0 && gp != nil && 
-		(gp == m->curg || gp == m->caughtsig))
+	if(m->throwing > 0 && gp != nil && (gp == m->curg || gp == m->caughtsig)) {
 		return 1;
+	}
 
-	if(traceback < 0) traceback = runtime·gotraceback(nil);
+	if(traceback < 0) {
+		traceback = runtime·gotraceback(nil);
+	} 
 
 	// name 为函数名称, 这里不是单纯的c语言字符串, 而是 golang 中的 String 对象
 	// 因此下面可以使用其专有的属性与方法.
@@ -388,8 +414,9 @@ runtime·showframe(Func *f, G *gp)
 	// see where a panic started in the middle of a stack trace.
 	// See golang.org/issue/5832.
 	// 7+1+5 正好是 runtime.panic 的字符串长度
-	if(name.len == 7+1+5 && hasprefix(name, "runtime.panic"))
+	if(name.len == 7+1+5 && hasprefix(name, "runtime.panic")) {
 		return 1;
+	}
 
 	return traceback > 1 || f != nil && contains(name, ".") && !hasprefix(name, "runtime.");
 }

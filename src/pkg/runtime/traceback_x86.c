@@ -16,25 +16,29 @@ void runtime·sigpanic(void);
 // 本文件中的代码也可用于 386 架构的回溯追踪.
 // 将 unitprt 类型用于合适的 字长 整数
 
-// Generic traceback. 
-// Handles runtime stack prints (pcbuf == nil),
-// the runtime.Callers function (pcbuf != nil), 
-// as well as the garbage collector (callback != nil). 
-// A little clunky to merge these, but avoids
-// duplicating the code and all its subtlety.
 // 通用回溯
-// 用于处理runtime的栈关系打印(需要 pcbuf == nil)
-// 或是用于实现 runtime.Callers() 函数(需要 pcbuf != nil),
-// 也可以用于gc回收(需要callback != nil)
+//
+// 1. 用于处理 runtime 的栈关系打印(需要 pcbuf == nil)
+// 2. 用于实现 runtime.Callers() 函数(需要 pcbuf != nil),
+// 3. 也可以用于 gc 回收(需要 callback != nil)
+//
 // 虽然将这此合并起来比较麻烦, 但也避免了重复代码, 也避免了一些细微的, 易出错的地方.
 //
 // caller:
 // 	1. src/pkg/runtime/mgc0.c -> addstackroots()
 // 	2. src/pkg/runtime/proc.c -> runtime·sigprof()
-// 	3. runtime·traceback()
-// 	4. runtime·callers()
-int32
-runtime·gentraceback(
+// 	3. runtime·traceback() 	用于实现 runtime.Callers()
+// 	4. runtime·callers() 	用于实现 runtime.Callers()
+//
+// Generic traceback. 
+// Handles runtime stack prints (pcbuf == nil),
+// the runtime.Callers function (pcbuf != nil), 
+// as well as the garbage collector (callback != nil). 
+//
+// A little clunky to merge these, but avoids duplicating the code
+// and all its subtlety.
+//
+int32 runtime·gentraceback(
 	uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, 
 	int32 max, void (*callback)(Stkframe*, void*), void *v, bool printall
 )
@@ -54,18 +58,17 @@ runtime·gentraceback(
 	frame.pc = pc0;
 	frame.sp = sp0;
 	waspanic = false;
-	// 是否是用于栈调用关系打印(用于打印时需要pcbuf=nil, callback=nil)
+	// 是否是用于栈调用关系打印(用于打印时需要 pcbuf=nil, callback=nil)
 	printing = pcbuf==nil && callback==nil;
-	
+
 	// If the PC is zero, it's likely a nil function call.
 	// Start in the caller's frame.
-	// 这里是参数 pc0
-	// 如果 pc0 为0, 
 	if(frame.pc == 0) {
 		frame.pc = *(uintptr*)frame.sp;
 		frame.sp += sizeof(uintptr);
 	}
 
+	// 在符号表中查找目标 frame.pc 所表示的函数并返回.
 	f = runtime·findfunc(frame.pc);
 	if(f == nil) {
 		if(callback != nil) {
@@ -78,9 +81,8 @@ runtime·gentraceback(
 	frame.fn = f;
 
 	n = 0;
-	// gp是当前协程对象, stackbase 指向栈空间顶部top部分的起始地址
+	// gp 是当前协程对象, stackbase 指向栈空间顶部top部分的起始地址
 	stk = (Stktop*)gp->stackbase;
-	// 从当前 frame 向上追溯, max 为最大层数.
 	while(n < max) {
 		// Typically:
 		//	pc is the PC of the running function.
@@ -102,19 +104,29 @@ runtime·gentraceback(
 			frame.lr = 0;
 			frame.fp = 0;
 			frame.fn = nil;
-			if(printing && runtime·showframe(nil, gp))
+			if(printing && runtime·showframe(nil, gp)) {
 				runtime·printf("----- stack segment boundary -----\n");
+			}
 			stk = (Stktop*)stk->stackbase;
 
 			f = runtime·findfunc(frame.pc);
 			if(f == nil) {
 				runtime·printf("runtime: unknown pc %p after stack split\n", frame.pc);
-				if(callback != nil) runtime·throw("unknown pc");
+				if(callback != nil) {
+					runtime·throw("unknown pc");
+				}
 			}
 			frame.fn = f;
 			continue;
 		}
 		f = frame.fn;
+
+		// [anchor] 运行到此处的示例, 请见 016.caller 中的 main() 方法
+		//
+		// runtime·printf(
+		// 	"skip: %d, n: %d, max: %d, function: %s\n", 
+		// 	skip, n, max, runtime·funcname(f)
+		// );
 
 		// Found an actual function.
 		// Derive frame pointer and link register.
@@ -128,16 +140,21 @@ runtime·gentraceback(
 			frame.lr = 0;
 			flr = nil;
 		} else {
-			if(frame.lr == 0) frame.lr = ((uintptr*)frame.fp)[-1];
-
+			if(frame.lr == 0) {
+				frame.lr = ((uintptr*)frame.fp)[-1];
+			}
 			flr = runtime·findfunc(frame.lr);
 			if(flr == nil) {
-				runtime·printf("runtime: unexpected return pc for %s called from %p\n", 
-					runtime·funcname(f), frame.lr);
-				if(callback != nil) runtime·throw("unknown caller pc");
+				runtime·printf(
+					"runtime: unexpected return pc for %s called from %p\n", 
+					runtime·funcname(f), frame.lr
+				);
+				if(callback != nil) {
+					runtime·throw("unknown caller pc");
+				} 
 			}
 		}
-		
+
 		frame.varp = (byte*)frame.fp - sizeof(uintptr);
 
 		// Derive size of arguments.
@@ -148,18 +165,26 @@ runtime·gentraceback(
 		// metadata recorded by f's caller.
 		if(callback != nil || printing) {
 			frame.argp = (byte*)frame.fp;
-			if(f->args != ArgsSizeUnknown)
+			if(f->args != ArgsSizeUnknown) {
 				frame.arglen = f->args;
-			else if(flr == nil)
+			}
+			else if(flr == nil) {
 				frame.arglen = 0;
-			else if(frame.lr == (uintptr)runtime·lessstack)
+			}
+			else if(frame.lr == (uintptr)runtime·lessstack) {
 				frame.arglen = stk->argsize;
-			else if((i = runtime·funcarglen(flr, frame.lr)) >= 0)
+			}
+			else if((i = runtime·funcarglen(flr, frame.lr)) >= 0) {
 				frame.arglen = i;
+			}
 			else {
-				runtime·printf("runtime: unknown argument frame size for %s called from %p [%s]\n",
-					runtime·funcname(f), frame.lr, flr ? runtime·funcname(flr) : "?");
-				if(callback != nil) runtime·throw("invalid stack");
+				runtime·printf(
+					"runtime: unknown argument frame size for %s called from %p [%s]\n",
+					runtime·funcname(f), frame.lr, flr ? runtime·funcname(flr) : "?"
+				);
+				if(callback != nil) {
+					runtime·throw("invalid stack");
+				} 
 				frame.arglen = 0;
 			}
 		}
@@ -168,12 +193,14 @@ runtime·gentraceback(
 			skip--;
 			goto skipped;
 		}
-		// 用于栈信息追溯而打印时, skip一般为0, 
-		// 否则直接在上面就 goto 到 skipped 处了.
-		if(pcbuf != nil) pcbuf[n] = frame.pc;
+		if(pcbuf != nil) {
+			pcbuf[n] = frame.pc;
+		}
 
 		// callback 在gc时会用到
-		if(callback != nil) callback(&frame, v);
+		if(callback != nil) {
+			callback(&frame, v);
+		} 
 
 		if(printing) {
 			if(printall || runtime·showframe(f, gp)) {
@@ -182,8 +209,9 @@ runtime·gentraceback(
 				//		/home/rsc/go/src/runtime/x.go:23 +0xf
 				//		
 				tracepc = frame.pc;	// back up to CALL instruction for funcline.
-				if(n > 0 && frame.pc > f->entry && !waspanic)
+				if(n > 0 && frame.pc > f->entry && !waspanic) {
 					tracepc--;
+				}
 				runtime·printf("%s(", runtime·funcname(f));
 				for(i = 0; i < frame.arglen/sizeof(uintptr); i++) {
 					if(i >= 5) {
@@ -196,22 +224,27 @@ runtime·gentraceback(
 				runtime·prints(")\n");
 				line = runtime·funcline(f, tracepc, &file);
 				runtime·printf("\t%S:%d", file, line);
-				if(frame.pc > f->entry)
+				if(frame.pc > f->entry) {
 					runtime·printf(" +%p", (uintptr)(frame.pc - f->entry));
+				}
 
-				if(m->throwing > 0 && gp == m->curg)
+				if(m->throwing > 0 && gp == m->curg) {
 					runtime·printf(" fp=%p", frame.fp);
+				}
 				runtime·printf("\n");
 				nprint++;
 			}
 		}
+
 		n++;
-	
+
 	skipped:
 		waspanic = f->entry == (uintptr)runtime·sigpanic;
 
 		// Do not unwind past the bottom of the stack.
-		if(flr == nil) break;
+		if(flr == nil) {
+			break;
+		}
 
 		// Unwind to next frame.
 		frame.fn = flr;
@@ -219,17 +252,19 @@ runtime·gentraceback(
 		frame.lr = 0;
 		frame.sp = frame.fp;
 		frame.fp = 0;
-	}
+	} // while{} 循环结束
+
 	// ...这不就是 printing 么? 为什么还要重新写一遍表达式?
-	if(pcbuf == nil && callback == nil) n = nprint;
+	if(pcbuf == nil && callback == nil) {
+		n = nprint;
+	} 
 
 	return n;
 }
 
 // 打印指定协程对象gp的父级函数的调用栈信息???
 // 包括函数名称, 所在文件及行号, 还有函数地址.
-void
-runtime·printcreatedby(G *gp)
+void runtime·printcreatedby(G *gp)
 {
 	int32 line;
 	uintptr pc, tracepc;
@@ -247,19 +282,22 @@ runtime·printcreatedby(G *gp)
 		tracepc = pc;
 		// 86/64 平台上, PCQuantum 值为1
 		// 函数对象的 entry 成员本来就是 pc 值, 什么时候会出现这种情况???
-		if(pc > f->entry) tracepc -= PCQuantum;
+		if(pc > f->entry) {
+			tracepc -= PCQuantum;
+		} 
 
 		line = runtime·funcline(f, tracepc, &file);
 		runtime·printf("\t%S:%d", file, line);
 
-		if(pc > f->entry) runtime·printf(" +%p", (uintptr)(pc - f->entry));
+		if(pc > f->entry) {
+			runtime·printf(" +%p", (uintptr)(pc - f->entry));
+		} 
 		
 		runtime·printf("\n");
 	}
 }
 
-void
-runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
+void runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 {
 	USED(lr);
 
@@ -285,17 +323,20 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 }
 
 // 返回在主调函数所在的调用链上, 函数的个数...???
-// pcbuf应该是一个uintptr[2]数组
+//
+// 	@param skip: 如果 skip 为 0, 获取的是 Caller() 的主调函数自身的信息, 可以表示当前函数.
+// 	@param pcbuf: 是一个 uintptr[2] 数组
 //
 // caller: 
-// 	1. runtime.c -> runtime·Caller()
+// 	1. runtime.c -> runtime·Caller() golang原生函数, 由开发者自行调用.
 // 	2. src/pkg/runtime/proc.c -> mcommoninit()
 //
-int32
-runtime·callers(int32 skip, uintptr *pcbuf, int32 m)
+int32 runtime·callers(int32 skip, uintptr *pcbuf, int32 m)
 {
 	uintptr pc, sp;
-	// 获取主调函数, 即runtime·callers()的sp, pc地址
+	// 获取主调函数, 即 runtime·callers() 的 sp, pc 地址
+	//
+	// 下面2个函数都是汇编实现
 	sp = runtime·getcallersp(&skip);
 	pc = (uintptr)runtime·getcallerpc(&skip);
 
