@@ -5,10 +5,19 @@
 package runtime
 #include "runtime.h"
 
+// 	@note: 本文件中, golang 函数原型的返回值 ret, 在函数定义中是不需要显式 return 的.
+
 func GOMAXPROCS(n int) (ret int) {
 	ret = runtime·gomaxprocsfunc(n);
 }
 
 func NumCPU() (ret int) {
 	ret = runtime·ncpu;
+}
+
+// 	todo: 不明白这里为什么只写声明就行, 明明只要 include 一下 "os_linux.h"
+void	runtime·sigpanic(void);
+// 	implementOf: src/pkg/runtime/symtab_compatible.go -> PcSigpanic()
+func PcSigpanic() (ret uintptr) {
+	ret = (uintptr)runtime·sigpanic;
 }
