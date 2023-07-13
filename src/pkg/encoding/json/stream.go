@@ -141,6 +141,14 @@ type Encoder struct {
 	w   io.Writer
 	e   encodeState
 	err error
+
+	////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 以下字段在 v1.7 版本初次添加
+	escapeHTML bool
+	indentPrefix string
+	indentValue  string
+	indentBuf    *bytes.Buffer
+	////////////////////////////////////////////////////////////////////////
 }
 
 // NewEncoder returns a new encoder that writes to w.
