@@ -304,8 +304,10 @@ static int staticcopy(Node *l, Node *r, NodeList **out)
 		return 1;
 	
 	case OLITERAL:
-		if(iszero(r))
+
+		if(iszero(r)) {
 			return 1;
+		}
 		gdata(l, r, l->type->width);
 		return 1;
 
@@ -392,10 +394,13 @@ static int staticassign(Node *l, Node *r, NodeList **out)
 		break;
 
 	case OLITERAL:
-		if(iszero(r))
+	{
+		if(iszero(r)) {
 			return 1;
+		}
 		gdata(l, r, l->type->width);
 		return 1;
+	}
 
 	case OADDR:
 		switch(r->left->op) {
@@ -1364,7 +1369,6 @@ static void addvalue(InitPlan *p, vlong xoffset, Node *key, Node *n)
 	InitEntry *e;
 
 	USED(key);
-
 	// special case: zero can be dropped entirely
 	if(iszero(n)) {
 		p->zero += n->type->width;
@@ -1394,8 +1398,8 @@ static void addvalue(InitPlan *p, vlong xoffset, Node *key, Node *n)
 	e->expr = n;
 }
 
-static int
-iszero(Node *n)
+// iszero 
+static int iszero(Node *n)
 {
 	NodeList *l;
 
@@ -1427,26 +1431,27 @@ iszero(Node *n)
 		}
 		break;
 	case OARRAYLIT:
-		if(isslice(n->type))
+		if(isslice(n->type)) {
 			break;
+		}
 		// fall through
 	case OSTRUCTLIT:
-		for(l=n->list; l; l=l->next)
-			if(!iszero(l->n->right))
+		for(l=n->list; l; l=l->next) {
+			if(!iszero(l->n->right)) {
 				return 0;
+			}
+		}
 		return 1;
 	}
 	return 0;
 }
 
-static int
-isvaluelit(Node *n)
+static int isvaluelit(Node *n)
 {
 	return (n->op == OARRAYLIT && isfixedarray(n->type)) || n->op == OSTRUCTLIT;
 }
 
-static InitEntry*
-entry(InitPlan *p)
+static InitEntry* entry(InitPlan *p)
 {
 	if(p->len >= p->cap) {
 		if(p->cap == 0)

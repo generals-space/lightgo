@@ -227,8 +227,7 @@ void main(int argc, char *argv[])
 //
 // caller:
 // 	1. main()
-int
-compile(char *file, char **defs, int ndef)
+int compile(char *file, char **defs, int ndef)
 {
 	char *ofile;
 	char *p, **av, opt[256];
@@ -375,8 +374,7 @@ compile(char *file, char **defs, int ndef)
 	return nerrors;
 }
 
-void
-errorexit(void)
+void errorexit(void)
 {
 	if(outfile) {
 		remove(outfile);
@@ -384,8 +382,7 @@ errorexit(void)
 	exits("error");
 }
 
-void
-pushio(void)
+void pushio(void)
 {
 	Io *i;
 
@@ -398,8 +395,7 @@ pushio(void)
 	i->c = fi.c;
 }
 
-void
-newio(void)
+void newio(void)
 {
 	Io *i;
 	static int pushdepth = 0;
@@ -420,8 +416,7 @@ newio(void)
 	ionext = i;
 }
 
-void
-newfile(char *s, int f)
+void newfile(char *s, int f)
 {
 	Io *i;
 
@@ -444,8 +439,7 @@ newfile(char *s, int f)
 	linehist(s, 0);
 }
 
-Sym*
-slookup(char *s)
+Sym* slookup(char *s)
 {
 	ensuresymb(strlen(s));
 	strcpy(symb, s);
@@ -459,8 +453,7 @@ slookup(char *s)
 // caller:
 // 	1. slookup()
 // 	2. yylex()
-Sym*
-lookup(void)
+Sym* lookup(void)
 {
 	Sym *s;
 	uint32 h;
@@ -524,8 +517,7 @@ lookup(void)
 //
 // caller:
 // 	1. lookup()
-void
-syminit(Sym *s)
+void syminit(Sym *s)
 {
 	s->lexical = LNAME;
 	s->block = 0;
@@ -551,8 +543,7 @@ enum
 	Numflt		= 1<<4,
 };
 
-int32
-yylex(void)
+int32 yylex(void)
 {
 	vlong vv;
 	int32 c, c1, t;
@@ -895,37 +886,56 @@ talph:
 	return s->lexical;
 
 tnum:
+{
 	c1 = 0;
 	cp = symb;
+	// 如果 c != '0' 一般为常规十进制数字
 	if(c != '0') {
 		c1 |= Numdec;
 		for(;;) {
 			*cp++ = c;
 			c = GETC();
-			if(isdigit(c))
+			if(isdigit(c)) {
 				continue;
+			}
 			goto dc;
 		}
 	}
+	// 如果 c == '0', 则有可能是八进制(0755), 或十六进制数字(0xA1)
+
 	*cp++ = c;
+	// 读取下一个字符
 	c = GETC();
-	if(c == 'x' || c == 'X')
+	if(c == 'x' || c == 'X') {
 		for(;;) {
 			*cp++ = c;
 			c = GETC();
-			if(isdigit(c))
+			if(isdigit(c)) {
 				continue;
-			if(c >= 'a' && c <= 'f')
+			}
+			// 常规的十六进制字符
+			if(c >= 'a' && c <= 'f') {
 				continue;
-			if(c >= 'A' && c <= 'F')
+			}
+			if(c >= 'A' && c <= 'F') {
 				continue;
-			if(cp == symb+2)
+			}
+			if(cp == symb+2) {
 				yyerror("malformed hex constant");
+			}
 			goto ncu;
 		}
-	if(c < '0' || c > '7')
+	}
+	// 对于 0o755 这种八进制格式, 如遇到字符 o/O, 还要再将指针后移一位再处理.
+	if(c == 'o' || c == 'O') {
+		*cp++ = c;
+		c = GETC();
+	}
+	if(c < '0' || c > '7') {
 		goto dc;
+	}
 	for(;;) {
+		// 常规的八进制字符
 		if(c >= '0' && c <= '7') {
 			*cp++ = c;
 			c = GETC();
@@ -933,12 +943,18 @@ tnum:
 		}
 		goto ncu;
 	}
+}
 
 dc:
-	if(c == '.')
+{
+	if(c == '.') {
 		goto casedot;
-	if(c == 'e' || c == 'E')
+	}
+	if(c == 'e' || c == 'E') {
+		// 科学计数法
 		goto casee;
+	}
+}
 
 ncu:
 	if((c == 'U' || c == 'u') && !(c1 & Numuns)) {
@@ -1000,34 +1016,40 @@ casedot:
 	for(;;) {
 		*cp++ = c;
 		c = GETC();
-		if(!isdigit(c))
+		if(!isdigit(c)) {
 			break;
+		}
 	}
-	if(c != 'e' && c != 'E')
+	if(c != 'e' && c != 'E') {
 		goto caseout;
+	}
 
-casee:
+casee: // 科学计数法
+{
 	*cp++ = 'e';
 	c = GETC();
 	if(c == '+' || c == '-') {
 		*cp++ = c;
 		c = GETC();
 	}
-	if(!isdigit(c))
+	if(!isdigit(c)) {
 		yyerror("malformed fp constant exponent");
+	}
 	while(isdigit(c)) {
 		*cp++ = c;
 		c = GETC();
 	}
+}
 
 caseout:
 	if(c == 'L' || c == 'l') {
 		c = GETC();
 		c1 |= Numlong;
-	} else
-	if(c == 'F' || c == 'f') {
-		c = GETC();
-		c1 |= Numflt;
+	} else {
+		if(c == 'F' || c == 'f') {
+			c = GETC();
+			c1 |= Numflt;
+		}
 	}
 	*cp = 0;
 	peekc = c;
@@ -1046,16 +1068,16 @@ caseout:
  * return conversion overflow.
  * required syntax is [0[x]]d*
  */
-int
-mpatov(char *s, vlong *v)
+int mpatov(char *s, vlong *v)
 {
 	vlong n, nn;
 	int c;
 
 	n = 0;
 	c = *s;
-	if(c == '0')
+	if(c == '0') {
 		goto oct;
+	}
 	while(c = *s++) {
 		if(c >= '0' && c <= '9')
 			nn = n*10 + c-'0';
@@ -1067,40 +1089,57 @@ mpatov(char *s, vlong *v)
 	}
 	goto out;
 
-oct:
+oct: // octal 的缩写, 八进制
+{
 	s++;
 	c = *s;
-	if(c == 'x' || c == 'X')
+	if(c == 'x' || c == 'X') {
 		goto hex;
+	}
+	// 对于 0o755 这种八进制格式, 如遇到字符 o/O, 还要再将指针后移一位再处理.
+	if(c == 'o' || c == 'O') {
+		s++;
+		c = *s;
+	}
 	while(c = *s++) {
-		if(c >= '0' || c <= '7')
+		if(c >= '0' || c <= '7') {
 			nn = n*8 + c-'0';
-		else
+		}
+		else {
 			goto bad;
-		if(n < 0 && nn >= 0)
+		}
+		if(n < 0 && nn >= 0) {
 			goto bad;
+		}
 		n = nn;
 	}
 	goto out;
+}
 
 hex:
+{
 	s++;
 	while(c = *s++) {
-		if(c >= '0' && c <= '9')
+		if(c >= '0' && c <= '9') {
 			c += 0-'0';
-		else
-		if(c >= 'a' && c <= 'f')
+		}
+		else if(c >= 'a' && c <= 'f') {
 			c += 10-'a';
-		else
-		if(c >= 'A' && c <= 'F')
+		}
+		else if(c >= 'A' && c <= 'F') {
 			c += 10-'A';
-		else
+		}
+		else {
 			goto bad;
+		}
 		nn = (uvlong)n*16 + c;
-		if(n < 0 && nn >= 0)
+		if(n < 0 && nn >= 0) {
 			goto bad;
+		}
 		n = nn;
 	}
+}
+
 out:
 	*v = n;
 	return 0;
@@ -1110,8 +1149,7 @@ bad:
 	return 1;
 }
 
-int
-getc(void)
+int getc(void)
 {
 	int c;
 

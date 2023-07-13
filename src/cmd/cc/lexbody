@@ -32,65 +32,56 @@
  * common code for all the assemblers
  */
 
-void
-pragpack(void)
+void pragpack(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragvararg(void)
+void pragvararg(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragcgo(char *name)
+void pragcgo(char *name)
 {
 	USED(name);
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragfpround(void)
+void pragfpround(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragtextflag(void)
+void pragtextflag(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragdataflag(void)
+void pragdataflag(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragprofile(void)
+void pragprofile(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void
-pragincomplete(void)
+void pragincomplete(void)
 {
 	while(getnsc() != '\n')
 		;
 }
 
-void*
-alloc(int32 n)
+void* alloc(int32 n)
 {
 	void *p;
 
@@ -103,8 +94,7 @@ alloc(int32 n)
 	return p;
 }
 
-void*
-allocn(void *p, int32 n, int32 d)
+void* allocn(void *p, int32 n, int32 d)
 {
 	if(p == nil)
 		return alloc(n+d);
@@ -118,8 +108,7 @@ allocn(void *p, int32 n, int32 d)
 	return p;
 }
 
-void
-ensuresymb(int32 n)
+void ensuresymb(int32 n)
 {
 	if(symb == nil) {
 		symb = alloc(NSYMB+1);
@@ -132,8 +121,7 @@ ensuresymb(int32 n)
 	}
 }
 
-void
-setinclude(char *p)
+void setinclude(char *p)
 {
 	int i;
 
@@ -149,8 +137,7 @@ setinclude(char *p)
 	include[ninclude++] = p;
 }
 
-void
-errorexit(void)
+void errorexit(void)
 {
 
 	if(outfile)
@@ -158,8 +145,7 @@ errorexit(void)
 	exits("error");
 }
 
-void
-pushio(void)
+void pushio(void)
 {
 	Io *i;
 
@@ -172,8 +158,7 @@ pushio(void)
 	i->c = fi.c;
 }
 
-void
-newio(void)
+void newio(void)
 {
 	Io *i;
 	static int pushdepth = 0;
@@ -193,8 +178,7 @@ newio(void)
 	ionext = i;
 }
 
-void
-newfile(char *s, int f)
+void newfile(char *s, int f)
 {
 	Io *i;
 
@@ -212,16 +196,14 @@ newfile(char *s, int f)
 	linehist(s, 0);
 }
 
-Sym*
-slookup(char *s)
+Sym* slookup(char *s)
 {
 	ensuresymb(strlen(s));
 	strcpy(symb, s);
 	return lookup();
 }
 
-Sym*
-lookup(void)
+Sym* lookup(void)
 {
 	Sym *s;
 	uint32 h;
@@ -276,8 +258,7 @@ lookup(void)
 	return s;
 }
 
-int
-ISALPHA(int c)
+int ISALPHA(int c)
 {
 	if(isalpha(c))
 		return 1;
@@ -286,8 +267,7 @@ ISALPHA(int c)
 	return 0;
 }
 
-int32
-yylex(void)
+int32 yylex(void)
 {
 	int c, c1;
 	char *cp;
@@ -348,6 +328,7 @@ l1:
 		cp = symb;
 
 	aloop:
+	{
 		*cp++ = c;
 		c = GETC();
 		if(ISALPHA(c) || isdigit(c) || c == '_' || c == '$')
@@ -381,34 +362,54 @@ l1:
 		}
 		yylval.lval = s->value;
 		return s->type;
+	}
 
-	tnum:
+	tnum: // type number: 数字类型分词
+	{
 		cp = symb;
-		if(c != '0')
+		// 如果 c != '0' 一般为常规十进制数字
+		if(c != '0') {
 			goto dc;
+		}
+		// 如果 c == '0', 则有可能是八进制(0755), 或十六进制数字(0xA1)
+
 		*cp++ = c;
+		// 读取下一个字符
 		c = GETC();
+		// c1: 
+		// 	3 表示八进制
+		// 	4 表示十六进制
 		c1 = 3;
 		if(c == 'x' || c == 'X') {
 			c1 = 4;
 			c = GETC();
-		} else
-		if(c < '0' || c > '7')
+		} else if (c == 'o' || c == 'O') {
+			// 对于 0o755 这种八进制格式, 如遇到字符 o/O, 还要再将指针后移一位再处理.
+			c1 = 3;
+			c = GETC();
+		} else if(c < '0' || c > '7') {
 			goto dc;
+		}
 		yylval.lval = 0;
 		for(;;) {
 			if(c >= '0' && c <= '9') {
-				if(c > '7' && c1 == 3)
+				// 非法的八进制, break, 如 09xxx(c 为第2个字符 9)
+				if(c > '7' && c1 == 3) {
 					break;
+				}
+				// 常规的八进制字符(其实就是 0-7 )
 				yylval.lval = (uvlong)yylval.lval << c1;
 				yylval.lval += c - '0';
 				c = GETC();
 				continue;
 			}
-			if(c1 == 3)
+			if(c1 == 3) {
 				break;
-			if(c >= 'A' && c <= 'F')
+			}
+			// 常规的十六进制字符
+			if(c >= 'A' && c <= 'F') {
 				c += 'a' - 'A';
+			}
 			if(c >= 'a' && c <= 'f') {
 				yylval.lval = (uvlong)yylval.lval << c1;
 				yylval.lval += c - 'a' + 10;
@@ -418,42 +419,58 @@ l1:
 			break;
 		}
 		goto ncu;
+	}
 
 	dc:
+	{
 		for(;;) {
-			if(!isdigit(c))
+			if(!isdigit(c)) {
 				break;
+			}
 			*cp++ = c;
 			c = GETC();
 		}
-		if(c == '.')
+		if(c == '.') {
 			goto casedot;
-		if(c == 'e' || c == 'E')
+		}
+		if(c == 'e' || c == 'E') {
 			goto casee;
+		}
 		*cp = 0;
-		if(sizeof(yylval.lval) == sizeof(vlong))
+		if(sizeof(yylval.lval) == sizeof(vlong)) {
 			yylval.lval = strtoll(symb, nil, 10);
-		else
+		}
+		else {
 			yylval.lval = strtol(symb, nil, 10);
+		}
+	}
 
 	ncu:
-		while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+	{
+		while(c == 'U' || c == 'u' || c == 'l' || c == 'L') {
 			c = GETC();
+		}
 		peekc = c;
 		return LCONST;
+	}
 
 	casedot:
+	{
 		for(;;) {
 			*cp++ = c;
 			c = GETC();
-			if(!isdigit(c))
+			if(!isdigit(c)) {
 				break;
+			}
 		}
-		if(c == 'e' || c == 'E')
+		if(c == 'e' || c == 'E') {
 			goto casee;
+		}
 		goto caseout;
+	}
 
-	casee:
+	casee: // 科学计数法
+	{
 		*cp++ = 'e';
 		c = GETC();
 		if(c == '+' || c == '-') {
@@ -464,8 +481,10 @@ l1:
 			*cp++ = c;
 			c = GETC();
 		}
+	}
 
 	caseout:
+	{
 		*cp = 0;
 		peekc = c;
 		if(FPCHIP) {
@@ -475,6 +494,7 @@ l1:
 		yyerror("assembler cannot interpret fp constants");
 		yylval.lval = 1L;
 		return LCONST;
+	}
 
 	case '"':
 		memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
@@ -539,8 +559,7 @@ l1:
 	return c;
 }
 
-int
-getc(void)
+int getc(void)
 {
 	int c;
 
@@ -559,8 +578,7 @@ getc(void)
 	return c;
 }
 
-int
-getnsc(void)
+int getnsc(void)
 {
 	int c;
 
@@ -571,8 +589,7 @@ getnsc(void)
 	}
 }
 
-void
-unget(int c)
+void unget(int c)
 {
 
 	peekc = c;
@@ -580,8 +597,7 @@ unget(int c)
 		lineno--;
 }
 
-int
-escchar(int e)
+int escchar(int e)
 {
 	int c, l;
 
@@ -626,8 +642,7 @@ loop:
 	return c;
 }
 
-void
-pinit(char *f)
+void pinit(char *f)
 {
 	int i;
 	Sym *s;
@@ -647,8 +662,7 @@ pinit(char *f)
 			s->macro = 0;
 }
 
-int
-filbuf(void)
+int filbuf(void)
 {
 	Io *i;
 
@@ -681,8 +695,7 @@ pop:
 	return *fi.p++ & 0xff;
 }
 
-void
-yyerror(char *a, ...)
+void yyerror(char *a, ...)
 {
 	char buf[200];
 	va_list arg;
@@ -706,8 +719,7 @@ yyerror(char *a, ...)
 	}
 }
 
-void
-prfile(int32 l)
+void prfile(int32 l)
 {
 	int i, n;
 	Hist a[HISTSZ], *h;
@@ -745,8 +757,7 @@ prfile(int32 l)
 		print("%s:%ld ", a[i].name, (long)(l-a[i].line+a[i].offset+1));
 }
 
-void
-ieeedtod(Ieee *ieee, double native)
+void ieeedtod(Ieee *ieee, double native)
 {
 	double fr, ho, f;
 	int exp;

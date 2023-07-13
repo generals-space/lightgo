@@ -442,12 +442,13 @@ bad:
 	mpmovecflt(a, 0.0);
 }
 
+// caller:
+// 	1. src/cmd/gc/lex.c -> _yylex()
 //
 // fixed point input
 // required syntax is [+-][0[x]]d*
 //
-void
-mpatofix(Mpint *a, char *as)
+void mpatofix(Mpint *a, char *as)
 {
 	int c, f;
 	char *s, *s0;
@@ -481,10 +482,16 @@ mpatofix(Mpint *a, char *as)
 	}
 	goto out;
 
-oct:
+oct: // 八进制
+{
 	c = *s++;
-	if(c == 'x' || c == 'X')
+	if(c == 'x' || c == 'X') {
 		goto hex;
+	}
+	// 对于 0o755 这种八进制格式, 如遇到字符 o/O, 还要再将指针后移一位再处理.
+	if(c == 'o' || c == 'O') {
+		c = *s++;
+	}
 	while(c) {
 		if(c >= '0' && c <= '7') {
 			mpmulcfix(a, 8);
@@ -495,8 +502,10 @@ oct:
 		goto bad;
 	}
 	goto out;
+}
 
-hex:
+hex: // 十六进制
+{
 	s0 = s;
 	c = *s;
 	while(c) {
@@ -508,8 +517,10 @@ hex:
 		goto bad;
 	}
 	mphextofix(a, s0, s-s0);
-	if(a->ovf)
+	if(a->ovf) {
 		goto bad;
+	}
+}
 
 out:
 	if(f)
