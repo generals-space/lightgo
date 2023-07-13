@@ -1025,8 +1025,7 @@ struct
 	0
 };
 
-void
-cinit(void)
+void cinit(void)
 {
 	Sym *s;
 	int i;
@@ -1064,8 +1063,7 @@ cinit(void)
 	}
 }
 
-void
-checkscale(int scale)
+void checkscale(int scale)
 {
 
 	switch(scale) {
@@ -1078,8 +1076,7 @@ checkscale(int scale)
 	yyerror("scale must be 1248: %d", scale);
 }
 
-void
-syminit(Sym *s)
+void syminit(Sym *s)
 {
 
 	s->type = LNAME;
@@ -1097,8 +1094,7 @@ cclean(void)
 	Bflush(&obuf);
 }
 
-void
-zname(char *n, int t, int s)
+void zname(char *n, int t, int s)
 {
 
 	BPUTLE2(&obuf, ANAME);		/* as(2) */
@@ -1111,8 +1107,7 @@ zname(char *n, int t, int s)
 	BPUTC(&obuf, 0);
 }
 
-void
-zaddr(Gen *a, int s)
+void zaddr(Gen *a, int s)
 {
 	int32 l;
 	int i, t;
@@ -1180,8 +1175,7 @@ zaddr(Gen *a, int s)
 		BPUTC(&obuf, a->type);
 }
 
-void
-outcode(int a, Gen2 *g2)
+void outcode(int a, Gen2 *g2)
 {
 	int sf, st, t;
 	Sym *s;
@@ -1246,8 +1240,7 @@ out:
 		pc++;
 }
 
-void
-outhist(void)
+void outhist(void)
 {
 	Gen g;
 	Hist *h;

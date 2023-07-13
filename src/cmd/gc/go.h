@@ -286,9 +286,13 @@ struct	Node
 	// Generic recursive walks should follow these fields.
 	Node*	left;
 	Node*	right;
+	// for init ; test ; incr {} 语句中的 test 部分, 见 src/cmd/gc/go.y -> ntest
 	Node*	ntest;
+	// for init ; test ; incr {} 语句中的 incr 部分, 见 src/cmd/gc/go.y -> nincr
 	Node*	nincr;
+	// for init ; test ; incr {} 语句中的 init 部分, 见 src/cmd/gc/go.y -> ninit
 	NodeList*	ninit;
+	// for init ; test ; incr {} 语句中的 body 部分, 见 src/cmd/gc/go.y -> nbody
 	NodeList*	nbody;
 	NodeList*	nelse;
 	NodeList*	list;
@@ -305,7 +309,10 @@ struct	Node
 	uchar	class;		// PPARAM, PAUTO, PEXTERN, etc
 	uchar	method;		// OCALLMETH name
 	uchar	embedded;	// ODCLFIELD embedded type
-	uchar	colas;		// OAS resulting from :=
+	// 表示当前表达式是否为 := 类型的赋值, 1为是, 0为否.
+	// 可见 src/cmd/gc/go.y 中, 关于 colas 的赋值场景
+	// OAS resulting from :=
+	uchar	colas;
 	uchar	diag;		// already printed error about this
 	uchar	noescape;	// func arguments do not escape
 	uchar	builtin;	// built-in name, like len or close

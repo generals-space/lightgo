@@ -1,4 +1,4 @@
-# 借助bison分析器工具实现type A=B语法
+# bison分析器工具实践.1.实现type A=B语法[go.y y.tab.c]
 
 参考文章
 
