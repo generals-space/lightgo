@@ -71,6 +71,7 @@ prog:
 	line
 
 line:
+	// 可能会以`;`结尾
 	LLAB ':'
 	{
 		if($1->value != pc)
@@ -78,12 +79,14 @@ line:
 		$1->value = pc;
 	}
 	line
+	// 可能会以`;`结尾
 |	LNAME ':'
 	{
 		$1->type = LLAB;
 		$1->value = pc;
 	}
 	line
+	// 空行
 |	';'
 |	inst ';'
 |	error ';'
@@ -583,6 +586,7 @@ nam:
 		$$.offset = $4;
 	}
 
+// 在汇编函数名`TEXT runtime·mcall(SB), NOSPLIT, $0-8`中, `-8`即为 offset 部分.
 offset:
 	{
 		$$ = 0;

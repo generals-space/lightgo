@@ -24,3 +24,12 @@ func (enc *Encoder) SetIndent(prefix, indent string) {
 func (enc *Encoder) SetEscapeHTML(on bool) {
 	enc.escapeHTML = on
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// 	@compatible: 此函数在 v1.10 版本添加
+//
+// DisallowUnknownFields causes the Decoder to return an error when the destination
+// is a struct and the input contains object keys which do not match any
+// non-ignored, exported fields in the destination.
+func (dec *Decoder) DisallowUnknownFields() { dec.d.disallowUnknownFields = true }

@@ -4,6 +4,10 @@
 
 package net
 
+// 	@compatible: 该文件在 v1.9 版本将被移到
+// https://github.com/golang/go/tree/go1.9/src/internal/poll/fd_mutex.go
+//
+
 import "sync/atomic"
 
 // fdMutex is a specialized synchronization primitive

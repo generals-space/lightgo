@@ -1044,6 +1044,11 @@ void reflect·ismapkey(Type *typ, bool ret)
 //
 // caller:
 // 	1. runtime·makemap()
+//
+// 	@compatible: 在 v1.5 版本中, 函数原型发生了变动, 成为了
+// func makemap(t *maptype, hint int64, h *hmap, bucket unsafe.Pointer) *hmap {}
+// 见 [go v1.5 hashmap.go](https://github.com/golang/go/tree/go1.5/src/runtime/hashmap.go#187L)
+//
 Hmap* runtime·makemap_c(MapType *typ, int64 hint)
 {
 	Hmap *h;
@@ -1092,10 +1097,20 @@ void runtime·makemap(MapType *typ, int64 hint, Hmap *ret)
 
 // For reflect:
 //	func makemap(Type *mapType) (hmap *map)
-void
-reflect·makemap(MapType *t, Hmap *ret)
+void reflect·makemap(MapType *t, Hmap *ret)
 {
 	ret = runtime·makemap_c(t, 0);
+	FLUSH(&ret);
+}
+
+//
+// 	@implementOf: src/pkg/reflect/value_compatible.go -> makemap_v1_9()
+//
+// For reflect:
+//	func makemap(Type *mapType) (hmap *map)
+void reflect·makemap_v1_9(MapType *t, int64 hint, Hmap *ret)
+{
+	ret = runtime·makemap_c(t, hint);
 	FLUSH(&ret);
 }
 

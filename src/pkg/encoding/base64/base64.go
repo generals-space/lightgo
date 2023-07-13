@@ -24,6 +24,8 @@ import (
 type Encoding struct {
 	encode    string
 	decodeMap [256]byte
+	// 	@compatible: 此字段在 v1.5 版本添加
+	padChar   rune
 }
 
 const encodeStd = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"

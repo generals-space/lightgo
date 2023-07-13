@@ -188,7 +188,7 @@ func (c *UnixConn) WriteTo(b []byte, addr Addr) (n int, err error) {
 	}
 	a, ok := addr.(*UnixAddr)
 	if !ok {
-		return 0, &OpError{"write", c.fd.net, addr, syscall.EINVAL}
+		return 0, &OpError{Op: "write", Net: c.fd.net, Addr: addr, Err: syscall.EINVAL}
 	}
 	return c.WriteToUnix(b, a)
 }

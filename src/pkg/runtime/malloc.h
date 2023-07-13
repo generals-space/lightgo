@@ -239,6 +239,8 @@ void*	runtime·FixAlloc_Alloc(FixAlloc *f);
 void	runtime·FixAlloc_Free(FixAlloc *f, void *p);
 
 
+// 	@implementBy: src/pkg/runtime/mem.go -> MemStats{}
+//
 // Statistics.
 // Shared with Go: if you edit this structure, also edit type MemStats in mem.go.
 struct MStats
@@ -314,6 +316,9 @@ struct MStats
 		uint64 nmalloc;
 		uint64 nfree;
 	} by_size[NumSizeClasses];
+
+	// 	@compatible: 此字段在 v1.5 版本添加
+	float64 gccpufraction;
 };
 
 #define mstats runtime·memStats	/* name shared with Go */
