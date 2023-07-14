@@ -1,4 +1,4 @@
-# go1.2 6l 6g等工具的编译生成及使用[8l 8g objdump]
+# 6g 6a 6l(go build)等工具的编译生成及使用[dist objdump]
 
 参考文章
 
@@ -49,7 +49,7 @@ total 18672
 -rwxr-xr-x 1 root root 2935448 Mar  5 18:57 yacc
 ```
 
-其中6a用于编译, 6g用于链接.
+其中6g用于编译c代码, 6a用于编译汇编代码, 6l用于链接.
 
 在`go build`出现之前, golang开发者一直使用6a, 6c, 6g等工具进行编译和链接的.
 
@@ -105,4 +105,3 @@ $ ll -h
 $ go tool dist install -vv
 go tool: no such tool "dist"
 ```
-
