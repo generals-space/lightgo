@@ -13,7 +13,16 @@
 package io
 
 import (
-	"errors"
+	errors "internal/errors"
+)
+
+// 	@compatible: 此枚举列表在 v1.7 版本初次添加
+//
+// Seek whence values.
+const (
+	SeekStart   = 0 // seek relative to the origin of the file
+	SeekCurrent = 1 // seek relative to the current offset
+	SeekEnd     = 2 // seek relative to the end
 )
 
 // ErrShortWrite means that a write accepted fewer bytes than requested
@@ -325,6 +334,9 @@ func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 	return
 }
 
+// 	@compatible: Copy() 函数的内容在 v1.5 版本被拆分到 copyBuffer() 中.
+// 	@note: 这里为了改动最小, 没有对原本的 Copy() 函数做改动.
+//
 // Copy copies from src to dst until either EOF is reached
 // on src or an error occurs.  It returns the number of bytes
 // copied and the first error encountered while copying, if any.
@@ -434,11 +446,11 @@ func (s *SectionReader) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	default:
 		return 0, errWhence
-	case 0:
+	case SeekStart:
 		offset += s.base
-	case 1:
+	case SeekCurrent:
 		offset += s.off
-	case 2:
+	case SeekEnd:
 		offset += s.limit
 	}
 	if offset < s.base {

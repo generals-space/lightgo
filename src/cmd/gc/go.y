@@ -5,6 +5,8 @@
 /*
  * 本文件定义了 golang 的语法规则, 经过处理得到可编译的 y.tab.c 文件.
  *
+ * bison go.y --output=y.tab.c --defines=y.tab.h
+ *
  * Go language grammar.
  *
  * The Go semicolon rules are:
@@ -303,14 +305,25 @@ xdcl:
 	}
 
 common_dcl:
+	// 3种情况:
+	//
+	// 1. var a, b, c int
+	// 2. var a, b, c int = 1, 2, 3
+	// 3. var a, b, c = function()
 	LVAR vardcl
 	{
 		$$ = $2;
 	}
+	// var (
+	// 	a, b, c int = 1, 2, 3;
+	//  str string = "hello world";
+	// )
 |	LVAR '(' vardcl_list osemi ')'
 	{
 		$$ = $3;
 	}
+	// var () 
+	// 无任何变量定义
 |	LVAR '(' ')'
 	{
 		$$ = nil;
@@ -338,10 +351,15 @@ common_dcl:
 		$$ = nil;
 		iota = -100000;
 	}
+	// type myType int
 |	LTYPE typedcl
 	{
 		$$ = list1($2);
 	}
+	// type (
+	// 	myInt int;
+	// 	myBool bool;
+	// )
 |	LTYPE '(' typedcl_list osemi ')'
 	{
 		$$ = $3;
@@ -357,15 +375,20 @@ lconst:
 		iota = 0;
 	}
 
+// var 变量声明语法
+// 注意: 如下规则中不包含 var 关键字, var 关键字可见 vardcl() 的主调函数, 用 LVAR 表示.
 vardcl:
+	// var a, b, c int
 	dcl_name_list ntype
 	{
 		$$ = variter($1, $2, nil);
 	}
+	// var a, b, c int = 1, 2, 3
 |	dcl_name_list ntype '=' expr_list
 	{
 		$$ = variter($1, $2, $4);
 	}
+	// var a, b, c = function()
 |	dcl_name_list '=' expr_list
 	{
 		$$ = variter($1, nil, $3);
@@ -401,10 +424,18 @@ typedclname:
 		$$ = typedcl0($1);
 	}
 
+// type 类型定义(别名)
+// 注意: 如下规则中不包含 type 关键字, type 关键字可见 typedcl() 的主调函数, 用 LTYPE 表示.
 typedcl:
+	// type myType int
 	typedclname ntype
 	{
 		$$ = typedcl1($1, $2, 1);
+	}
+|	// type myType int
+	typedclname '=' ntype
+	{
+		$$ = typedcl1($1, $3, 1);
 	}
 
 simple_stmt:
@@ -426,11 +457,13 @@ simple_stmt:
 			break;
 		}
 	}
+	// a := 1
 |	expr LASOP expr
 	{
 		$$ = nod(OASOP, $1, $3);
 		$$->etype = $2;			// rathole to pass opcode
 	}
+	// a, b, c = 1, 2, 3
 |	expr_list '=' expr_list
 	{
 		if($1->next == nil && $3->next == nil) {
@@ -443,6 +476,7 @@ simple_stmt:
 		$$->list = $1;
 		$$->rlist = $3;
 	}
+	// a, b, c := 1, 2, 3
 |	expr_list LCOLAS expr_list
 	{
 		if($3->n->op == OTYPESW) {
@@ -459,11 +493,13 @@ simple_stmt:
 		}
 		$$ = colas($1, $3, $2);
 	}
+	// a ++ 自增
 |	expr LINC
 	{
 		$$ = nod(OASOP, $1, nodintconst(1));
 		$$->etype = OADD;
 	}
+	// a -- 自减
 |	expr LDEC
 	{
 		$$ = nod(OASOP, $1, nodintconst(1));
@@ -601,12 +637,15 @@ loop_body:
 	}
 
 range_stmt:
+	// k, v = range XXX
 	expr_list '=' LRANGE expr
 	{
 		$$ = nod(ORANGE, N, $4);
 		$$->list = $1;
 		$$->etype = 0;	// := flag
 	}
+	// LCOLAS 即为 ':=' 符号
+	// item, ok := range XXX
 |	expr_list LCOLAS LRANGE expr
 	{
 		$$ = nod(ORANGE, N, $4);
@@ -614,8 +653,20 @@ range_stmt:
 		$$->colas = 1;
 		colasdefn($1, $$);
 	}
+	// for range XXX 
+|	LRANGE expr
+	{
+		$$ = nod(ORANGE, N, $2);
+		// 这里模拟了第一种情况中的 for _ = range XXX,
+		// 只不过 `_` 部分通过 list1(nod(ONAME, N, N)) 注入, 这样就不需要开发者显式写了.
+		// `_` 用 ONAME 表示.
+		$$->list = list1(nod(ONAME, N, N));
+		$$->etype = 0;	// := flag
+	}
 
+// for {} 循环, 条件部分
 for_header:
+	// for i := 0; i < 10; i ++ {}
 	osimple_stmt ';' osimple_stmt ';' osimple_stmt
 	{
 		// init ; test ; incr
@@ -627,12 +678,14 @@ for_header:
 		$$->ntest = $3;
 		$$->nincr = $5;
 	}
+	// for a < b {}
 |	osimple_stmt
 	{
 		// normal test
 		$$ = nod(OFOR, N, N);
 		$$->ntest = $1;
 	}
+	// for a, b := range XXX {}
 |	range_stmt
 
 for_body:
@@ -643,6 +696,7 @@ for_body:
 	}
 
 for_stmt:
+	// for {}
 	LFOR
 	{
 		markdcl();
@@ -1498,8 +1552,15 @@ xdcl_list:
 		noescape = 0;
 	}
 
+// vardcl_list 其实就是常规的 (vardcl;vardcl;) 的组合.
+//
+// var (
+// 	a, b, c int = 1, 2, 3;
+//  str string = "hello world";
+// )
 vardcl_list:
 	vardcl
+	// 下面这一句有点像递归, 但最终的组成元素还是 vardcl.
 |	vardcl_list ';' vardcl
 	{
 		$$ = concat($1, $3);

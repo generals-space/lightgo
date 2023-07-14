@@ -257,12 +257,13 @@ addvar(Node *n, Type *t, int ctxt)
 	n->type = t;
 }
 
-/*
- * declare variables from grammar
- * new_name_list (type | [type] = expr_list)
- */
-NodeList*
-variter(NodeList *vl, Node *t, NodeList *el)
+// caller:
+// 	1. src/cmd/gc/go.y -> vardcl() 只有这一处, 变量声明时被调用.
+//
+// declare variables from grammar
+// new_name_list (type | [type] = expr_list)
+// 
+NodeList* variter(NodeList *vl, Node *t, NodeList *el)
 {
 	int doexpr;
 	Node *v, *e, *as2;
@@ -733,8 +734,7 @@ funcbody(Node *n)
 /*
  * new type being defined with name s.
  */
-Node*
-typedcl0(Sym *s)
+Node* typedcl0(Sym *s)
 {
 	Node *n;
 
@@ -749,8 +749,7 @@ typedcl0(Sym *s)
  * is being declared to have uncompiled type t.
  * return the ODCLTYPE node to use.
  */
-Node*
-typedcl1(Node *n, Node *t, int local)
+Node* typedcl1(Node *n, Node *t, int local)
 {
 	n->ntype = t;
 	n->local = local;

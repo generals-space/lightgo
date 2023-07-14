@@ -14,8 +14,10 @@ export GO_TOOLLIST=${GO_TOOL}/linux_amd64
 export GO_PATH_LOCAL=${GOROOT}/gopath
 ## vscode golang 插件所需的子插件, 如代码补全, 智能提示等工具
 export GO_PATH_EXTENSION=/usr/local/gopath_extension
+## 兼容标准库
+export GO_PATH_COMPATIBLE=/usr/local/go/compatible
 
-export GOPATH=/usr/local/gopath:${GO_PATH_LOCAL}:${GO_PATH_EXTENSION}
+export GOPATH=/usr/local/gopath:${GO_PATH_LOCAL}:${GO_PATH_EXTENSION}:${GO_PATH_COMPATIBLE}
 
 ## 将 dist, 6g, 6l 等命令加入 PATH
 export PATH=$PATH:${GOROOT}/bin:${GO_TOOL}:${GO_TOOLLIST}

@@ -7,7 +7,7 @@
 package exec
 
 import (
-	"errors"
+	errors "internal/errors"
 	"os"
 	"strings"
 )

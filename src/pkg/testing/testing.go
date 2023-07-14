@@ -391,9 +391,18 @@ func tRunner(t *T, test *InternalTest) {
 	test.F(t)
 }
 
-// An internal function but exported because it is cross-package; part of the implementation
-// of the "go test" command.
-func Main(matchString func(pat, str string) (bool, error), tests []InternalTest, benchmarks []InternalBenchmark, examples []InternalExample) {
+// 	@golang原生: go test 命令的入口函数
+//
+// 	@param tests: *_test.go 文件中, 各 TestXXX()函数.
+//
+// An internal function but exported because it is cross-package;
+// part of the implementation of the "go test" command.
+func Main(
+	matchString func(pat, str string) (bool, error), 
+	tests []InternalTest, 
+	benchmarks []InternalBenchmark, 
+	examples []InternalExample,
+) {
 	flag.Parse()
 	parseCpuList()
 
@@ -426,7 +435,15 @@ func (t *T) report() {
 	}
 }
 
-func RunTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ok bool) {
+// RunTests 执行 TestXXX() 函数
+//
+// 与 TestXXX() 平级的, 还有 BenchmarkXXX(), Example() 等函数.
+//
+// 	@param tests: *_test.go 文件中, 各 TestXXX()函数.
+func RunTests(
+	matchString func(pat, str string) (bool, error), 
+	tests []InternalTest,
+) (ok bool) {
 	ok = true
 	if len(tests) == 0 && !haveExamples {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")

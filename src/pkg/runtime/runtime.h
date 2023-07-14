@@ -825,6 +825,8 @@ enum
 typedef	struct	Alg		Alg;
 struct	Alg
 {
+	// Alg 对象的4个成员函数: hash, equal, print, copy
+
 	// hash 应该是指向 src/pkg/runtime/asm_amd64.s -> runtime·aeshash() 的汇编指针.
 	// 还记得在 golang runtime 启动过程中, 有一个 runtime·hashinit() 调用吗?
 	void	(*hash)(uintptr*, uintptr, void*);
@@ -1031,6 +1033,7 @@ void	runtime·mcall(void(*)(G*));
 void	runtime·usleep(uint32);
 int64	runtime·cputicks(void);
 
+void	runtime·asmcgocall(void (*fn)(void*), void*);
 // 汇编函数实现结束
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -1114,7 +1117,6 @@ void	runtime·park(void(*)(Lock*), Lock*, int8*);
 void	runtime·tsleep(int64, int8*);
 M*	runtime·newm(void);
 void	runtime·goexit(void);
-void	runtime·asmcgocall(void (*fn)(void*), void*);
 void	runtime·entersyscall(void);
 void	runtime·entersyscallblock(void);
 void	runtime·exitsyscall(void);

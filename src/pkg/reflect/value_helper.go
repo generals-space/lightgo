@@ -34,9 +34,9 @@ type iword unsafe.Pointer
 func (v Value) iword() iword {
 	if v.flag&flagIndir != 0 && v.typ.size <= ptrSize {
 		// Have indirect but want direct word.
-		return loadIword(v.val, v.typ.size)
+		return loadIword(v.ptr, v.typ.size)
 	}
-	return iword(v.val)
+	return iword(v.ptr)
 }
 
 // loadIword loads n bytes at p from memory into an iword.

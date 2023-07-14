@@ -103,6 +103,8 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 // It returns the number of entries written to pc.
 func Callers(skip int, pc []uintptr) int
 
+////////////////////////////////////////////////////////////////////////////////
+
 type Func struct {
 	opaque struct{} // unexported field to disallow conversions
 }
@@ -136,6 +138,8 @@ func funcline_go(*Func, uintptr) (string, int)
 func funcname_go(*Func) string
 // 	@implementAt: src/pkg/runtime/symtab.c -> runtime·funcentry_go()
 func funcentry_go(*Func) uintptr
+
+////////////////////////////////////////////////////////////////////////////////
 
 // SetFinalizer sets the finalizer associated with x to f.
 // When the garbage collector finds an unreachable block

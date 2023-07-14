@@ -286,9 +286,13 @@ struct	Node
 	// Generic recursive walks should follow these fields.
 	Node*	left;
 	Node*	right;
+	// for init ; test ; incr {} 语句中的 test 部分, 见 src/cmd/gc/go.y -> ntest
 	Node*	ntest;
+	// for init ; test ; incr {} 语句中的 incr 部分, 见 src/cmd/gc/go.y -> nincr
 	Node*	nincr;
+	// for init ; test ; incr {} 语句中的 init 部分, 见 src/cmd/gc/go.y -> ninit
 	NodeList*	ninit;
+	// for init ; test ; incr {} 语句中的 body 部分, 见 src/cmd/gc/go.y -> nbody
 	NodeList*	nbody;
 	NodeList*	nelse;
 	NodeList*	list;
@@ -305,7 +309,10 @@ struct	Node
 	uchar	class;		// PPARAM, PAUTO, PEXTERN, etc
 	uchar	method;		// OCALLMETH name
 	uchar	embedded;	// ODCLFIELD embedded type
-	uchar	colas;		// OAS resulting from :=
+	// 表示当前表达式是否为 := 类型的赋值, 1为是, 0为否.
+	// 可见 src/cmd/gc/go.y 中, 关于 colas 的赋值场景
+	// OAS resulting from :=
+	uchar	colas;
 	uchar	diag;		// already printed error about this
 	uchar	noescape;	// func arguments do not escape
 	uchar	builtin;	// built-in name, like len or close
@@ -556,7 +563,8 @@ enum
 	OAS2MAPR,	// x, ok = m["foo"]
 	OAS2DOTTYPE,	// x, ok = I.(int)
 	OASOP,	// x += y
-	OCALL,	// function call, method call or type conversion, possibly preceded by defer or go.
+	// function call, method call or type conversion, possibly preceded by defer or go.
+	OCALL,
 	OCALLFUNC,	// f()
 	OCALLMETH,	// t.Method()
 	OCALLINTER,	// err.Error()
@@ -577,19 +585,26 @@ enum
 	OSTRUCTLIT,	// T{x:3, y:4}
 	OARRAYLIT,	// [2]int{3, 4}
 	OPTRLIT,	// &T{x:3, y:4}
-	OCONV,	// var i int; var u uint; i = int(u)
-	OCONVIFACE,	// I(t)
-	// 类型转换并赋值时发现, 两者本来就是同一类型, 无需做底层转换.
+	// 普通类型转换
+	// var i int; var u uint; i = int(u)
+	OCONV,
+	// 接口类型转换
+	// I(t)
+	OCONVIFACE,
+	// 类型转换的特殊情况, 两者本来就是同一类型, 无需做底层转换.
 	// 下面的语句是同一场景下的一段连续的表达式.
 	// type Int int; var i int; var j Int; i = int(j)
 	OCONVNOP,
 	// copy()函数
 	OCOPY,
-	ODCL,	// var x int
+	// 指定类型的变量声明
+	// var x int
+	ODCL,
 	ODCLFUNC,	// func f() or func (r) f()
 	ODCLFIELD,	// struct field, interface field, or func/method argument/return value.
 	ODCLCONST,	// const pi = 3.14
-	ODCLTYPE,	// type Int int
+	// type Int int
+	ODCLTYPE,
 	// delete()函数
 	ODELETE,
 	ODOT,	// t.x
@@ -1075,6 +1090,10 @@ EXTERN	Type*	idealstring;
 EXTERN	Type*	idealbool;
 EXTERN	Type*	bytetype;
 EXTERN	Type*	runetype;
+// errortype 就是 golang 的 error 类型的底层实现
+//
+// 在编译期 src/cmd/gc/lex.c -> lexinit1() 函数中, 被赋值.
+// 其实对应的是 src/pkg/builtin/builtin.go -> error 接口类型
 EXTERN	Type*	errortype;
 
 ////////////////////////////////////////////////////////////////////////////////

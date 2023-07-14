@@ -180,7 +180,7 @@ func cvtStringRunes(v Value, t Type) Value {
 func cvtDirect(v Value, typ Type) Value {
 	f := v.flag
 	t := typ.common()
-	val := v.val
+	val := v.ptr
 	if f&flagAddr != 0 {
 		// indirect, mutable word - make a copy
 		ptr := unsafe_New(t)

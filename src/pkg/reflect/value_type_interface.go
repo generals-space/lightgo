@@ -33,11 +33,11 @@ func valueInterface(v Value, safe bool) interface{} {
 		// Empty interface has one layout, all interfaces with
 		// methods have a second layout.
 		if v.NumMethod() == 0 {
-			return *(*interface{})(v.val)
+			return *(*interface{})(v.ptr)
 		}
 		return *(*interface {
 			M()
-		})(v.val)
+		})(v.ptr)
 	}
 
 	// Non-interface value.
@@ -67,5 +67,5 @@ func (v Value) InterfaceData() [2]uintptr {
 	// has to import "unsafe" to turn it into something
 	// that can be abused.
 	// Interface value is always bigger than a word; assume flagIndir.
-	return *(*[2]uintptr)(v.val)
+	return *(*[2]uintptr)(v.ptr)
 }

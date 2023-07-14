@@ -8,6 +8,7 @@ package http
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net/textproto"
@@ -74,6 +75,26 @@ type Response struct {
 	// Request's Body is nil (having already been consumed).
 	// This is only populated for Client requests.
 	Request *Request
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.3 版本添加
+	// TLS contains information about the TLS connection on which the
+	// response was received. It is nil for unencrypted responses.
+	// The pointer is shared between responses and should not be
+	// modified.
+	TLS *tls.ConnectionState
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.7 版本添加
+	// Uncompressed reports whether the response was sent compressed but
+	// was decompressed by the http package. When true, reading from
+	// Body yields the uncompressed content instead of the compressed
+	// content actually set from the server, ContentLength is set to -1,
+	// and the "Content-Length" and "Content-Encoding" fields are deleted
+	// from the responseHeader. To get the original response from
+	// the server, set Transport.DisableCompression to true.
+	Uncompressed bool
+
 }
 
 // Cookies parses and returns the cookies set in the Set-Cookie headers.

@@ -26,6 +26,8 @@
 //   - inline functions with ... args
 //   - handle T.meth(f()) with func f() (t T, arg, arg, )
 
+// inl -> inline(内联)
+
 #include <u.h>
 #include <libc.h>
 #include "go.h"

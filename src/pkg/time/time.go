@@ -7,7 +7,7 @@
 // The calendrical calculations always assume a Gregorian calendar.
 package time
 
-import "errors"
+import errors "internal/errors"
 
 // A Time represents an instant in time with nanosecond precision.
 //

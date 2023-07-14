@@ -13,3 +13,4 @@ zstring_linux_amd64.c
 zsys_linux_amd64.s
 ztime_linux_amd64.c
 zversion.go
+zsync_compatible_linux_amd64.c

@@ -22,7 +22,12 @@ type Interface interface {
 	Swap(i, j int)
 }
 
-func min(a, b int) int {
+// 	@compatible: 为了兼容 genzfunc_compatible.go 的生成规则, 这里重命名 min -> _min
+//
+// genzfunc_compatible.go -> rewriteCall() 会针 sort.go 中函数调用,
+// 都转换成 xxx_func 这种格式, 所以这里将其更改为下划线开头, 并在 rewriteCall() 中忽略.
+//
+func _min(a, b int) int {
 	if a < b {
 		return a
 	}
@@ -159,10 +164,10 @@ func doPivot(data Interface, lo, hi int) (midlo, midhi int) {
 		c--
 	}
 
-	n := min(b-a, a-lo)
+	n := _min(b-a, a-lo)
 	swapRange(data, lo, b-n, n)
 
-	n = min(hi-d, d-c)
+	n = _min(hi-d, d-c)
 	swapRange(data, c, hi-n, n)
 
 	return lo + b - a, hi - (d - c)
@@ -282,6 +287,10 @@ func Ints(a []int) { Sort(IntSlice(a)) }
 // Float64s sorts a slice of float64s in increasing order.
 func Float64s(a []float64) { Sort(Float64Slice(a)) }
 
+// Strings 该函数实现的是对字符串数组的排序, 而非单个字符串的排序.
+//
+// 	@param a: 注意, 接受的是一个 []string 数组, 而非单个字符串.
+//
 // Strings sorts a slice of strings in increasing order.
 func Strings(a []string) { Sort(StringSlice(a)) }
 
@@ -325,7 +334,10 @@ func StringsAreSorted(a []string) bool { return IsSorted(StringSlice(a)) }
 // It makes one call to data.Len to determine n, O(n*log(n)) calls to
 // data.Less and O(n*log(n)*log(n)) calls to data.Swap.
 func Stable(data Interface) {
-	n := data.Len()
+	stable(data, data.Len())
+}
+
+func stable(data Interface, n int) {
 	blockSize := 20
 	a, b := 0, blockSize
 	for b <= n {

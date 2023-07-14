@@ -42,9 +42,9 @@ func (v Value) call(op string, in []Value) []Value {
 	if v.flag&flagMethod != 0 {
 		t, fn, rcvr = methodReceiver(op, v, int(v.flag)>>flagMethodShift)
 	} else if v.flag&flagIndir != 0 {
-		fn = *(*unsafe.Pointer)(v.val)
+		fn = *(*unsafe.Pointer)(v.ptr)
 	} else {
-		fn = v.val
+		fn = v.ptr
 	}
 
 	if fn == nil {
@@ -136,9 +136,9 @@ func (v Value) call(op string, in []Value) []Value {
 		addr := unsafe.Pointer(uintptr(ptr) + off)
 		v = v.assignTo("reflect.Value.Call", targ, (*interface{})(addr))
 		if v.flag&flagIndir == 0 {
-			storeIword(addr, iword(v.val), n)
+			storeIword(addr, iword(v.ptr), n)
 		} else {
-			memmove(addr, v.val, n)
+			memmove(addr, v.ptr, n)
 		}
 		off += n
 	}
@@ -192,14 +192,14 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer) {
 		v := Value{typ, nil, flag(typ.Kind()) << flagKindShift}
 		if typ.size <= ptrSize {
 			// value fits in word.
-			v.val = unsafe.Pointer(loadIword(unsafe.Pointer(uintptr(ptr)+off), typ.size))
+			v.ptr = unsafe.Pointer(loadIword(unsafe.Pointer(uintptr(ptr)+off), typ.size))
 		} else {
 			// value does not fit in word.
 			// Must make a copy, because f might keep a reference to it,
 			// and we cannot let f keep a reference to the stack frame
 			// after this function returns, not even a read-only reference.
-			v.val = unsafe_New(typ)
-			memmove(v.val, unsafe.Pointer(uintptr(ptr)+off), typ.size)
+			v.ptr = unsafe_New(typ)
+			memmove(v.ptr, unsafe.Pointer(uintptr(ptr)+off), typ.size)
 			v.flag |= flagIndir
 		}
 		in = append(in, v)
@@ -230,9 +230,9 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer) {
 			off += -off & uintptr(typ.align-1)
 			addr := unsafe.Pointer(uintptr(ptr) + off)
 			if v.flag&flagIndir == 0 {
-				storeIword(addr, iword(v.val), typ.size)
+				storeIword(addr, iword(v.ptr), typ.size)
 			} else {
-				memmove(addr, v.val, typ.size)
+				memmove(addr, v.ptr, typ.size)
 			}
 			off += typ.size
 		}
@@ -278,16 +278,11 @@ func callMethod(ctxt *methodValue, frame unsafe.Pointer) {
 	)
 }
 
-func (t *rtype) AssignableTo(u Type) bool {
-	if u == nil {
-		panic("reflect: nil type passed to Type.AssignableTo")
-	}
-	uu := u.(*rtype)
-	return directlyAssignable(uu, t) || implements(uu, t)
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
+// caller:
+// 	1. callReflect() 只有这一处
+//
 // funcName returns the name of f, for use in error messages.
 func funcName(f func([]Value) []Value) string {
 	pc := *(*uintptr)(unsafe.Pointer(&f))
@@ -315,7 +310,7 @@ func methodReceiver(
 			panic("reflect: " + op + " of unexported method")
 		}
 		t = m.typ
-		iface := (*nonEmptyInterface)(v.val)
+		iface := (*nonEmptyInterface)(v.ptr)
 		if iface.itab == nil {
 			panic("reflect: " + op + " of method on nil interface value")
 		}

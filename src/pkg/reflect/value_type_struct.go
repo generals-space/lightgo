@@ -27,13 +27,13 @@ func (v Value) Field(i int) Value {
 	switch {
 	case fl&flagIndir != 0:
 		// Indirect.  Just bump pointer.
-		val = unsafe.Pointer(uintptr(v.val) + field.offset)
+		val = unsafe.Pointer(uintptr(v.ptr) + field.offset)
 	case bigEndian:
 		// Direct.  Discard leading bytes.
-		val = unsafe.Pointer(uintptr(v.val) << (field.offset * 8))
+		val = unsafe.Pointer(uintptr(v.ptr) << (field.offset * 8))
 	default:
 		// Direct.  Discard leading bytes.
-		val = unsafe.Pointer(uintptr(v.val) >> (field.offset * 8))
+		val = unsafe.Pointer(uintptr(v.ptr) >> (field.offset * 8))
 	}
 
 	return Value{typ, val, fl}
@@ -106,7 +106,7 @@ func (v Value) Method(i int) Value {
 	fl := v.flag & (flagRO | flagIndir)
 	fl |= flag(Func) << flagKindShift
 	fl |= flag(i)<<flagMethodShift | flagMethod
-	return Value{v.typ, v.val, fl}
+	return Value{v.typ, v.ptr, fl}
 }
 
 // NumMethod returns the number of methods in the value's method set.

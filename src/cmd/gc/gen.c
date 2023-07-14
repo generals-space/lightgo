@@ -256,15 +256,14 @@ stmtlabel(Node *n)
 /*
  * compile statements
  */
-void
-genlist(NodeList *l)
+void genlist(NodeList *l)
 {
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		gen(l->n);
+	}
 }
 
-void
-gen(Node *n)
+void gen(Node *n)
 {
 	int32 lno;
 	Prog *scontin, *sbreak;
@@ -307,6 +306,7 @@ gen(Node *n)
 		break;
 
 	case OLABEL:
+	{
 		lab = newlab(n);
 
 		// if there are pending gotos, resolve them all to the current pc.
@@ -328,6 +328,7 @@ gen(Node *n)
 			}
 		}
 		break;
+	}
 
 	case OGOTO:
 		// if label is defined, emit jump to it.
@@ -518,8 +519,7 @@ ret:
  *	proc=1	goroutine run in new proc
  *	proc=2	defer call save away stack
  */
-void
-cgen_callmeth(Node *n, int proc)
+void cgen_callmeth(Node *n, int proc)
 {
 	Node n2;
 	Node *l;

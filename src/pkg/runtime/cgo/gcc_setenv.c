@@ -9,8 +9,7 @@
 #include <stdlib.h>
 
 /* Stub for calling setenv */
-void
-x_cgo_setenv(char **arg)
+void x_cgo_setenv(char **arg)
 {
 	setenv(arg[0], arg[1], 1);
 }

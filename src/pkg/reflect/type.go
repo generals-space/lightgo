@@ -287,7 +287,7 @@ func (t *rtype) Bits() int {
 	return int(t.size) * 8
 }
 
-// Elem 返回目标对象的引用类型(而不是指针类型).
+// Elem 返回目标对象的**非指针类型**.
 // 比如, 如果 t 是 *[]int, 那么 t.Elem() 将为 []int, 对于 struct 类型也是如此.
 //
 // 如果 t 本身就是引用类型, 那就直接返回, 不会发生其他事.
@@ -320,11 +320,29 @@ func (t *rtype) ConvertibleTo(u Type) bool {
 	return convertOp(uu, t) != nil
 }
 
-// 	@compatible: 该方法在 v1.4 版本初次添加
+// 	@compatible: 该方法在 v1.4 版本初次添加(v1.7 版本时又增加了对 struct 相等的判断)
 func (t *rtype) Comparable() bool {
 	return t.alg != nil && t.alg.equal != nil
 }
 
+// AssignableTo 判断当前类型 t 是否能赋值给目标 u 类型.
+//
+// 两种情况:
+// 	1. t 和 u 底层是同一种类型, 可以直接赋值;
+// 	2. u 是接口类型, t 可以是其父接口, 或某个对象, 只要 t 实现了 u 中的所有方法, 也可以赋值;
+//
+// caller:
+// 	1. src/pkg/reflect/value_call.go -> Value.call() 只有这一处
+func (t *rtype) AssignableTo(u Type) bool {
+	if u == nil {
+		panic("reflect: nil type passed to Type.AssignableTo")
+	}
+	uu := u.(*rtype)
+	return directlyAssignable(uu, t) || implements(uu, t)
+}
+
+// directlyAssignable 判断 V 类型是否能直接赋值给 T 类型
+//
 // caller:
 // 	1. rtype.AssignableTo() 只有这一处
 //
@@ -344,6 +362,8 @@ func directlyAssignable(T, V *rtype) bool {
 	if T.Name() != "" && V.Name() != "" || T.Kind() != V.Kind() {
 		return false
 	}
+
+	// 运行到这里, 说明 T 和 V 至少表面上并不是同一类型.
 
 	// x's type T and V must  have identical underlying types.
 	return haveIdenticalUnderlyingType(T, V)
@@ -369,81 +389,97 @@ func haveIdenticalUnderlyingType(T, V *rtype) bool {
 
 	// Composite types.
 	switch kind {
-	case Array:
-		return T.Elem() == V.Elem() && T.Len() == V.Len()
+		case Array:
+		{
+			return T.Elem() == V.Elem() && T.Len() == V.Len()
+		}
 
-	case Chan:
-		// Special case:
-		// x is a bidirectional channel value, T is a channel type,
-		// and x's type V and T have identical element types.
-		if V.ChanDir() == BothDir && T.Elem() == V.Elem() {
+		case Chan:
+		{
+			// Special case:
+			// x is a bidirectional channel value, T is a channel type,
+			// and x's type V and T have identical element types.
+			if V.ChanDir() == BothDir && T.Elem() == V.Elem() {
+				return true
+			}
+
+			// Otherwise continue test for identical underlying type.
+			return V.ChanDir() == T.ChanDir() && T.Elem() == V.Elem()
+		}
+
+		case Func:
+		{
+			t := (*funcType)(unsafe.Pointer(T))
+			v := (*funcType)(unsafe.Pointer(V))
+			if t.dotdotdot != v.dotdotdot || len(t.in) != len(v.in) || len(t.out) != len(v.out) {
+				return false
+			}
+			for i, typ := range t.in {
+				if typ != v.in[i] {
+					return false
+				}
+			}
+			for i, typ := range t.out {
+				if typ != v.out[i] {
+					return false
+				}
+			}
 			return true
 		}
 
-		// Otherwise continue test for identical underlying type.
-		return V.ChanDir() == T.ChanDir() && T.Elem() == V.Elem()
-
-	case Func:
-		t := (*funcType)(unsafe.Pointer(T))
-		v := (*funcType)(unsafe.Pointer(V))
-		if t.dotdotdot != v.dotdotdot || len(t.in) != len(v.in) || len(t.out) != len(v.out) {
+		case Interface:
+		{
+			t := (*interfaceType)(unsafe.Pointer(T))
+			v := (*interfaceType)(unsafe.Pointer(V))
+			if len(t.methods) == 0 && len(v.methods) == 0 {
+				return true
+			}
+			// Might have the same methods but still
+			// need a run time conversion.
 			return false
 		}
-		for i, typ := range t.in {
-			if typ != v.in[i] {
-				return false
-			}
-		}
-		for i, typ := range t.out {
-			if typ != v.out[i] {
-				return false
-			}
-		}
-		return true
 
-	case Interface:
-		t := (*interfaceType)(unsafe.Pointer(T))
-		v := (*interfaceType)(unsafe.Pointer(V))
-		if len(t.methods) == 0 && len(v.methods) == 0 {
+		case Map:
+		{
+			return T.Key() == V.Key() && T.Elem() == V.Elem()
+		}
+
+		case Ptr, Slice:
+		{
+			return T.Elem() == V.Elem()
+		}
+
+		case Struct:
+		{
+			
+			t := (*structType)(unsafe.Pointer(T))
+			v := (*structType)(unsafe.Pointer(V))
+			if len(t.fields) != len(v.fields) {
+				return false
+			}
+			for i := range t.fields {
+				tf := &t.fields[i]
+				vf := &v.fields[i]
+				if tf.name != vf.name && (tf.name == nil || vf.name == nil || *tf.name != *vf.name) {
+					return false
+				}
+				if tf.pkgPath != vf.pkgPath && (tf.pkgPath == nil || vf.pkgPath == nil || *tf.pkgPath != *vf.pkgPath) {
+					return false
+				}
+				if tf.typ != vf.typ {
+					return false
+				}
+				if tf.tag != vf.tag && (tf.tag == nil || vf.tag == nil || *tf.tag != *vf.tag) {
+					return false
+				}
+				if tf.offset != vf.offset {
+					return false
+				}
+			}
 			return true
 		}
-		// Might have the same methods but still
-		// need a run time conversion.
-		return false
 
-	case Map:
-		return T.Key() == V.Key() && T.Elem() == V.Elem()
-
-	case Ptr, Slice:
-		return T.Elem() == V.Elem()
-
-	case Struct:
-		t := (*structType)(unsafe.Pointer(T))
-		v := (*structType)(unsafe.Pointer(V))
-		if len(t.fields) != len(v.fields) {
-			return false
-		}
-		for i := range t.fields {
-			tf := &t.fields[i]
-			vf := &v.fields[i]
-			if tf.name != vf.name && (tf.name == nil || vf.name == nil || *tf.name != *vf.name) {
-				return false
-			}
-			if tf.pkgPath != vf.pkgPath && (tf.pkgPath == nil || vf.pkgPath == nil || *tf.pkgPath != *vf.pkgPath) {
-				return false
-			}
-			if tf.typ != vf.typ {
-				return false
-			}
-			if tf.tag != vf.tag && (tf.tag == nil || vf.tag == nil || *tf.tag != *vf.tag) {
-				return false
-			}
-			if tf.offset != vf.offset {
-				return false
-			}
-		}
-		return true
-	}
+	} // switch 结束
 
 	return false
 }

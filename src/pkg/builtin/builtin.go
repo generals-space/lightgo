@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// 关于 builtin 中类型定义的引用, 应该在 
+// src/cmd/gc/lex.c -> lexinit() 中的 builtinpkg
+//
+// 如 s1 = pkglookup("error", builtinpkg);
+
 /*
 	Package builtin provides documentation for Go's predeclared identifiers.
 	The items documented here are not actually in package builtin
@@ -249,6 +254,11 @@ func print(args ...Type)
 // to stay in the language.
 func println(args ...Type)
 
+// 任何一个实际了 Error() 方法的对象, 都可以被定义为 error 类型?
+//
+// 在编译期 src/cmd/gc/lex.c -> lexinit1() 函数中,
+// 被识别为 src/cmd/gc/go.h -> errortype 类型
+//
 // The error built-in interface type is the conventional interface for
 // representing an error condition, with the nil value representing no error.
 type error interface {

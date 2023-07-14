@@ -31,20 +31,32 @@ type netFD struct {
 
 	// wait server
 	pd pollDesc
+
+	// 	@compatible: v1.9 版本中, 将 fdmu, sysfd, pd 3个字段,
+	// 	抽象到了 internal/pool -> FD{} 结构体中.
+	// 	在进行改造时, 为避免大改大动, 将 FD{} 直接定义在了 fd_unix_pfd_compatible.go 中.
+	//
+	// pfd poll.FD
+	pfd FD
 }
 
 func sysInit() {
 }
 
 func dial(
-	network string, ra Addr, 
+	network string, ra Addr,
 	dialer func(time.Time) (Conn, error), deadline time.Time,
 ) (Conn, error) {
 	return dialer(deadline)
 }
 
 func newFD(sysfd, family, sotype int, net string) (*netFD, error) {
-	return &netFD{sysfd: sysfd, family: family, sotype: sotype, net: net}, nil
+	return &netFD{
+		sysfd: sysfd, family: family, sotype: sotype, net: net,
+		pfd: FD{
+			Sysfd: sysfd,
+		},
+	}, nil
 }
 
 // caller:
@@ -53,6 +65,7 @@ func (fd *netFD) init() error {
 	if err := fd.pd.Init(fd); err != nil {
 		return err
 	}
+	fd.pfd.pd = fd.pd
 	return nil
 }
 
@@ -180,7 +193,7 @@ func (fd *netFD) shutdown(how int) error {
 	defer fd.decref()
 	err := syscall.Shutdown(fd.sysfd, how)
 	if err != nil {
-		return &OpError{"shutdown", fd.net, fd.laddr, err}
+		return &OpError{Op: "shutdown", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 	return nil
 }
@@ -199,7 +212,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 	}
 	defer fd.readUnlock()
 	if err := fd.pd.PrepareRead(); err != nil {
-		return 0, &OpError{"read", fd.net, fd.raddr, err}
+		return 0, &OpError{Op: "read", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	for {
 		n, err = syscall.Read(int(fd.sysfd), p)
@@ -215,7 +228,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 		break
 	}
 	if err != nil && err != io.EOF {
-		err = &OpError{"read", fd.net, fd.raddr, err}
+		err = &OpError{Op: "read", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	return
 }
@@ -226,7 +239,7 @@ func (fd *netFD) ReadFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 	}
 	defer fd.readUnlock()
 	if err := fd.pd.PrepareRead(); err != nil {
-		return 0, nil, &OpError{"read", fd.net, fd.laddr, err}
+		return 0, nil, &OpError{Op: "read", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 	for {
 		n, sa, err = syscall.Recvfrom(fd.sysfd, p, 0)
@@ -242,7 +255,7 @@ func (fd *netFD) ReadFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 		break
 	}
 	if err != nil && err != io.EOF {
-		err = &OpError{"read", fd.net, fd.laddr, err}
+		err = &OpError{Op: "read", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 	return
 }
@@ -255,7 +268,7 @@ func (fd *netFD) ReadMsg(
 	}
 	defer fd.readUnlock()
 	if err := fd.pd.PrepareRead(); err != nil {
-		return 0, 0, 0, nil, &OpError{"read", fd.net, fd.laddr, err}
+		return 0, 0, 0, nil, &OpError{Op: "read", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 	for {
 		n, oobn, flags, sa, err = syscall.Recvmsg(fd.sysfd, p, oob, 0)
@@ -271,7 +284,7 @@ func (fd *netFD) ReadMsg(
 		break
 	}
 	if err != nil && err != io.EOF {
-		err = &OpError{"read", fd.net, fd.laddr, err}
+		err = &OpError{Op: "read", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 	return
 }
@@ -289,7 +302,7 @@ func (fd *netFD) Write(p []byte) (nn int, err error) {
 	}
 	defer fd.writeUnlock()
 	if err := fd.pd.PrepareWrite(); err != nil {
-		return 0, &OpError{"write", fd.net, fd.raddr, err}
+		return 0, &OpError{Op: "write", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	for {
 		var n int
@@ -315,7 +328,7 @@ func (fd *netFD) Write(p []byte) (nn int, err error) {
 		}
 	}
 	if err != nil {
-		err = &OpError{"write", fd.net, fd.raddr, err}
+		err = &OpError{Op: "write", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	return nn, err
 }
@@ -326,7 +339,7 @@ func (fd *netFD) WriteTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	}
 	defer fd.writeUnlock()
 	if err := fd.pd.PrepareWrite(); err != nil {
-		return 0, &OpError{"write", fd.net, fd.raddr, err}
+		return 0, &OpError{Op: "write", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	for {
 		err = syscall.Sendto(fd.sysfd, p, 0, sa)
@@ -340,7 +353,7 @@ func (fd *netFD) WriteTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	if err == nil {
 		n = len(p)
 	} else {
-		err = &OpError{"write", fd.net, fd.raddr, err}
+		err = &OpError{Op: "write", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	return
 }
@@ -353,7 +366,7 @@ func (fd *netFD) WriteMsg(
 	}
 	defer fd.writeUnlock()
 	if err := fd.pd.PrepareWrite(); err != nil {
-		return 0, 0, &OpError{"write", fd.net, fd.raddr, err}
+		return 0, 0, &OpError{Op: "write", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	for {
 		err = syscall.Sendmsg(fd.sysfd, p, oob, sa, 0)
@@ -368,7 +381,7 @@ func (fd *netFD) WriteMsg(
 		n = len(p)
 		oobn = len(oob)
 	} else {
-		err = &OpError{"write", fd.net, fd.raddr, err}
+		err = &OpError{Op: "write", Net: fd.net, Addr: fd.raddr, Err: err}
 	}
 	return
 }
@@ -382,7 +395,7 @@ func (fd *netFD) accept(toAddr func(syscall.Sockaddr) Addr) (netfd *netFD, err e
 	var s int
 	var rsa syscall.Sockaddr
 	if err = fd.pd.PrepareRead(); err != nil {
-		return nil, &OpError{"accept", fd.net, fd.laddr, err}
+		return nil, &OpError{Op: "accept", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 	for {
 		s, rsa, err = accept(fd.sysfd)
@@ -396,7 +409,7 @@ func (fd *netFD) accept(toAddr func(syscall.Sockaddr) Addr) (netfd *netFD, err e
 				// before we Accept()ed it; it's a silly error, so try again.
 				continue
 			}
-			return nil, &OpError{"accept", fd.net, fd.laddr, err}
+			return nil, &OpError{Op: "accept", Net: fd.net, Addr: fd.laddr, Err: err}
 		}
 		break
 	}
@@ -465,7 +478,7 @@ func (fd *netFD) dup() (f *os.File, err error) {
 	ns, err := dupCloseOnExec(fd.sysfd)
 	if err != nil {
 		syscall.ForkLock.RUnlock()
-		return nil, &OpError{"dup", fd.net, fd.laddr, err}
+		return nil, &OpError{Op: "dup", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 
 	// We want blocking mode for the new fd, hence the double negative.
@@ -473,7 +486,7 @@ func (fd *netFD) dup() (f *os.File, err error) {
 	// I/O will block the thread instead of letting us use the epoll server.
 	// Everything will still work, just with more threads.
 	if err = syscall.SetNonblock(ns, false); err != nil {
-		return nil, &OpError{"setnonblock", fd.net, fd.laddr, err}
+		return nil, &OpError{Op: "setnonblock", Net: fd.net, Addr: fd.laddr, Err: err}
 	}
 
 	return os.NewFile(uintptr(ns), fd.name()), nil

@@ -14,7 +14,7 @@ func (v Value) Addr() Value {
 	if v.flag&flagAddr == 0 {
 		panic("reflect.Value.Addr of unaddressable value")
 	}
-	return Value{v.typ.ptrTo(), v.val, (v.flag & flagRO) | flag(Ptr)<<flagKindShift}
+	return Value{v.typ.ptrTo(), v.ptr, (v.flag & flagRO) | flag(Ptr)<<flagKindShift}
 }
 
 // UnsafeAddr returns a pointer to v's data.
@@ -27,7 +27,7 @@ func (v Value) UnsafeAddr() uintptr {
 	if v.flag&flagAddr == 0 {
 		panic("reflect.Value.UnsafeAddr of unaddressable value")
 	}
-	return uintptr(v.val)
+	return uintptr(v.ptr)
 }
 
 // Bool returns v's underlying value.
@@ -35,9 +35,9 @@ func (v Value) UnsafeAddr() uintptr {
 func (v Value) Bool() bool {
 	v.mustBe(Bool)
 	if v.flag&flagIndir != 0 {
-		return *(*bool)(v.val)
+		return *(*bool)(v.ptr)
 	}
-	return *(*bool)(unsafe.Pointer(&v.val))
+	return *(*bool)(unsafe.Pointer(&v.ptr))
 }
 
 // Bytes returns v's underlying value.
@@ -48,7 +48,7 @@ func (v Value) Bytes() []byte {
 		panic("reflect.Value.Bytes of non-byte slice")
 	}
 	// Slice is always bigger than a word; assume flagIndir.
-	return *(*[]byte)(v.val)
+	return *(*[]byte)(v.ptr)
 }
 
 // runes returns v's underlying value.
@@ -59,7 +59,7 @@ func (v Value) runes() []rune {
 		panic("reflect.Value.Bytes of non-rune slice")
 	}
 	// Slice is always bigger than a word; assume flagIndir.
-	return *(*[]rune)(v.val)
+	return *(*[]rune)(v.ptr)
 }
 
 // Float returns v's underlying value, as a float64.
@@ -69,14 +69,14 @@ func (v Value) Float() float64 {
 	switch k {
 	case Float32:
 		if v.flag&flagIndir != 0 {
-			return float64(*(*float32)(v.val))
+			return float64(*(*float32)(v.ptr))
 		}
-		return float64(*(*float32)(unsafe.Pointer(&v.val)))
+		return float64(*(*float32)(unsafe.Pointer(&v.ptr)))
 	case Float64:
 		if v.flag&flagIndir != 0 {
-			return *(*float64)(v.val)
+			return *(*float64)(v.ptr)
 		}
-		return *(*float64)(unsafe.Pointer(&v.val))
+		return *(*float64)(unsafe.Pointer(&v.ptr))
 	}
 	panic(&ValueError{"reflect.Value.Float", k})
 }
@@ -87,11 +87,11 @@ func (v Value) Int() int64 {
 	k := v.kind()
 	var p unsafe.Pointer
 	if v.flag&flagIndir != 0 {
-		p = v.val
+		p = v.ptr
 	} else {
-		// The escape analysis is good enough that &v.val
+		// The escape analysis is good enough that &v.ptr
 		// does not trigger a heap allocation.
-		p = unsafe.Pointer(&v.val)
+		p = unsafe.Pointer(&v.ptr)
 	}
 	switch k {
 	case Int:
@@ -114,11 +114,11 @@ func (v Value) Uint() uint64 {
 	k := v.kind()
 	var p unsafe.Pointer
 	if v.flag&flagIndir != 0 {
-		p = v.val
+		p = v.ptr
 	} else {
-		// The escape analysis is good enough that &v.val
+		// The escape analysis is good enough that &v.ptr
 		// does not trigger a heap allocation.
-		p = unsafe.Pointer(&v.val)
+		p = unsafe.Pointer(&v.ptr)
 	}
 	switch k {
 	case Uint:
@@ -146,7 +146,7 @@ func (v Value) String() string {
 	case Invalid:
 		return "<invalid Value>"
 	case String:
-		return *(*string)(v.val)
+		return *(*string)(v.ptr)
 	}
 	// If you call String on a reflect.Value of other type, it's better to
 	// print something than to panic. Useful in debugging.
@@ -162,12 +162,12 @@ func (v Value) Complex() complex128 {
 	switch k {
 	case Complex64:
 		if v.flag&flagIndir != 0 {
-			return complex128(*(*complex64)(v.val))
+			return complex128(*(*complex64)(v.ptr))
 		}
-		return complex128(*(*complex64)(unsafe.Pointer(&v.val)))
+		return complex128(*(*complex64)(unsafe.Pointer(&v.ptr)))
 	case Complex128:
 		// complex128 is always bigger than a word; assume flagIndir.
-		return *(*complex128)(v.val)
+		return *(*complex128)(v.ptr)
 	}
 	panic(&ValueError{"reflect.Value.Complex", k})
 }

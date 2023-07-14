@@ -14,13 +14,13 @@ func (v Value) Set(x Value) {
 	x.mustBeExported() // do not let unexported x leak
 	var target *interface{}
 	if v.kind() == Interface {
-		target = (*interface{})(v.val)
+		target = (*interface{})(v.ptr)
 	}
 	x = x.assignTo("reflect.Set", v.typ, target)
 	if x.flag&flagIndir != 0 {
-		memmove(v.val, x.val, v.typ.size)
+		memmove(v.ptr, x.ptr, v.typ.size)
 	} else {
-		storeIword(v.val, iword(x.val), v.typ.size)
+		storeIword(v.ptr, iword(x.ptr), v.typ.size)
 	}
 }
 
@@ -29,7 +29,7 @@ func (v Value) Set(x Value) {
 func (v Value) SetBool(x bool) {
 	v.mustBeAssignable()
 	v.mustBe(Bool)
-	*(*bool)(v.val) = x
+	*(*bool)(v.ptr) = x
 }
 
 // SetBytes sets v's underlying value.
@@ -40,7 +40,7 @@ func (v Value) SetBytes(x []byte) {
 	if v.typ.Elem().Kind() != Uint8 {
 		panic("reflect.Value.SetBytes of non-byte slice")
 	}
-	*(*[]byte)(v.val) = x
+	*(*[]byte)(v.ptr) = x
 }
 
 // setRunes sets v's underlying value.
@@ -51,7 +51,7 @@ func (v Value) setRunes(x []rune) {
 	if v.typ.Elem().Kind() != Int32 {
 		panic("reflect.Value.setRunes of non-rune slice")
 	}
-	*(*[]rune)(v.val) = x
+	*(*[]rune)(v.ptr) = x
 }
 
 // SetComplex sets v's underlying value to x.
@@ -62,9 +62,9 @@ func (v Value) SetComplex(x complex128) {
 	default:
 		panic(&ValueError{"reflect.Value.SetComplex", k})
 	case Complex64:
-		*(*complex64)(v.val) = complex64(x)
+		*(*complex64)(v.ptr) = complex64(x)
 	case Complex128:
-		*(*complex128)(v.val) = x
+		*(*complex128)(v.ptr) = x
 	}
 }
 
@@ -76,9 +76,9 @@ func (v Value) SetFloat(x float64) {
 	default:
 		panic(&ValueError{"reflect.Value.SetFloat", k})
 	case Float32:
-		*(*float32)(v.val) = float32(x)
+		*(*float32)(v.ptr) = float32(x)
 	case Float64:
-		*(*float64)(v.val) = x
+		*(*float64)(v.ptr) = x
 	}
 }
 
@@ -90,15 +90,15 @@ func (v Value) SetInt(x int64) {
 	default:
 		panic(&ValueError{"reflect.Value.SetInt", k})
 	case Int:
-		*(*int)(v.val) = int(x)
+		*(*int)(v.ptr) = int(x)
 	case Int8:
-		*(*int8)(v.val) = int8(x)
+		*(*int8)(v.ptr) = int8(x)
 	case Int16:
-		*(*int16)(v.val) = int16(x)
+		*(*int16)(v.ptr) = int16(x)
 	case Int32:
-		*(*int32)(v.val) = int32(x)
+		*(*int32)(v.ptr) = int32(x)
 	case Int64:
-		*(*int64)(v.val) = x
+		*(*int64)(v.ptr) = x
 	}
 }
 
@@ -108,7 +108,7 @@ func (v Value) SetInt(x int64) {
 func (v Value) SetLen(n int) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
-	s := (*SliceHeader)(v.val)
+	s := (*SliceHeader)(v.ptr)
 	if n < 0 || n > int(s.Cap) {
 		panic("reflect: slice length out of range in SetLen")
 	}
@@ -121,7 +121,7 @@ func (v Value) SetLen(n int) {
 func (v Value) SetCap(n int) {
 	v.mustBeAssignable()
 	v.mustBe(Slice)
-	s := (*SliceHeader)(v.val)
+	s := (*SliceHeader)(v.ptr)
 	if n < int(s.Len) || n > int(s.Cap) {
 		panic("reflect: slice capacity out of range in SetCap")
 	}
@@ -154,17 +154,17 @@ func (v Value) SetUint(x uint64) {
 	default:
 		panic(&ValueError{"reflect.Value.SetUint", k})
 	case Uint:
-		*(*uint)(v.val) = uint(x)
+		*(*uint)(v.ptr) = uint(x)
 	case Uint8:
-		*(*uint8)(v.val) = uint8(x)
+		*(*uint8)(v.ptr) = uint8(x)
 	case Uint16:
-		*(*uint16)(v.val) = uint16(x)
+		*(*uint16)(v.ptr) = uint16(x)
 	case Uint32:
-		*(*uint32)(v.val) = uint32(x)
+		*(*uint32)(v.ptr) = uint32(x)
 	case Uint64:
-		*(*uint64)(v.val) = x
+		*(*uint64)(v.ptr) = x
 	case Uintptr:
-		*(*uintptr)(v.val) = uintptr(x)
+		*(*uintptr)(v.ptr) = uintptr(x)
 	}
 }
 
@@ -173,7 +173,7 @@ func (v Value) SetUint(x uint64) {
 func (v Value) SetPointer(x unsafe.Pointer) {
 	v.mustBeAssignable()
 	v.mustBe(UnsafePointer)
-	*(*unsafe.Pointer)(v.val) = x
+	*(*unsafe.Pointer)(v.ptr) = x
 }
 
 // SetString sets v's underlying value to x.
@@ -181,5 +181,5 @@ func (v Value) SetPointer(x unsafe.Pointer) {
 func (v Value) SetString(x string) {
 	v.mustBeAssignable()
 	v.mustBe(String)
-	*(*string)(v.val) = x
+	*(*string)(v.ptr) = x
 }

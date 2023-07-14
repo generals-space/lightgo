@@ -48,6 +48,14 @@ const (
 	// suiteTLS12 indicates that the cipher suite should only be advertised
 	// and accepted when using TLS 1.2.
 	suiteTLS12
+
+	// 	@compatible: 如下两个变量在 v1.5 版本初次添加.
+	// suiteSHA384 indicates that the cipher suite uses SHA384 as the
+	// handshake hash.
+	suiteSHA384
+	// suiteDefaultOff indicates that this cipher suite is not included by
+	// default.
+	suiteDefaultOff
 )
 
 // A cipherSuite is a specific combination of key agreement, cipher and MAC
@@ -82,6 +90,22 @@ var cipherSuites = []*cipherSuite{
 	{TLS_RSA_WITH_AES_256_CBC_SHA, 32, 20, 16, rsaKA, 0, cipherAES, macSHA1, nil},
 	{TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, 24, 20, 8, ecdheRSAKA, suiteECDHE, cipher3DES, macSHA1, nil},
 	{TLS_RSA_WITH_3DES_EDE_CBC_SHA, 24, 20, 8, rsaKA, 0, cipher3DES, macSHA1, nil},
+
+	// 	@compatible: 如下2个成员在 v1.5 版本初次添加
+	{TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, 32, 0, 4, ecdheRSAKA, suiteECDHE | suiteTLS12 | suiteSHA384, nil, nil, aeadAESGCM},
+	{TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, 32, 0, 4, ecdheECDSAKA, suiteECDHE | suiteECDSA | suiteTLS12 | suiteSHA384, nil, nil, aeadAESGCM},
+
+	// 	@compatible: 如下2个成员在 v1.6 版本初次添加
+	{TLS_RSA_WITH_AES_128_GCM_SHA256, 16, 0, 4, rsaKA, suiteTLS12, nil, nil, aeadAESGCM},
+	{TLS_RSA_WITH_AES_256_GCM_SHA384, 32, 0, 4, rsaKA, suiteTLS12 | suiteSHA384, nil, nil, aeadAESGCM},
+
+	// 	@compatible: 如下2个成员在 v1.8 版本初次添加
+	// {TLS_RSA_WITH_AES_128_CBC_SHA256, 16, 32, 16, rsaKA, suiteTLS12 | suiteDefaultOff, cipherAES, macSHA256, nil},
+	// {TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, 16, 32, 16, ecdheECDSAKA, suiteECDHE | suiteECDSA | suiteTLS12 | suiteDefaultOff, cipherAES, macSHA256, nil},
+	// {TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256, 16, 32, 16, ecdheRSAKA, suiteECDHE | suiteTLS12 | suiteDefaultOff, cipherAES, macSHA256, nil},
+	// {TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305, 32, 0, 12, ecdheRSAKA, suiteECDHE | suiteTLS12, nil, nil, aeadChaCha20Poly1305},
+	// {TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, 32, 0, 12, ecdheECDSAKA, suiteECDHE | suiteECDSA | suiteTLS12, nil, nil, aeadChaCha20Poly1305},
+
 }
 
 func cipherRC4(key, iv []byte, isRead bool) interface{} {
@@ -267,4 +291,29 @@ const (
 	TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA      uint16 = 0xc014
 	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256   uint16 = 0xc02f
 	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 uint16 = 0xc02b
+
+	// 	@compatible: 如下变量在 v1.5 版本初次添加
+	//
+	TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384   uint16 = 0xc030
+	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 uint16 = 0xc02c
+
+	// 	@compatible: 如下变量在 v1.6 版本初次添加
+	//
+	TLS_RSA_WITH_AES_128_GCM_SHA256         uint16 = 0x009c
+	TLS_RSA_WITH_AES_256_GCM_SHA384         uint16 = 0x009d
+
+	// 	@compatible: 如下变量在 v1.8 版本初次添加
+	//
+	TLS_RSA_WITH_AES_128_CBC_SHA256         uint16 = 0x003c
+	TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 uint16 = 0xc023
+	TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256   uint16 = 0xc027
+	TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305    uint16 = 0xcca8
+	TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305  uint16 = 0xcca9
+
+	// 	@compatible: 该变量在 v1.4 版本初次添加
+	//
+	// TLS_FALLBACK_SCSV isn't a standard cipher suite but an indicator
+	// that the client is doing version fallback. See
+	// https://tools.ietf.org/html/draft-ietf-tls-downgrade-scsv-00.
+	TLS_FALLBACK_SCSV uint16 = 0x5600
 )

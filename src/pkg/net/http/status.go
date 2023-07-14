@@ -4,6 +4,12 @@
 
 package http
 
+// 	@compatible: 该列表在 v1.7 版本中更全, 且有全部的 RFC 出处.
+// 见 [golang v1.7 status.go](https://github.com/golang/go/tree/go1.7/src/net/http/status.go)
+//
+// HTTP status codes as registered with IANA.
+// See: http://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+//
 // HTTP status codes, defined in RFC 2616.
 const (
 	StatusContinue           = 100
@@ -58,6 +64,16 @@ const (
 	statusTooManyRequests               = 429
 	statusRequestHeaderFieldsTooLarge   = 431
 	statusNetworkAuthenticationRequired = 511
+
+	// 	@compatible: 如下字段在 v1.6 版本被暴露(451是新增的)
+	StatusPreconditionRequired          = 428
+	StatusTooManyRequests               = 429
+	StatusRequestHeaderFieldsTooLarge   = 431
+	StatusUnavailableForLegalReasons    = 451
+	StatusNetworkAuthenticationRequired = 511
+	// 	@compatible: 如下字段在 v1.7 版本添加
+	StatusUnprocessableEntity          = 422 // RFC 4918, 11.2
+
 )
 
 var statusText = map[int]string{
@@ -107,10 +123,21 @@ var statusText = map[int]string{
 	StatusGatewayTimeout:          "Gateway Timeout",
 	StatusHTTPVersionNotSupported: "HTTP Version Not Supported",
 
-	statusPreconditionRequired:          "Precondition Required",
-	statusTooManyRequests:               "Too Many Requests",
-	statusRequestHeaderFieldsTooLarge:   "Request Header Fields Too Large",
-	statusNetworkAuthenticationRequired: "Network Authentication Required",
+	// 	@compatible: 如下字段在 v1.6 版本添加(被暴露)
+	//
+	// statusPreconditionRequired:          "Precondition Required",
+	// statusTooManyRequests:               "Too Many Requests",
+	// statusRequestHeaderFieldsTooLarge:   "Request Header Fields Too Large",
+	// statusNetworkAuthenticationRequired: "Network Authentication Required",
+	StatusPreconditionRequired:          "Precondition Required",
+	StatusTooManyRequests:               "Too Many Requests",
+	StatusRequestHeaderFieldsTooLarge:   "Request Header Fields Too Large",
+	StatusNetworkAuthenticationRequired: "Network Authentication Required",
+	StatusUnavailableForLegalReasons:    "Unavailable For Legal Reasons",
+	// 	@compatible: 如下字段在 v1.7 版本添加
+	//
+	StatusUnprocessableEntity:          "Unprocessable Entity",
+
 }
 
 // StatusText returns a text for the HTTP status code. It returns the empty

@@ -71,6 +71,8 @@ static uint8**	argv;
 Slice os·Args; // 命令行执行时的参数列表
 Slice syscall·envs;
 
+// runtime·sysargs 的函数定义在 
+// src/pkg/runtime/vdso_linux_amd64.c -> runtime·sysargs()
 void (*runtime·sysargs)(int32, uint8**);
 
 // caller: 
@@ -94,13 +96,14 @@ uint32 runtime·cpuid_ecx;
 uint32 runtime·cpuid_edx;
 
 // 将命令行传入的参数列表填充入os·Args列表.
+//
+// caller:
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 只有这一处
 void runtime·goargs(void)
 {
 	String *s; // 参数列表, 按照字符串类型处理
 	int32 i;
 
-	// for windows implementation see "os" package
-	if(Windows) return;
 	// 为s参数列表分配空间
 	s = runtime·malloc(argc*sizeof s[0]);
 	for(i=0; i<argc; i++) {
@@ -113,6 +116,10 @@ void runtime·goargs(void)
 	os·Args.cap = argc;
 }
 
+// runtime·goenvs_unix 程序启动时加载其所在终端中的所有环境变量到 syscall·envs 数组中.
+//
+// caller:
+// 	1. src/pkg/runtime/os_linux.c -> runtime·goenvs() 在程序启动时被调用
 void runtime·goenvs_unix(void)
 {
 	String *s;
@@ -429,7 +436,7 @@ static struct {
 	{"scheddetail", &runtime·debug.scheddetail},
 };
 
-// runtime·parsedebugvars ...
+// runtime·parsedebugvars 处理程序启动时传入的 GODEBUG 调试参数.
 //
 // caller: 
 // 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 在初始化调度器时被调用.

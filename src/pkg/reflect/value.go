@@ -60,8 +60,10 @@ type Value struct {
 	// typ holds the type of the value represented by a Value.
 	typ *rtype
 
+	// 	@compatible: 该成员字段在 v1.3 版本由 val 被改为 ptr, 这里做了一个全局替换.
+	//
 	// 当前 Value 对象中, 实际存储数据的指针.
-	// 该 val 指针可以被转换为其实际的类型, 如 (*int64)(v.val)
+	// 该 val 指针可以被转换为其实际的类型, 如 (*int64)(v.ptr)
 	//
 	// Value 对象中有 SetXXX 函数族, 可以对 val 成员赋值.
 	//
@@ -72,7 +74,7 @@ type Value struct {
 	// the first byte (in the memory address sense) of val.
 	// We use unsafe.Pointer so that the garbage collector
 	// knows that val could be a pointer.
-	val unsafe.Pointer
+	ptr unsafe.Pointer
 
 	// flag holds metadata about the value.
 	// The lowest bits are flag bits:
@@ -129,7 +131,7 @@ func (v Value) Elem() Value {
 			val unsafe.Pointer
 		)
 		if v.typ.NumMethod() == 0 {
-			eface := (*emptyInterface)(v.val)
+			eface := (*emptyInterface)(v.ptr)
 			if eface.typ == nil {
 				// nil interface value
 				return Value{}
@@ -137,7 +139,7 @@ func (v Value) Elem() Value {
 			typ = eface.typ
 			val = unsafe.Pointer(eface.word)
 		} else {
-			iface := (*nonEmptyInterface)(v.val)
+			iface := (*nonEmptyInterface)(v.ptr)
 			if iface.itab == nil {
 				// nil interface value
 				return Value{}
@@ -153,7 +155,7 @@ func (v Value) Elem() Value {
 		return Value{typ, val, fl}
 
 	case Ptr:
-		val := v.val
+		val := v.ptr
 		if v.flag&flagIndir != 0 {
 			val = *(*unsafe.Pointer)(val)
 		}
@@ -182,7 +184,7 @@ func (v Value) IsNil() bool {
 		if v.flag&flagMethod != 0 {
 			return false
 		}
-		ptr := v.val
+		ptr := v.ptr
 		if v.flag&flagIndir != 0 {
 			ptr = *(*unsafe.Pointer)(ptr)
 		}
@@ -190,7 +192,7 @@ func (v Value) IsNil() bool {
 	case Interface, Slice:
 		// Both interface and slice are nil if first word is 0.
 		// Both are always bigger than a word; assume flagIndir.
-		return *(*unsafe.Pointer)(v.val) == nil
+		return *(*unsafe.Pointer)(v.ptr) == nil
 	}
 	panic(&ValueError{"reflect.Value.IsNil", k})
 }
@@ -224,13 +226,13 @@ func (v Value) Index(i int) Value {
 		switch {
 		case fl&flagIndir != 0:
 			// Indirect.  Just bump pointer.
-			val = unsafe.Pointer(uintptr(v.val) + offset)
+			val = unsafe.Pointer(uintptr(v.ptr) + offset)
 		case bigEndian:
 			// Direct.  Discard leading bytes.
-			val = unsafe.Pointer(uintptr(v.val) << (offset * 8))
+			val = unsafe.Pointer(uintptr(v.ptr) << (offset * 8))
 		default:
 			// Direct.  Discard leading bytes.
-			val = unsafe.Pointer(uintptr(v.val) >> (offset * 8))
+			val = unsafe.Pointer(uintptr(v.ptr) >> (offset * 8))
 		}
 		return Value{typ, val, fl}
 
@@ -238,7 +240,7 @@ func (v Value) Index(i int) Value {
 		// Element flag same as Elem of Ptr.
 		// Addressable, indirect, possibly read-only.
 		fl := flagAddr | flagIndir | v.flag&flagRO
-		s := (*SliceHeader)(v.val)
+		s := (*SliceHeader)(v.ptr)
 		if i < 0 || i >= s.Len {
 			panic("reflect: slice index out of range")
 		}
@@ -250,7 +252,7 @@ func (v Value) Index(i int) Value {
 
 	case String:
 		fl := v.flag&flagRO | flag(Uint8<<flagKindShift)
-		s := (*StringHeader)(v.val)
+		s := (*StringHeader)(v.ptr)
 		if i < 0 || i >= s.Len {
 			panic("reflect: string index out of range")
 		}
@@ -271,7 +273,7 @@ func (v Value) Cap() int {
 		return int(chancap(v.iword()))
 	case Slice:
 		// Slice is always bigger than a word; assume flagIndir.
-		return (*SliceHeader)(v.val).Cap
+		return (*SliceHeader)(v.ptr).Cap
 	}
 	panic(&ValueError{"reflect.Value.Cap", k})
 }
@@ -290,10 +292,10 @@ func (v Value) Len() int {
 		return maplen(v.iword())
 	case Slice:
 		// Slice is bigger than a word; assume flagIndir.
-		return (*SliceHeader)(v.val).Len
+		return (*SliceHeader)(v.ptr).Len
 	case String:
 		// String is bigger than a word; assume flagIndir.
-		return (*StringHeader)(v.val).Len
+		return (*StringHeader)(v.ptr).Len
 	}
 	panic(&ValueError{"reflect.Value.Len", k})
 }
@@ -314,7 +316,7 @@ func (v Value) Pointer() uintptr {
 	k := v.kind()
 	switch k {
 	case Chan, Map, Ptr, UnsafePointer:
-		p := v.val
+		p := v.ptr
 		if v.flag&flagIndir != 0 {
 			p = *(*unsafe.Pointer)(p)
 		}
@@ -330,7 +332,7 @@ func (v Value) Pointer() uintptr {
 			f := methodValueCall
 			return **(**uintptr)(unsafe.Pointer(&f))
 		}
-		p := v.val
+		p := v.ptr
 		if v.flag&flagIndir != 0 {
 			p = *(*unsafe.Pointer)(p)
 		}
@@ -342,11 +344,17 @@ func (v Value) Pointer() uintptr {
 		return uintptr(p)
 
 	case Slice:
-		return (*SliceHeader)(v.val).Data
+		return (*SliceHeader)(v.ptr).Data
 	}
 	panic(&ValueError{"reflect.Value.Pointer", k})
 }
 
+// Type 貌似与直接用 TypeOf() 得到的 Type 是同一个类型.
+//
+// var err *error
+// fmt.Printf("%s\n", reflect.TypeOf(err))          // *error
+// fmt.Printf("%s\n", reflect.ValueOf(err).Type())  // *error
+//
 // Type returns v's type.
 func (v Value) Type() Type {
 	f := v.flag
@@ -448,7 +456,7 @@ func (v Value) assignTo(context string, dst *rtype, target *interface{}) Value {
 		v.typ = dst
 		fl := v.flag & (flagRO | flagAddr | flagIndir)
 		fl |= flag(dst.Kind()) << flagKindShift
-		return Value{dst, v.val, fl}
+		return Value{dst, v.ptr, fl}
 
 	case implements(dst, v.typ):
 		if target == nil {

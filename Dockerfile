@@ -17,10 +17,12 @@ ENV GO_TOOLLIST ${GO_TOOL}/linux_amd64
 
 ## 工程内部的 gopath 目录, 也要追加到 GOPATH 路径列表中
 ENV GO_PATH_LOCAL ${GOROOT}/gopath
+## 为兼容后续版本新增的标准库
+ENV GO_PATH_COMPATIBLE ${GOROOT}/compatible
 ## vscode golang 插件所需的子插件, 如代码补全, 智能提示等工具
 ENV GO_PATH_EXTENSION /usr/local/gopath_extension
 
-ENV GOPATH /usr/local/gopath:${GO_PATH_LOCAL}:${GO_PATH_EXTENSION}
+ENV GOPATH /usr/local/gopath:${GO_PATH_LOCAL}:${GO_PATH_COMPATIBLE}:${GO_PATH_EXTENSION}
 
 ## 将 dist, 6g, 6l 等命令加入 PATH
 ENV PATH $PATH:${GOROOT}/bin:${GO_TOOL}:${GO_TOOLLIST}

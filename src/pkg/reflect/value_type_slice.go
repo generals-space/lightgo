@@ -24,16 +24,16 @@ func (v Value) Slice(i, j int) Value {
 		tt := (*arrayType)(unsafe.Pointer(v.typ))
 		cap = int(tt.len)
 		typ = (*sliceType)(unsafe.Pointer(tt.slice))
-		base = v.val
+		base = v.ptr
 
 	case Slice:
 		typ = (*sliceType)(unsafe.Pointer(v.typ))
-		s := (*SliceHeader)(v.val)
+		s := (*SliceHeader)(v.ptr)
 		base = unsafe.Pointer(s.Data)
 		cap = s.Cap
 
 	case String:
-		s := (*StringHeader)(v.val)
+		s := (*StringHeader)(v.ptr)
 		if i < 0 || j < i || j > s.Len {
 			panic("reflect.Value.Slice: string slice index out of bounds")
 		}
@@ -81,11 +81,11 @@ func (v Value) Slice3(i, j, k int) Value {
 		tt := (*arrayType)(unsafe.Pointer(v.typ))
 		cap = int(tt.len)
 		typ = (*sliceType)(unsafe.Pointer(tt.slice))
-		base = v.val
+		base = v.ptr
 
 	case Slice:
 		typ = (*sliceType)(unsafe.Pointer(v.typ))
-		s := (*SliceHeader)(v.val)
+		s := (*SliceHeader)(v.ptr)
 		base = unsafe.Pointer(s.Data)
 		cap = s.Cap
 	}
@@ -206,14 +206,14 @@ func Copy(dst, src Value) int {
 	// Copy via memmove.
 	var da, sa unsafe.Pointer
 	if dk == Array {
-		da = dst.val
+		da = dst.ptr
 	} else {
-		da = unsafe.Pointer((*SliceHeader)(dst.val).Data)
+		da = unsafe.Pointer((*SliceHeader)(dst.ptr).Data)
 	}
 	if sk == Array {
-		sa = src.val
+		sa = src.ptr
 	} else {
-		sa = unsafe.Pointer((*SliceHeader)(src.val).Data)
+		sa = unsafe.Pointer((*SliceHeader)(src.ptr).Data)
 	}
 	memmove(da, sa, uintptr(n)*de.Size())
 	return n

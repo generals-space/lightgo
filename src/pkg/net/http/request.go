@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -189,6 +190,33 @@ type Request struct {
 	// otherwise it leaves the field nil.
 	// This field is ignored by the HTTP client.
 	TLS *tls.ConnectionState
+
+	// 	@compatible: 该字段在 v1.5 版本初次添加
+	//
+	// Cancel is an optional channel whose closure indicates that the client
+	// request should be regarded as canceled. Not all implementations of
+	// RoundTripper may support Cancel.
+	//
+	// For server requests, this field is not applicable.
+	Cancel <-chan struct{}
+
+	// 	@compatible: 该字段在 v1.7 版本初次添加
+	//
+	// ctx is either the client or server context. It should only
+	// be modified via copying the whole Request using WithContext.
+	// It is unexported to prevent people from using Context wrong
+	// and mutating the contexts held by callers of the same request.
+	ctx context.Context
+
+	// 	@compatible: 该字段在 v1.8 版本初次添加
+	//
+	// GetBody defines an optional func to return a new copy of
+	// Body. It is used for client requests when a redirect requires
+	// reading the body more than once. Use of GetBody still
+	// requires setting Body.
+	//
+	// For server requests it is unused.
+	GetBody func() (io.ReadCloser, error)
 }
 
 // ProtoAtLeast reports whether the HTTP protocol used

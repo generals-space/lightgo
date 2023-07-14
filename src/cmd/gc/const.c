@@ -1062,8 +1062,9 @@ idealkind(Node *n)
 {
 	int k1, k2;
 
-	if(n == N || !isideal(n->type))
+	if(n == N || !isideal(n->type)) {
 		return CTxxx;
+	}
 
 	switch(n->op) {
 	default:

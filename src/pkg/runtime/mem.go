@@ -9,6 +9,8 @@ import "unsafe"
 // Note: the MemStats struct should be kept in sync with
 // struct MStats in malloc.h
 
+// 	@implementOf: src/pkg/runtime/malloc.h -> MStats{}
+//
 // A MemStats records statistics about the memory allocator.
 type MemStats struct {
 	// General statistics.
@@ -56,6 +58,9 @@ type MemStats struct {
 		Mallocs uint64
 		Frees   uint64
 	}
+
+	// 	@compatible: 此字段在 v1.5 版本添加
+	GCCPUFraction float64 // fraction of CPU time used by GC
 }
 
 var sizeof_C_MStats uintptr // filled in by malloc.goc

@@ -17,6 +17,7 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // A Client is an HTTP client. Its zero value (DefaultClient) is a
@@ -52,6 +53,22 @@ type Client struct {
 	// If Jar is nil, cookies are not sent in requests and ignored
 	// in responses.
 	Jar CookieJar
+
+	// 	@compatible: 此字段在 v1.3 版本添加
+	//
+	// Timeout specifies a time limit for requests made by this
+	// Client. The timeout includes connection time, any
+	// redirects, and reading the response body. The timer remains
+	// running after Get, Head, Post, or Do return and will
+	// interrupt reading of the Response.Body.
+	//
+	// A Timeout of zero means no timeout.
+	//
+	// The Client's Transport must support the CancelRequest
+	// method or Client will return errors when attempting to make
+	// a request with Get, Head, Post, or Do. Client's default
+	// Transport (DefaultTransport) supports CancelRequest.
+	Timeout time.Duration
 }
 
 // DefaultClient is the default Client and is used by Get, Head, and Post.

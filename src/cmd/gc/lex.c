@@ -190,6 +190,8 @@ doversion(void)
 
 // 这个函数是 6g 命令的入口.
 //
+// caller:
+// 	1. src/lib9/main.c -> main()
 int main(int argc, char *argv[])
 {
 	int i;
@@ -987,8 +989,9 @@ l0:
 		goto talph;
 	}
 
-	if(yy_isdigit(c))
+	if(yy_isdigit(c)) {
 		goto tnum;
+	}
 
 	switch(c) {
 	case EOF:
@@ -1406,8 +1409,10 @@ talph:
 	return s->lexical;
 
 tnum:
+{
 	cp = lexbuf;
 	ep = lexbuf+sizeof lexbuf;
+	// 如果 c != '0' 一般为常规十进制数字
 	if(c != '0') {
 		for(;;) {
 			if(cp+10 >= ep) {
@@ -1416,13 +1421,17 @@ tnum:
 			}
 			*cp++ = c;
 			c = getc();
-			if(yy_isdigit(c))
+			if(yy_isdigit(c)) {
 				continue;
+			}
 			goto dc;
 		}
 	}
+	// 如果 c == '0', 则有可能是八进制(0755, 0o755), 或十六进制数字(0xA1)
+
 	*cp++ = c;
 	c = getc();
+	// 十六进制
 	if(c == 'x' || c == 'X') {
 		for(;;) {
 			if(cp+10 >= ep) {
@@ -1431,55 +1440,85 @@ tnum:
 			}
 			*cp++ = c;
 			c = getc();
-			if(yy_isdigit(c))
+			if(yy_isdigit(c)) {
 				continue;
-			if(c >= 'a' && c <= 'f')
+			}
+			if(c >= 'a' && c <= 'f') {
 				continue;
-			if(c >= 'A' && c <= 'F')
+			}
+			if(c >= 'A' && c <= 'F') {
 				continue;
-			if(cp == lexbuf+2)
+			}
+			if(cp == lexbuf+2) {
 				yyerror("malformed hex constant");
-			if(c == 'p')
+			}
+			if(c == 'p') {
 				goto caseep;
+			}
 			goto ncu;
 		}
 	}
 
-	if(c == 'p')	// 0p begins floating point zero
+	// 0p begins floating point zero
+	if(c == 'p') {
 		goto caseep;
+	}
 
 	c1 = 0;
+	// 八进制
+
+	// 对于 0o755 这种八进制格式, 如遇到字符 o/O, 还要再将指针后移一位再处理.
+	// 但仍要保留对 0755 这种格式的支持
+	if(c == 'o' || c == 'O') {
+		*cp++ = c;
+		c = getc();
+	}
 	for(;;) {
 		if(cp+10 >= ep) {
 			yyerror("identifier too long");
 			errorexit();
 		}
-		if(!yy_isdigit(c))
+		if(!yy_isdigit(c)) {
 			break;
-		if(c < '0' || c > '7')
-			c1 = 1;		// not octal
+		}
+		if(c < '0' || c > '7') {
+			// 一旦有非0-7的字符出现, 就需要考虑其他情况了.
+			// not octal
+			c1 = 1;
+		}
 		*cp++ = c;
 		c = getc();
 	}
-	if(c == '.')
+	if(c == '.') {
 		goto casedot;
-	if(c == 'e' || c == 'E')
+	}
+	if(c == 'e' || c == 'E') {
 		goto caseep;
-	if(c == 'i')
+	}
+	if(c == 'i') {
 		goto casei;
-	if(c1)
+	}
+	if(c1) {
 		yyerror("malformed octal constant");
+	}
 	goto ncu;
+}
 
 dc:
-	if(c == '.')
+{
+	if(c == '.') {
 		goto casedot;
-	if(c == 'e' || c == 'E' || c == 'p' || c == 'P')
+	}
+	if(c == 'e' || c == 'E' || c == 'p' || c == 'P') {
 		goto caseep;
-	if(c == 'i')
+	}
+	if(c == 'i') {
 		goto casei;
+	}
+}
 
 ncu:
+{
 	*cp = 0;
 	ungetc(c);
 
@@ -1494,6 +1533,7 @@ ncu:
 	strcpy(litbuf, "literal ");
 	strcat(litbuf, lexbuf);
 	return LLITERAL;
+}
 
 casedot:
 	for(;;) {
@@ -1858,13 +1898,15 @@ static int escchar(int e, int *escflg, vlong *val)
 	case '\\': c = '\\'; break;
 
 	default:
-		if(c != e)
+		if(c != e) {
 			yyerror("unknown escape sequence: %c", c);
+		}
 	}
 	*val = c;
 	return 0;
 
 hex:
+{
 	l = 0;
 	for(; i>0; i--) {
 		c = getc();
@@ -1890,8 +1932,10 @@ hex:
 	}
 	*val = l;
 	return 0;
+}
 
 oct:
+{
 	l = c - '0';
 	for(i=2; i>0; i--) {
 		c = getc();
@@ -1902,11 +1946,13 @@ oct:
 		yyerror("non-octal character in escape sequence: %c", c);
 		ungetc(c);
 	}
-	if(l > 255)
+	if(l > 255) {
 		yyerror("octal escape value > 255: %d", l);
+	}
 
 	*val = l;
 	return 0;
+}
 }
 
 static	struct
@@ -2011,16 +2057,18 @@ static void lexinit(void)
 
 		etype = syms[i].etype;
 		if(etype != Txxx) {
-			if(etype < 0 || etype >= nelem(types))
+			if(etype < 0 || etype >= nelem(types)) {
 				fatal("lexinit: %s bad etype", s->name);
+			}
 			s1 = pkglookup(syms[i].name, builtinpkg);
 			t = types[etype];
 			if(t == T) {
 				t = typ(etype);
 				t->sym = s1;
 
-				if(etype != TANY && etype != TSTRING)
+				if(etype != TANY && etype != TSTRING) {
 					dowidth(t);
+				}
 				types[etype] = t;
 			}
 			s1->lexical = LNAME;

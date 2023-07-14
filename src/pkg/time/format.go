@@ -4,7 +4,7 @@
 
 package time
 
-import "errors"
+import errors "internal/errors"
 
 // These are predefined layouts for use in Time.Format and Time.Parse.
 // The reference time used in the layouts is:

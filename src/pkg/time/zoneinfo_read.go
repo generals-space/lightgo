@@ -9,7 +9,7 @@
 
 package time
 
-import "errors"
+import errors "internal/errors"
 
 // Simple I/O interface to binary blob of data.
 type data struct {

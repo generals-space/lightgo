@@ -9,7 +9,7 @@ package exec
 
 import (
 	"bytes"
-	"errors"
+	errors "internal/errors"
 	"io"
 	"os"
 	"strconv"

@@ -44,6 +44,21 @@ type Dialer struct {
 	// destination is a host name that has multiple address family
 	// DNS records.
 	DualStack bool
+
+	// 	@compatible: 此字段在 v1.3 版本添加
+	//
+	// KeepAlive specifies the keep-alive period for an active
+	// network connection.
+	// If zero, keep-alives are not enabled. Network protocols
+	// that do not support keep-alives ignore this field.
+	KeepAlive time.Duration
+
+	// 	@compatible: 此字段在 v1.5 版本添加
+	//
+	// FallbackDelay specifies the length of time to wait before
+	// spawning a fallback connection, when DualStack is enabled.
+	// If zero, a default delay of 300ms is used.
+	FallbackDelay time.Duration
 }
 
 // Return either now+Timeout or Deadline, whichever comes first.

@@ -12,6 +12,7 @@ package http
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -90,6 +91,131 @@ type Transport struct {
 
 	// TODO: tunable on global max cached connections
 	// TODO: tunable on timeout on cached connections
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.3 版本添加
+	//
+	// TLSHandshakeTimeout specifies the maximum amount of time waiting to
+	// wait for a TLS handshake. Zero means no timeout.
+	TLSHandshakeTimeout time.Duration
+	// 	@compatible: 此字段在 v1.3 版本添加
+	//
+	// DialTLS specifies an optional dial function for creating
+	// TLS connections for non-proxied HTTPS requests.
+	//
+	// If DialTLS is nil, Dial and TLSClientConfig are used.
+	//
+	// If DialTLS is set, the Dial hook is not used for HTTPS
+	// requests and the TLSClientConfig and TLSHandshakeTimeout
+	// are ignored. The returned net.Conn is assumed to already be
+	// past the TLS handshake.
+	DialTLS func(network, addr string) (net.Conn, error)
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.6 版本添加
+	//
+	// ExpectContinueTimeout, if non-zero, specifies the amount of
+	// time to wait for a server's first response headers after fully
+	// writing the request headers if the request has an
+	// "Expect: 100-continue" header. Zero means no timeout.
+	// This time does not include the time to send the request header.
+	ExpectContinueTimeout time.Duration
+
+	// 	@compatible: 此字段在 v1.6 版本添加
+	//
+	// TLSNextProto specifies how the Transport switches to an
+	// alternate protocol (such as HTTP/2) after a TLS NPN/ALPN
+	// protocol negotiation.  If Transport dials an TLS connection
+	// with a non-empty protocol name and TLSNextProto contains a
+	// map entry for that key (such as "h2"), then the func is
+	// called with the request's authority (such as "example.com"
+	// or "example.com:1234") and the TLS connection. The function
+	// must return a RoundTripper that then handles the request.
+	// If TLSNextProto is nil, HTTP/2 support is enabled automatically.
+	TLSNextProto map[string]func(authority string, c *tls.Conn) RoundTripper
+	// 	@compatible: 此字段在 v1.6 版本添加
+	//
+	// nextProtoOnce guards initialization of TLSNextProto and
+	// h2transport (via onceSetNextProtoDefaults)
+	nextProtoOnce sync.Once
+	// 	@compatible: 此字段在 v1.6 版本添加
+	//
+	h2transport   *http2Transport // non-nil if http2 wired up
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.7 版本添加
+	//
+	// MaxIdleConns controls the maximum number of idle (keep-alive)
+	// connections across all hosts. Zero means no limit.
+	MaxIdleConns int
+
+	// 	@compatible: 此字段在 v1.7 版本添加
+	//
+	// IdleConnTimeout is the maximum amount of time an idle
+	// (keep-alive) connection will remain idle before closing
+	// itself.
+	// Zero means no limit.
+	IdleConnTimeout time.Duration
+	// 	@compatible: 此字段在 v1.7 版本添加
+	//
+	// DialContext specifies the dial function for creating unencrypted TCP connections.
+	// If DialContext is nil (and the deprecated Dial below is also nil),
+	// then the transport dials using package net.
+	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.8 版本添加
+	//
+	// ProxyConnectHeader optionally specifies headers to send to
+	// proxies during CONNECT requests.
+	ProxyConnectHeader Header
+	// 	@compatible: 此字段在 v1.8 版本添加
+	//
+	// MaxResponseHeaderBytes specifies a limit on how many
+	// response bytes are allowed in the server's response
+	// header.
+	//
+	// Zero means to use a default limit.
+	MaxResponseHeaderBytes int64
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.11 版本添加
+	//
+	// MaxConnsPerHost optionally limits the total number of
+	// connections per host, including connections in the dialing,
+	// active, and idle states. On limit violation, dials will block.
+	//
+	// Zero means no limit.
+	//
+	// For HTTP/2, this currently only controls the number of new
+	// connections being created at a time, instead of the total
+	// number. In practice, hosts using HTTP/2 only have about one
+	// idle connection, though.
+	MaxConnsPerHost int
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: 此字段在 v1.13 版本添加
+	//
+	// ForceAttemptHTTP2 controls whether HTTP/2 is enabled when a non-zero
+	// Dial, DialTLS, or DialContext func or TLSClientConfig is provided.
+	// By default, use of any those fields conservatively disables HTTP/2.
+	// To use a custom dialer or TLS config and still attempt HTTP/2
+	// upgrades, set this to true.
+	ForceAttemptHTTP2 bool
+	// 	@compatible: 此字段在 v1.13 版本添加
+	//
+	// WriteBufferSize specifies the size of the write buffer used
+	// when writing to the transport.
+	// If zero, a default (currently 4KB) is used.
+	WriteBufferSize int
+	// 	@compatible: 此字段在 v1.13 版本添加
+	//
+	// ReadBufferSize specifies the size of the read buffer used
+	// when reading from the transport.
+	// If zero, a default (currently 4KB) is used.
+	ReadBufferSize int
+	// 	@compatible: 此字段在 v1.13 版本添加
+	//
+	tlsNextProtoWasNil bool // whether TLSNextProto was nil when the Once fired
+
 }
 
 // ProxyFromEnvironment returns the URL of the proxy to use for a
