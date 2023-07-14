@@ -1,4 +1,4 @@
-# gdb调试时报错退出fatal error - runtime - misuse of rewindmorestack[bug]
+# gdb next单步调试时报错退出fatal error - runtime - misuse of rewindmorestack[bug]
 
 参考文章
 
@@ -10,9 +10,5 @@
 ## 问题描述
 
 在用gdb调试示例006时, 执行next指令, 突然报了"fatal error: runtime: misuse of rewindmorestack"的错误...
-
-```
-
-```
 
 ...像是一个bug.

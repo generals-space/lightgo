@@ -1,3 +1,16 @@
+
+```
+b main.main
+```
+
+```
+b runtime.mallocgc
+b runtime.gc
+b runtime.new
+b runtime.mal
+```
+
+```
 runtime·MHeap_Scavenger()
 |
 ├── forcegchelper()
@@ -43,3 +56,5 @@ runtime·MHeap_Scavenger()
 |   
 ├──
 
+
+```
