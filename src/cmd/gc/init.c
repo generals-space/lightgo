@@ -6,13 +6,14 @@
 #include <libc.h>
 #include "go.h"
 
-/*
- * a function named init is a special case.
- * it is called by the initialization before
- * main is run. to make it unique within a
- * package and also uncallable, the name,
- * normally "pkg.init", is altered to "pkg.init·1".
- */
+// caller:
+// 	1. src/cmd/gc/go.y -> fndcl{} 块, 只有这一处
+//
+// a function named init is a special case.
+// it is called by the initialization before main is run. 
+// to make it unique within a package and also uncallable, 
+// the name, normally "pkg.init", is altered to "pkg.init·1".
+// 
 Sym* renameinit(void)
 {
 	static int initgen;
@@ -21,6 +22,8 @@ Sym* renameinit(void)
 	return lookup(namebuf);
 }
 
+// caller:
+// 	1. fninit() 只有这一处
 /*
  * hand-craft the following initialization code
  *	var initdone· uint8 				(1)
@@ -63,23 +66,28 @@ static int anyinit(NodeList *n)
 	}
 
 	// is this main
-	if(strcmp(localpkg->name, "main") == 0)
+	if(strcmp(localpkg->name, "main") == 0) {
 		return 1;
+	}
 
 	// is there an explicit init function
 	snprint(namebuf, sizeof(namebuf), "init·1");
 	s = lookup(namebuf);
-	if(s->def != N)
+	if(s->def != N) {
 		return 1;
+	}
 
 	// are there any imported init functions
-	for(h=0; h<NHASH; h++)
-	for(s = hash[h]; s != S; s = s->link) {
-		if(s->name[0] != 'i' || strcmp(s->name, "init") != 0)
-			continue;
-		if(s->def == N)
-			continue;
-		return 1;
+	for(h=0; h<NHASH; h++) {
+		for(s = hash[h]; s != S; s = s->link) {
+			if(s->name[0] != 'i' || strcmp(s->name, "init") != 0) {
+				continue;
+			}
+			if(s->def == N) {
+				continue;
+			}
+			return 1;
+		}
 	}
 
 	// then none
