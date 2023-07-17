@@ -1351,11 +1351,13 @@ interfacetype:
 		fixlbrace($2);
 	}
 
+// 单行函数声明及定义
 /*
  * function stuff
  * all in one place to show how crappy it all is
  */
 xfndcl:
+	// func fndcl(函数声明) fnbody(函数体)
 	LFUNC fndcl fnbody
 	{
 		$$ = $2;
@@ -1370,6 +1372,10 @@ xfndcl:
 	}
 
 fndcl:
+	// 普通函数定义(这里其实是没有 func 的)
+	//       sym              fnres
+	//        |                 |
+	// func name(a, b int) (err error)
 	sym '(' oarg_type_list_ocomma ')' fnres
 	{
 		Node *t;
@@ -1377,6 +1383,7 @@ fndcl:
 		$$ = N;
 		$3 = checkarglist($3, 1);
 
+		// 如果函数名为 init, 则需要特殊处理, 把函数名改成 pkg.init·1
 		if(strcmp($1->name, "init") == 0) {
 			$1 = renameinit();
 			if($3 != nil || $5 != nil)
@@ -1399,6 +1406,10 @@ fndcl:
 
 		funchdr($$);
 	}
+	// 方法函数定义(这里其实是没有 func 的)
+	//                sym              fnres
+	//                 |                 |
+	// func(r *recv) name(a, b int) (err error)
 |	'(' oarg_type_list_ocomma ')' sym '(' oarg_type_list_ocomma ')' fnres
 	{
 		Node *rcvr, *t;

@@ -29,7 +29,7 @@ THE SOFTWARE.
 
 extern void p9main(int, char**);
 
-// 6c/6l/6g 命令的入口函数
+// 6c/6l 命令的入口函数
 int main(int argc, char **argv)
 {
 	p9main(argc, argv);

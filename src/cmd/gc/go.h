@@ -427,6 +427,9 @@ struct	Node
  */
 EXTERN	uint32	walkgen;
 
+// NodeList 单向链表
+// 不过有点特殊, 除了 next 与常规的链表结构相同外, 还多了一个 end,
+// 这表示该链表中任意一个节点都拥有一个指向链表末尾的节点...
 struct	NodeList
 {
 	Node*	n;
@@ -1048,7 +1051,13 @@ EXTERN	Sym*	hash[NHASH];
 EXTERN	Sym*	importmyname;	// my name for package
 
 ////////////////////////////////////////////////////////////////////////////////
-// 全局变量, 表示 go run/build, 或是 6g 编译的目标 package, 一般为 main 包.
+// 全局变量, 表示 go run/build, 或是 6g 编译的目标 package.
+// 对于一个完整的工程, 会根据各个 package 的引用顺序, 依次编译,
+// localpkg 就表示当前正在被编译的 package 信息.
+//
+// 在 src/cmd/gc/lex.c -> main() 函数中, 通过调用 src/cmd/gc/y.tab.c -> yyparse()
+// 对该变量进行初始化.
+//
 // package being compiled
 EXTERN	Pkg*	localpkg;
 EXTERN	Pkg*	builtinpkg;	// fake package for builtins
@@ -1561,6 +1570,7 @@ int	isslice(Type *t);
 int	istype(Type *t, int et);
 void	linehist(char *file, int32 off, int relative);
 NodeList*	list(NodeList *l, Node *n);
+NodeList*	list_insert(NodeList *l, Node *n);
 NodeList*	list1(Node *n);
 void	listsort(NodeList**, int(*f)(Node*, Node*));
 Node*	liststmt(NodeList *l);
