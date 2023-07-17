@@ -24,7 +24,7 @@ Sym* pkglookup(char *name, Pkg *pkg)
 			return s;
 		}
 	}
-
+	// 没找到, 则新建一个再返回
 	s = mal(sizeof(*s));
 	s->name = mal(strlen(name)+1);
 	strcpy(s->name, name);

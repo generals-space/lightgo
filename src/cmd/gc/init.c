@@ -6,8 +6,10 @@
 #include <libc.h>
 #include "go.h"
 
+// renameinit 编译期间遇到名为 init 的函数的 Sym 对象, 将其重命名.
+//
 // caller:
-// 	1. src/cmd/gc/go.y -> fndcl{} 块, 只有这一处
+// 	1. src/cmd/gc/go.y -> fndcl{}, 只有这一处
 //
 // a function named init is a special case.
 // it is called by the initialization before main is run. 

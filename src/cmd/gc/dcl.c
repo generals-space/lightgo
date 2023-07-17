@@ -372,8 +372,9 @@ Node* newname(Sym *s)
 {
 	Node *n;
 
-	if(s == S)
+	if(s == S) {
 		fatal("newname nil");
+	}
 
 	n = nod(ONAME, N, N);
 	n->sym = s;
@@ -563,14 +564,13 @@ ifacedcl(Node *n)
 	funcbody(n);
 }
 
-/*
- * declare the function proper
- * and declare the arguments.
- * called in extern-declaration context
- * returns in auto-declaration context.
- */
-void
-funchdr(Node *n)
+// 	@param n: 这是一个函数类型(ODCLFUNC)的 Node
+//
+// declare the function proper and declare the arguments.
+// called in extern-declaration context
+// returns in auto-declaration context.
+// 
+void funchdr(Node *n)
 {
 	// change the declaration context from extern to auto
 	if(funcdepth == 0 && dclcontext != PEXTERN)
@@ -591,8 +591,7 @@ funchdr(Node *n)
 		funcargs2(n->type);
 }
 
-static void
-funcargs(Node *nt)
+static void funcargs(Node *nt)
 {
 	Node *n, *nn;
 	NodeList *l;

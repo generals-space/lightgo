@@ -365,6 +365,10 @@ void unimportfile(void)
 	typecheckok = 0;
 }
 
+// caller:
+// 	1. fakeimport()
+// 	2. importfile()
+// 	3. src/cmd/gc/go.y -> loadsys{} 
 void cannedimports(char *file, char *cp)
 {
 	// if sys.6 is included on line 1,

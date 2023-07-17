@@ -422,14 +422,17 @@ patch(void)
 		p->pcond = q;
 	}
 
-	for(cursym = textp; cursym != nil; cursym = cursym->next)
-	for(p = cursym->text; p != P; p = p->link) {
-		p->mark = 0;	/* initialization for follow */
-		if(p->pcond != P) {
-			p->pcond = brloop(p->pcond);
-			if(p->pcond != P)
-			if(p->to.type == D_BRANCH)
-				p->to.offset = p->pcond->pc;
+	for(cursym = textp; cursym != nil; cursym = cursym->next) {
+		for(p = cursym->text; p != P; p = p->link) {
+			p->mark = 0;	/* initialization for follow */
+			if(p->pcond != P) {
+				p->pcond = brloop(p->pcond);
+				if(p->pcond != P) {
+					if(p->to.type == D_BRANCH) {
+						p->to.offset = p->pcond->pc;
+					}
+				}
+			}
 		}
 	}
 }
