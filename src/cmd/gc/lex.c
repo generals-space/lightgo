@@ -49,7 +49,10 @@ static void setexp(void)
 	}
 }
 
-// 这个函数是 6g 命令的入口.
+// 这个函数是 6g 命令的入口, 每编译一个 package 时, 都会调用一次.
+// 	@note: 对于一个完整的工程, 会根据各个 package 的引用顺序, 依次编译. 
+// 	也就是说, 每个 package 在编译时都会运行到该 main() 方法中,
+// 	localpkg 对象就表示当前正在被编译的 package 信息.
 //
 // 	@note: 
 // 	@todo: 本来在拆分 lex.c 时, 想把 main() 拆分到独立的 main.c 文件中, 更方便查询,
@@ -258,6 +261,8 @@ int main(int argc, char *argv[])
 
 		block = 1;
 		iota = -1000000;
+		// 1. 完成 xtop 对象的初始化
+		// 2. 完成 localpkg 对象的初始化
 		yyparse();
 		if(nsyntaxerrors != 0) {
 			errorexit();
