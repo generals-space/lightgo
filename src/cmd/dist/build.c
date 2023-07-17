@@ -410,7 +410,9 @@ static char *buildorder[] = {
 // which is relative to $GOROOT/src.
 void install(char *dir)
 {
-	char *name, *p, *elem, *prefix;
+	// name 当前正在编译的源文件名称(只有文件名, 没有路径)
+	char *name;
+	char *p, *elem, *prefix;
 	bool islib, ispkg, isgo, stale;
 	Buf b, b1, path;
 	// 存储在编译过程中生成的, 待清理的文件列表.

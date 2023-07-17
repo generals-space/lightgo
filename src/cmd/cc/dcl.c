@@ -317,8 +317,7 @@ isstruct(Node *a, Type *t)
 	return 0;
 }
 
-Node*
-init1(Sym *s, Type *t, int32 o, int exflag)
+Node* init1(Sym *s, Type *t, int32 o, int exflag)
 {
 	Node *a, *l, *r, nod;
 	Type *t1;

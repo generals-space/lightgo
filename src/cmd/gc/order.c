@@ -16,23 +16,25 @@ static void	orderblock(NodeList **l);
 static void	orderexpr(Node**, NodeList**);
 static void	orderexprlist(NodeList*, NodeList**);
 
-void
-order(Node *fn)
+void order(Node *fn)
 {
 	orderblock(&fn->nbody);
 }
 
-static void
-orderstmtlist(NodeList *l, NodeList **out)
+// caller:
+// 	1. orderblock()
+// 	2. orderinit()
+// 	3. orderstmt()
+static void orderstmtlist(NodeList *l, NodeList **out)
 {
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		orderstmt(l->n, out);
+	}
 }
 
 // Order the block of statements *l onto a new list,
 // and then replace *l with that list.
-static void
-orderblock(NodeList **l)
+static void orderblock(NodeList **l)
 {
 	NodeList *out;
 	
@@ -43,8 +45,7 @@ orderblock(NodeList **l)
 
 // Order the side effects in *np and leave them as
 // the init list of the final *np.
-static void
-orderexprinplace(Node **np)
+static void orderexprinplace(Node **np)
 {
 	Node *n;
 	NodeList *out;
@@ -57,8 +58,7 @@ orderexprinplace(Node **np)
 }
 
 // Like orderblock, but applied to a single statement.
-static void
-orderstmtinplace(Node **np)
+static void orderstmtinplace(Node **np)
 {
 	Node *n;
 	NodeList *out;
@@ -69,17 +69,19 @@ orderstmtinplace(Node **np)
 	*np = liststmt(out);
 }
 
+// caller:
+// 	1. orderstmt()
+// 	2. orderexpr()
+//
 // Move n's init list to *out.
-static void
-orderinit(Node *n, NodeList **out)
+static void orderinit(Node *n, NodeList **out)
 {
 	orderstmtlist(n->ninit, out);
 	n->ninit = nil;
 }
 
 // Is the list l actually just f() for a multi-value function?
-static int
-ismulticall(NodeList *l)
+static int ismulticall(NodeList *l)
 {
 	Node *n;
 	
@@ -104,8 +106,7 @@ ismulticall(NodeList *l)
 
 // n is a multi-value function call.  Add t1, t2, .. = n to out
 // and return the list t1, t2, ...
-static NodeList*
-copyret(Node *n, NodeList **out)
+static NodeList* copyret(Node *n, NodeList **out)
 {
 	Type *t;
 	Node *tmp, *as;
@@ -132,8 +133,7 @@ copyret(Node *n, NodeList **out)
 	return l2;
 }
 
-static void
-ordercallargs(NodeList **l, NodeList **out)
+static void ordercallargs(NodeList **l, NodeList **out)
 {
 	if(ismulticall(*l)) {
 		// return f() where f() is multiple values.
@@ -143,15 +143,13 @@ ordercallargs(NodeList **l, NodeList **out)
 	}
 }
 
-static void
-ordercall(Node *n, NodeList **out)
+static void ordercall(Node *n, NodeList **out)
 {
 	orderexpr(&n->left, out);
 	ordercallargs(&n->list, out);
 }
 
-static void
-orderstmt(Node *n, NodeList **out)
+static void orderstmt(Node *n, NodeList **out)
 {
 	int lno;
 	NodeList *l;
@@ -307,15 +305,13 @@ orderstmt(Node *n, NodeList **out)
 	lineno = lno;
 }
 
-static void
-orderexprlist(NodeList *l, NodeList **out)
+static void orderexprlist(NodeList *l, NodeList **out)
 {
 	for(; l; l=l->next)
 		orderexpr(&l->n, out);
 }
 
-static void
-orderexpr(Node **np, NodeList **out)
+static void orderexpr(Node **np, NodeList **out)
 {
 	Node *n;
 	int lno;
