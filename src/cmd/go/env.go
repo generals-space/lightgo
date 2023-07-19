@@ -9,11 +9,22 @@ import (
 	"os"
 	"runtime"
 	"strings"
+
+	"internal/cfg"
 )
 
 var cmdEnv = &Command{
-	Run:       runEnv,
-	UsageLine: "env [var ...]",
+	// 	@compatible: 此处变更在 v1.9 版本完成, 因为
+	// cmdEnv.Run -> runEnv -> envJson -> cmdEnv
+	//  ↑                                   |
+	//  └───────────────────────────────────┘
+	// 出现了循环引用
+	//
+	// Run:       runEnv,
+
+	// 	@compatible: 此处变更与`Long`中的`-json`部分, 在 v1.9 版本完成
+	// UsageLine: "env [var ...]",
+	UsageLine: "env [-json] [var ...]",
 	Short:     "print Go environment information",
 	Long: `
 Env prints Go environment information.
@@ -22,6 +33,9 @@ By default env prints information as a shell script
 (on Windows, a batch file).  If one or more variable
 names is given as arguments,  env prints the value of
 each named variable on its own line.
+
+The -json flag prints the environment in JSON format
+instead of as a shell script.
 	`,
 }
 
@@ -79,9 +93,32 @@ func findEnv(env []envVar, name string) string {
 func runEnv(cmd *Command, args []string) {
 	env := mkEnv()
 	if len(args) > 0 {
-		for _, name := range args {
-			fmt.Printf("%s\n", findEnv(env, name))
+		if *envJson {
+			// 	@compatible: 此 if 块在 v1.9 版本添加, 为了实现 -json 参数的能力
+			var es []cfg.EnvVar
+			for _, name := range args {
+				e := cfg.EnvVar{Name: name, Value: findEnv(env, name)}
+				es = append(es, e)
+			}
+			printEnvAsJSON(es)
+		} else {
+			for _, name := range args {
+				fmt.Printf("%s\n", findEnv(env, name))
+			}
 		}
+		return
+	}
+
+	// 	@compatible: 此 if 块在 v1.9 版本添加, 为了实现 -json 参数的能力
+	if *envJson {
+		var cfgEnv []cfg.EnvVar
+		for _, e := range env {
+			cfgEnv = append(cfgEnv, cfg.EnvVar{
+				Name: e.name,
+				Value: e.value,
+			})
+		}
+		printEnvAsJSON(cfgEnv)
 		return
 	}
 
