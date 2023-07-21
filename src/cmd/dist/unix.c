@@ -543,16 +543,24 @@ bool streq(char *p, char *q)
 	return strcmp(p, q) == 0;
 }
 
-// 获取目标路径中的文件名, 类似于 linux 的 basename 命令.
+// 获取目标路径中的文件名(包含后缀名), 类似于 linux 的 basename 命令.
+//
+// 	@param p: 如 pkg/runtime/runtime.c
+//
+// caller:
+// 	1. src/cmd/dist/build_func.c -> shouldbuild()
+//
 // lastelem returns the final path element in p.
 char* lastelem(char *p)
 {
 	char *out;
 
 	out = p;
-	for(; *p; p++)
-		if(*p == '/')
+	for(; *p; p++) {
+		if(*p == '/') {
 			out = p+1;
+		}
+	}
 	return out;
 }
 
