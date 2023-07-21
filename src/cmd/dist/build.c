@@ -394,6 +394,8 @@ static char *buildorder[] = {
 	"pkg/text/template",
 	"pkg/go/doc",
 	"pkg/go/build",
+	// cfg 包, 是为了实现 go env -json 参数
+	"pkg/internal/cfg",
 	"cmd/go",
 };
 
