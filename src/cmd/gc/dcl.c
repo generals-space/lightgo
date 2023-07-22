@@ -151,21 +151,33 @@ testdclstack(void)
 	}
 }
 
-void
-redeclare(Sym *s, char *where)
+// 	@param s: 重复声明的对象, 有可能是 函数名, 变量名 等.
+// 	@param where: 重复对象可能的情况, "in this block", "as imported package name" 两种
+//
+// caller:
+// 	1. declare()
+// 	2. src/cmd/gc/export.c -> importsym()
+// 	3. src/cmd/gc/subr_package.c -> importdot()
+// 	4. src/cmd/gc/go.y -> import_stmt()
+void redeclare(Sym *s, char *where)
 {
 	Strlit *pkgstr;
-	int line1, line2;
+	// line1 发生重复声明错误所在的行, 如 ../../xxx.go:123
+	int line1;
+	// line2 同名函数初次声明所在的行, 如 ../../xxx.go:122
+	int line2;
 
 	if(s->lastlineno == 0) {
 		pkgstr = s->origpkg ? s->origpkg->path : s->pkg->path;
-		yyerror("%S redeclared %s\n"
+		yyerror(
+			"%S redeclared %s\n"
 			"\tprevious declaration during import \"%Z\"",
-			s, where, pkgstr);
+			s, where, pkgstr
+		);
 	} else {
 		line1 = parserline();
 		line2 = s->lastlineno;
-		
+
 		// When an import and a declaration collide in separate files,
 		// present the import as the "redeclared", because the declaration
 		// is visible where the import is, but not vice versa.
@@ -175,65 +187,81 @@ redeclare(Sym *s, char *where)
 			line1 = s->lastlineno;
 		}
 
-		yyerrorl(line1, "%S redeclared %s\n"
+		yyerrorl(
+			line1, "%S redeclared %s\n"
 			"\tprevious declaration at %L",
-			s, where, line2);
+			s, where, line2
+		);
 	}
 }
 
 static int vargen;
 
-/*
- * declare individual names - var, typ, const
- */
+// 	@param n: 变量, 类型或函数对象
+//
+// declare individual names - var, typ, const
+// 
 void declare(Node *n, int ctxt)
 {
 	Sym *s;
 	int gen;
 	static int typegen;
 
-	if(ctxt == PDISCARD)
+	if(ctxt == PDISCARD) {
 		return;
+	}
 
-	if(isblank(n))
+	if(isblank(n)) {
 		return;
+	}
 
 	n->lineno = parserline();
 	s = n->sym;
 
 	// kludgy: typecheckok means we're past parsing. 
 	// Eg genwrapper may declare out of package names later.
-	if(importpkg == nil && !typecheckok && s->pkg != localpkg)
+	if(importpkg == nil && !typecheckok && s->pkg != localpkg) {
 		yyerror("cannot declare name %S", s);
+	}
 
-	if(ctxt == PEXTERN && strcmp(s->name, "init") == 0)
+	if(ctxt == PEXTERN && strcmp(s->name, "init") == 0) {
 		yyerror("cannot declare init - must be func", s);
+	}
 
 	gen = 0;
 	if(ctxt == PEXTERN) {
 		externdcl = list(externdcl, n);
-		if(dflag())
+		if(dflag()) {
 			print("\t%L global decl %S %p\n", lineno, s, n);
+		}
 	} else {
-		if(curfn == nil && ctxt == PAUTO)
+		if(curfn == nil && ctxt == PAUTO) {
 			fatal("automatic outside function");
-		if(curfn != nil)
+		}
+		if(curfn != nil) {
 			curfn->dcl = list(curfn->dcl, n);
-		if(n->op == OTYPE)
+		}
+		if(n->op == OTYPE) {
 			gen = ++typegen;
-		else if(n->op == ONAME && ctxt == PAUTO && strstr(s->name, "·") == nil)
+		}
+		else if(n->op == ONAME && ctxt == PAUTO && strstr(s->name, "·") == nil) {
 			gen = ++vargen;
+		}
 		pushdcl(s);
 		n->curfn = curfn;
 	}
-	if(ctxt == PAUTO)
+	if(ctxt == PAUTO) {
 		n->xoffset = 0;
+	}
 
 	if(s->block == block) {
+		// (同一个 package 下的)同名函数重复声明
+		//
 		// functype will print errors about duplicate function arguments.
 		// Don't repeat the error here.
-		if(ctxt != PPARAM && ctxt != PPARAMOUT)
+		if(ctxt != PPARAM && ctxt != PPARAMOUT) {
 			redeclare(s, "in this block");
+		}
 	}
 
 	s->block = block;
