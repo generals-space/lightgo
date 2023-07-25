@@ -74,6 +74,8 @@ type Reader struct {
 	flg          byte
 	buf          [512]byte
 	err          error
+	// 	@compatible: 此字段在 v1.4 版本添加
+	multistream  bool
 }
 
 // NewReader creates a new Reader reading the given reader.

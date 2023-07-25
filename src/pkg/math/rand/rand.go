@@ -30,11 +30,22 @@ func NewSource(seed int64) Source {
 // A Rand is a source of random numbers.
 type Rand struct {
 	src Source
+
+	// 	@compatible: 此字段在 v1.8 版本添加
+	s64 Source64 // non-nil if src is source64
 }
 
+// 	@compatible: 此函数在 v1.8 版本作了变更, 新增了 s64 字段的初始化
+//
 // New returns a new Rand that uses random values from src
 // to generate other random values.
-func New(src Source) *Rand { return &Rand{src} }
+//
+// func New(src Source) *Rand { return &Rand{src} }
+//
+func New(src Source) *Rand {
+	s64, _ := src.(Source64)
+	return &Rand{src: src, s64: s64}
+}
 
 // Seed uses the provided seed value to initialize the generator to a deterministic state.
 func (r *Rand) Seed(seed int64) { r.src.Seed(seed) }
