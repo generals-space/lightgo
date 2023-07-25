@@ -222,6 +222,13 @@ type PSSOptions struct {
 	// signature. It can either be a number of bytes, or one of the special
 	// PSSSaltLength constants.
 	SaltLength int
+
+	// 	@compatible: 此字段在 v1.4 版本添加
+	//
+	// Hash, if not zero, overrides the hash function passed to SignPSS.
+	// This is the only way to specify the hash function when using the
+	// crypto.Signer interface.
+	Hash crypto.Hash
 }
 
 func (opts *PSSOptions) saltLength() int {
