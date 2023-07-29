@@ -221,7 +221,14 @@ static Type* ifacelookdot(Sym *s, Type *t, int *followptr, int ignorecase)
 // 	3. src/cmd/gc/swt.c -> typecheckswitch()
 int implements(Type *t, Type *iface, Type **m, Type **samename, int *ptr)
 {
-	Type *t0, *im, *tm, *rcvr, *imtype;
+	Type *t0;
+	// 被赋值的 interface 类型
+	Type *im;
+	// 待赋值的 struct 类型(或是别名类型, 也有可能是其他的 interface 类型)
+	Type *tm;
+	// tm 中上挂载的方法中, receiver 的类型(有可能是 tm 本身, 但也有可能是 *tm)
+	Type *rcvr;
+	Type *imtype;
 	int followptr;
 
 	t0 = t;

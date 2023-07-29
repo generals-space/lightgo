@@ -256,89 +256,135 @@ int twoarg(Node *n)
 	return 0;
 }
 
+// 判断变量类型是否一致, 因为之后要进行赋值.
+//
+// 从目前来看, 该函数有如下2种使用场景:
+// 	1. 检测传入的参数列表的类型, 与函数声明中的参数列表是否一致;
+// 	2. 检测函数返回的变量的类型, 是函数声明中的返回值列表是否一致;
+//
+// 	@param op: 只有2个选项: OCALL(传入参数)/ORETURN(返回值);
+// 	@param call: 如果 op 是 OCALL, 则为主调函数的 Node, 如果 op 是 ORETURN, 则为 nil.
+// 	@param tstruct: 目标函数声明中定义的参数列表或返回值列表(即形参)
+// 	@param nl: 实际传入的参数列表或返回值列表(即实参)
+// 	@param desc: 当 op == OCALL 时, desc = "function argument", 当 op == ORETURN 时,
+// 	desc = "return argument"
+//
 // caller:
 //  1. typecheck1() 只有这一处
 //
 // typecheck assignment: type list = expression list
 void typecheckaste(int op, Node *call, int isddd, Type *tstruct, NodeList *nl, char *desc)
 {
-	Type *t, *tl, *tn;
+	Type *t;
+	// 形参中的某个参数的类型
+	Type *tl;
+	// 实参中的某个参数的类型
+	Type *tn;
 	Node *n;
 	int lno;
 	char *why;
 
 	lno = lineno;
 
-	if(tstruct->broke)
+	if(tstruct->broke) {
 		goto out;
+	}
 
-	if(nl != nil && nl->next == nil && (n = nl->n)->type != T)
-	if(n->type->etype == TSTRUCT && n->type->funarg) {
-		tn = n->type->type;
-		for(tl=tstruct->type; tl; tl=tl->down) {
-			if(tl->isddd) {
-				for(; tn; tn=tn->down) {
-					if(assignop(tn->type, tl->type->type, &why) == 0) {
-						if(call != N)
-							yyerror("cannot use %T as type %T in argument to %N%s", tn->type, tl->type->type, call, why);
-						else
-							yyerror("cannot use %T as type %T in %s%s", tn->type, tl->type->type, desc, why);
+	if(nl != nil && nl->next == nil && (n = nl->n)->type != T) {
+		if(n->type->etype == TSTRUCT && n->type->funarg) {
+			tn = n->type->type;
+			for(tl=tstruct->type; tl; tl=tl->down) {
+				if(tl->isddd) {
+					for(; tn; tn=tn->down) {
+						if(assignop(tn->type, tl->type->type, &why) == 0) {
+							if(call != N) {
+								yyerror(
+									"cannot use %T as type %T in argument to %N%s", 
+									tn->type, tl->type->type, call, why
+								);
+							}
+							else {
+								yyerror(
+									"cannot use %T as type %T in %s%s", 
+									tn->type, tl->type->type, desc, why
+								);
+							}
+						}
+					}
+					goto out;
+				}
+				if(tn == T) {
+					goto notenough;
+				}
+				if(assignop(tn->type, tl->type, &why) == 0) {
+					if(call != N) {
+						yyerror(
+							"cannot use %T as type %T in argument to %N%s", 
+							tn->type, tl->type, call, why
+						);
+					}
+					else {
+						yyerror(
+							"cannot use %T as type %T in %s%s", 
+							tn->type, tl->type, desc, why
+						);
 					}
 				}
-				goto out;
+				tn = tn->down;
 			}
-			if(tn == T)
-				goto notenough;
-			if(assignop(tn->type, tl->type, &why) == 0) {
-				if(call != N)
-					yyerror("cannot use %T as type %T in argument to %N%s", tn->type, tl->type, call, why);
-				else
-					yyerror("cannot use %T as type %T in %s%s", tn->type, tl->type, desc, why);
+			if(tn != T) {
+				goto toomany;
 			}
-			tn = tn->down;
+			goto out;
 		}
-		if(tn != T)
-			goto toomany;
-		goto out;
 	}
 
 	for(tl=tstruct->type; tl; tl=tl->down) {
 		t = tl->type;
 		if(tl->isddd) {
 			if(isddd) {
-				if(nl == nil)
+				if(nl == nil) {
 					goto notenough;
-				if(nl->next != nil)
+				}
+				if(nl->next != nil) {
 					goto toomany;
+				}
 				n = nl->n;
 				setlineno(n);
-				if(n->type != T)
+				if(n->type != T) {
 					nl->n = assignconv(n, t, desc);
+				}
 				goto out;
 			}
 			for(; nl; nl=nl->next) {
 				n = nl->n;
 				setlineno(nl->n);
-				if(n->type != T)
+				if(n->type != T) {
 					nl->n = assignconv(n, t->type, desc);
+				}
 			}
 			goto out;
 		}
-		if(nl == nil)
+		if(nl == nil) {
 			goto notenough;
+		}
 		n = nl->n;
 		setlineno(n);
-		if(n->type != T)
+		if(n->type != T) {
 			nl->n = assignconv(n, t, desc);
+		}
 		nl = nl->next;
 	}
-	if(nl != nil)
+	if(nl != nil) {
 		goto toomany;
+	}
 	if(isddd) {
-		if(call != N)
+		if(call != N) {
 			yyerror("invalid use of ... in call to %N", call);
-		else
+		}
+		else {
 			yyerror("invalid use of ... in %O", op);
+		}
 	}
 
 out:
@@ -346,17 +392,21 @@ out:
 	return;
 
 notenough:
-	if(call != N)
+	if(call != N) {
 		yyerror("not enough arguments in call to %N", call);
-	else
+	}
+	else {
 		yyerror("not enough arguments to %O", op);
+	}
 	goto out;
 
 toomany:
-	if(call != N)
+	if(call != N) {
 		yyerror("too many arguments in call to %N", call);
-	else
+	}
+	else {
 		yyerror("too many arguments to %O", op);
+	}
 	goto out;
 }
 

@@ -16,13 +16,14 @@ static int eqnote(Strlit *a, Strlit *b);
 
 // caller:
 // 	1. implements()
+// 	2. src/cmd/gc/subr_assign_convert.c -> assignop()
 //
 // Return 1 if t1 and t2 are identical(相同的), following the spec rules.
 //
-// Any cyclic(循环的) type must go through a named type, and if one is
-// named, it is only identical to the other if they are the same
-// pointer (t1 == t2), so there's no chance of chasing cycles
-// ad infinitum, so no need for a depth counter.
+// Any cyclic(循环的) type must go through a named type, and if one is named,
+// it is only identical to the other if they are the same pointer (t1 == t2),
+// so there's no chance of chasing cycles ad infinitum,
+// so no need for a depth counter.
 int eqtype(Type *t1, Type *t2)
 {
 	return eqtype1(t1, t2, nil);
@@ -32,29 +33,35 @@ static int eqtype1(Type *t1, Type *t2, TypePairList *assumed_equal)
 {
 	TypePairList l;
 
-	if(t1 == t2)
+	if(t1 == t2) {
 		return 1;
-	if(t1 == T || t2 == T || t1->etype != t2->etype)
+	}
+	// type 为 nil...这怎么可能
+	if(t1 == T || t2 == T || t1->etype != t2->etype) {
 		return 0;
+	}
 	if(t1->sym || t2->sym) {
-		// Special case: we keep byte and uint8 separate
-		// for error messages.  Treat them as equal.
+		// Special case: we keep byte and uint8 separate for error messages. 
+		// Treat them as equal.
 		switch(t1->etype) {
 		case TUINT8:
-			if((t1 == types[TUINT8] || t1 == bytetype) && (t2 == types[TUINT8] || t2 == bytetype))
+			if((t1 == types[TUINT8] || t1 == bytetype) && (t2 == types[TUINT8] || t2 == bytetype)) {
 				return 1;
+			}
 			break;
 		case TINT:
 		case TINT32:
-			if((t1 == types[runetype->etype] || t1 == runetype) && (t2 == types[runetype->etype] || t2 == runetype))
+			if((t1 == types[runetype->etype] || t1 == runetype) && (t2 == types[runetype->etype] || t2 == runetype)) {
 				return 1;
+			}
 			break;
 		}
 		return 0;
 	}
 
-	if(onlist(assumed_equal, t1, t2))
+	if(onlist(assumed_equal, t1, t2)) {
 		return 1;
+	}
 	l.next = assumed_equal;
 	l.t1 = t1;
 	l.t2 = t2;

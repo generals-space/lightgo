@@ -6,12 +6,13 @@
 // assignop 判断 src 对象是否可以赋值给 dst 类型.
 // 一般出现在将 strcut{} 结构体对象(src) 赋值给某个 interface 接口(dst)类型对象.
 //
-// 	@param src: struct{} 结构体对象
-// 	@param dst: 接口对象
+// 	@param src: struct{} 结构体对象, 或实参
+// 	@param dst: 接口对象, 或形参
 //
 // caller:
-// 	1. convertop()
-// 	2. assignconv()
+// 	1. convertop() 类型转换
+// 	2. assignconv() 类型断言
+// 	3. src/cmd/gc/typecheck1_func.c -> typecheckaste() 用于判断目标函数形参与实参的类型是否一致.
 //
 // Is type src assignment compatible to type dst?
 // If so, return op code to use in conversion.
@@ -21,8 +22,10 @@ int assignop(Type *src, Type *dst, char **why)
 	Type *missing, *have;
 	int ptr;
 
-	if(why != nil)
+	// 初始化清空 why 字符串
+	if(why != nil) {
 		*why = "";
+	}
 
 	// TODO(rsc,lvd): This behaves poorly in the presence of inlining.
 	// https://code.google.com/p/go/issues/detail?id=2795
@@ -31,6 +34,7 @@ int assignop(Type *src, Type *dst, char **why)
 		errorexit();
 	}
 
+	// 0. 参数类型完全匹配, int 对 int, string 对 string.
 	if(src == dst) {
 		return OCONVNOP;
 	}
@@ -44,12 +48,12 @@ int assignop(Type *src, Type *dst, char **why)
 	if(eqtype(src, dst)) {
 		return OCONVNOP;
 	}
-	
-	// 2. 底层类型相同, 是啥情况?
+
+	// 2. 底层类型相同, 比如 type myType int, 那么对 myType 类型而言, orig 就是 int
 	//
 	// 2. src and dst have identical underlying types
-	// and either src or dst is not a named type or
-	// both are interface types.
+	// and either src or dst is not a named type
+	// or both are interface types.
 	if(eqtype(src->orig, dst->orig) && (src->sym == S || dst->sym == S || src->etype == TINTER)) {
 		return OCONVNOP;
 	}
@@ -105,22 +109,26 @@ int assignop(Type *src, Type *dst, char **why)
 		return 0;
 	}
 	if(isptrto(dst, TINTER)) {
-		if(why != nil)
+		if(why != nil) {
 			*why = smprint(":\n\t%T is pointer to interface, not interface", dst);
+		}
 		return 0;
 	}
 	if(src->etype == TINTER && dst->etype != TBLANK) {
-		if(why != nil && implements(dst, src, &missing, &have, &ptr))
+		if(why != nil && implements(dst, src, &missing, &have, &ptr)) {
 			*why = ": need type assertion";
+		}
 		return 0;
 	}
 
 	// 4. src is a bidirectional channel value, dst is a channel type,
 	// src and dst have identical element types, and
 	// either src or dst is not a named type.
-	if(src->etype == TCHAN && src->chan == Cboth && dst->etype == TCHAN)
-	if(eqtype(src->type, dst->type) && (src->sym == S || dst->sym == S))
-		return OCONVNOP;
+	if(src->etype == TCHAN && src->chan == Cboth && dst->etype == TCHAN) {
+		if(eqtype(src->type, dst->type) && (src->sym == S || dst->sym == S)) {
+			return OCONVNOP;
+		}
+	}
 
 	// 5. src is the predeclared identifier nil and dst is a nillable type.
 	if(src->etype == TNIL) {
@@ -141,8 +149,9 @@ int assignop(Type *src, Type *dst, char **why)
 	// 6. rule about untyped constants - already converted by defaultlit.
 	
 	// 7. Any typed value can be assigned to the blank identifier.
-	if(dst->etype == TBLANK)
+	if(dst->etype == TBLANK) {
 		return OCONVNOP;
+	}
 
 	return 0;
 }
@@ -231,6 +240,11 @@ int convertop(Type *src, Type *dst, char **why)
 	return 0;
 }
 
+// 赋值时的(隐式)类型转换, 如 n1(t1) = n2(t2), 将右侧变量 n, 转换为左侧变量的类型 t.
+//
+// 	@param n: 右侧的源变量
+// 	@param t: 左侧的目标变量的类型
+//
 // caller:
 // 	1. src/cmd/gc/typecheck_assign.c -> typecheckas()
 //
@@ -240,7 +254,7 @@ Node* assignconv(Node *n, Type *t, char *context)
 	int op;
 	Node *r, *old;
 	char *why;
-	
+
 	if(n == N || n->type == T || n->type->broke) {
 		return n;
 	}
@@ -269,16 +283,19 @@ Node* assignconv(Node *n, Type *t, char *context)
 		}
 	}
 
+	// 如果两侧是同一类型, 则直接返回 n.
 	if(eqtype(n->type, t)) {
 		return n;
 	}
 
 	op = assignop(n->type, t, &why);
+	// 不是同一类型, 且无法直接转换, 则报错
 	if(op == 0) {
 		yyerror("cannot use %lN as type %T in %s%s", n, t, context, why);
 		op = OCONV;
 	}
 
+	// 不是同一类型, 但可以转换, 则转换.
 	r = nod(op, n, N);
 	r->type = t;
 	r->typecheck = 1;

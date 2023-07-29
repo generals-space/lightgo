@@ -23,6 +23,7 @@
 Node* unsafenmagic(Node *nn)
 {
 	Node *r, *n, *base, *r1;
+	// s 即 unsafe 包中的函数对象, 如 Sizeof, Offsetof 等.
 	Sym *s;
 	Type *t, *tr;
 	// 返回值 v
@@ -34,10 +35,12 @@ Node* unsafenmagic(Node *nn)
 	fn = nn->left;
 	args = nn->list;
 
-	if(safemode || fn == N || fn->op != ONAME || (s = fn->sym) == S)
+	if(safemode || fn == N || fn->op != ONAME || (s = fn->sym) == S) {
 		goto no;
-	if(s->pkg != unsafepkg)
+	}
+	if(s->pkg != unsafepkg) {
 		goto no;
+	}
 
 	if(args == nil) {
 		yyerror("missing argument for %S", s);
@@ -60,9 +63,12 @@ Node* unsafenmagic(Node *nn)
 		goto yes;
 	}
 	if(strcmp(s->name, "Offsetof") == 0) {
+		// Offsetof 的参数必须是某个 struct 的成员字段(通过点号 . 进行运算)
+		//
 		// must be a selector.
-		if(r->op != OXDOT)
+		if(r->op != OXDOT) {
 			goto bad;
+		}
 		// Remember base of selector to find it back after dot insertion.
 		// Since r->left may be mutated by typechecking, check it explicitly
 		// first to track it correctly.
@@ -134,6 +140,7 @@ bad:
 	goto ret;
 
 yes:
+	// 传入的参数还没处理完
 	if(args->next != nil) {
 		yyerror("extra arguments for %S", s);
 	}
@@ -150,6 +157,8 @@ ret:
 	return n;
 }
 
+// caller:
+// 	1. src/cmd/gc/typecheck1.c -> typecheck1() 只有这一处
 int isunsafebuiltin(Node *n)
 {
 	if(n == N || n->op != ONAME || n->sym == S || n->sym->pkg != unsafepkg)

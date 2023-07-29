@@ -451,8 +451,7 @@ nodindreg(Node *n, Type *t, int r)
 	n->op = OINDREG;
 }
 
-Node*
-nodarg(Type *t, int fp)
+Node* nodarg(Type *t, int fp)
 {
 	Node *n;
 	Type *first;

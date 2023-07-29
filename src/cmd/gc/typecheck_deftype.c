@@ -25,12 +25,13 @@ static void domethod(Node *n)
 	//		M(_ int)
 	//	}
 	// then even though I.M looks like it doesn't care about the
-	// value of its argument, a specific implementation of I may
-	// care.  The _ would suppress the assignment to that argument
+	// value of its argument, a specific implementation of I may care. 
+	// The _ would suppress the assignment to that argument
 	// while generating a call, so remove it.
 	for(t=getinargx(nt->type)->type; t; t=t->down) {
-		if(t->sym != nil && strcmp(t->sym->name, "_") == 0)
+		if(t->sym != nil && strcmp(t->sym->name, "_") == 0) {
 			t->sym = nil;
+		}
 	}
 
 	*n->type = *nt->type;
@@ -70,20 +71,22 @@ void copytype(Node *n, Type *t)
 	t->printed = 0;
 	t->deferwidth = 0;
 	t->copyto = nil;
-	
+
 	// Update nodes waiting on this type.
-	for(; l; l=l->next)
+	for(; l; l=l->next) {
 		copytype(l->n, t);
+	}
 
 	// Double-check use of type as embedded type.
 	lno = lineno;
 	if(embedlineno) {
 		lineno = embedlineno;
-		if(isptr[t->etype])
+		if(isptr[t->etype]) {
 			yyerror("embedded type cannot be a pointer");
+		}
 	}
 	lineno = lno;
-	
+
 	// Queue check for map until all the types are done settling.
 	if(maplineno) {
 		t->maplineno = maplineno;
@@ -116,23 +119,21 @@ void typecheckdeftype(Node *n)
 		goto ret;
 	}
 
-	// copy new type and clear fields
-	// that don't come along.
-	// anything zeroed here must be zeroed in
-	// typedcl2 too.
+	// copy new type and clear fields that don't come along.
+	// anything zeroed here must be zeroed in typedcl2 too.
 	copytype(n, t);
 
 ret:
 	lineno = lno;
 
 	// if there are no type definitions going on, it's safe to
-	// try to resolve the method types for the interfaces
-	// we just read.
+	// try to resolve the method types for the interfaces we just read.
 	if(ntypecheckdeftype == 1) {
 		while((l = methodqueue) != nil) {
 			methodqueue = nil;
-			for(; l; l=l->next)
+			for(; l; l=l->next) {
 				domethod(l->n);
+			}
 		}
 		for(l=mapqueue; l; l=l->next) {
 			lineno = l->n->type->maplineno;
@@ -146,7 +147,7 @@ ret:
 ////////////////////////////////////////////////////////////////////////////////
 
 // caller:
-//  1. src/cmd/gc/dcl.c -> interfacefield()
+//  1. src/cmd/gc/dcl.c -> interfacefield() 只有这一处
 void queuemethod(Node *n)
 {
 	if(ntypecheckdeftype == 0) {
