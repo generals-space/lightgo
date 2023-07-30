@@ -22,6 +22,8 @@ type FileInfo interface {
 	Sys() interface{}   // underlying data source (can return nil)
 }
 
+// 	@compatible: 此类型在 v1.16 版本被移动到 io/fs/fs.go 文件中.
+//
 // A FileMode represents a file's mode and permission bits.
 // The bits have the same definition on all systems, so that
 // information about files can be moved from one system
