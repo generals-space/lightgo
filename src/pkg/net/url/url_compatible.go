@@ -40,3 +40,27 @@ func stripPort(hostport string) string {
 	}
 	return hostport[:colon]
 }
+
+// 	@compatible: addAt v1.8
+//
+// Port returns the port part of u.Host, without the leading colon.
+// If u.Host doesn't contain a port, Port returns an empty string.
+func (u *URL) Port() string {
+	return portOnly(u.Host)
+}
+
+func portOnly(hostport string) string {
+	colon := strings.IndexByte(hostport, ':')
+	if colon == -1 {
+		return ""
+	}
+	if i := strings.Index(hostport, "]:"); i != -1 {
+		return hostport[i+len("]:"):]
+	}
+	if strings.Contains(hostport, "]") {
+		return ""
+	}
+	return hostport[colon+len(":"):]
+}
+
+////////////////////////////////////////////////////////////////////////////////

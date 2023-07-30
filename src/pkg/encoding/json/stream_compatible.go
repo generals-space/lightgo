@@ -1,5 +1,63 @@
 package json
 
+// 	@compatible: addAt v1.5 
+//
+// More reports whether there is another element in the
+// current array or object being parsed.
+func (dec *Decoder) More() bool {
+	c, err := dec.peek()
+	return err == nil && c != ']' && c != '}'
+}
+
+// 	@compatible: addAt v1.5 
+//
+func (dec *Decoder) peek() (byte, error) {
+	var err error
+	for {
+		for i := dec.scanp; i < len(dec.buf); i++ {
+			c := dec.buf[i]
+			if isSpace(rune(c)) {
+				continue
+			}
+			dec.scanp = i
+			return c, nil
+		}
+		// buffer has been scanned, now report any error
+		if err != nil {
+			return 0, err
+		}
+		err = dec.refill()
+	}
+}
+
+// 	@compatible: addAt v1.5 
+//
+func (dec *Decoder) refill() error {
+	// Make room to read more into the buffer.
+	// First slide down data already consumed.
+	if dec.scanp > 0 {
+		n := copy(dec.buf, dec.buf[dec.scanp:])
+		dec.buf = dec.buf[:n]
+		dec.scanp = 0
+	}
+
+	// Grow buffer if not large enough.
+	const minRead = 512
+	if cap(dec.buf)-len(dec.buf) < minRead {
+		newBuf := make([]byte, len(dec.buf), 2*cap(dec.buf)+minRead)
+		copy(newBuf, dec.buf)
+		dec.buf = newBuf
+	}
+
+	// Read.  Delay error for next iteration (after scan).
+	n, err := dec.r.Read(dec.buf[len(dec.buf):cap(dec.buf)])
+	dec.buf = dec.buf[0 : len(dec.buf)+n]
+
+	return err
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 // 	@compatible: 此函数在 v1.7 版本初次添加
 // 	@todo: 只有函数体, 但 indentPrefix, indentValue 字段没有被使用
 //
