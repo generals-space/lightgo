@@ -20,6 +20,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -514,6 +515,9 @@ type Certificate struct {
 	CRLDistributionPoints []string
 
 	PolicyIdentifiers []asn1.ObjectIdentifier
+
+	// 	@compatible: 此字段在 v1.10 版本添加
+	URIs []*url.URL
 }
 
 // ErrUnsupportedAlgorithm results from attempting to perform an operation that
