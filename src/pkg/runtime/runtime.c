@@ -361,13 +361,14 @@ void runtime·Callers(intgo skip, Slice pc, intgo retn)
 	FLUSH(&retn);
 }
 
-// 	@implementOf: src/pkg/runtime/extern.go -> runtime·FuncForPC()
+// 	@implementOf: src/pkg/runtime/extern.go -> FuncForPC()
 void runtime·FuncForPC(uintptr pc, void *retf)
 {
 	retf = runtime·findfunc(pc);
 	FLUSH(&retf);
 }
 
+// 	@implementOf: src/pkg/runtime/extern_compatible.go -> fastrand1()
 uint32 runtime·fastrand1(void)
 {
 	uint32 x;
