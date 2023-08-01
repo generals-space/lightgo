@@ -143,3 +143,31 @@ func ReadAll(r Reader) ([]byte, error) {
 		}
 	}
 }
+
+// 	@compatible: 此变量在 v1.16 版本添加
+//
+// NopCloser returns a ReadCloser with a no-op Close method wrapping
+// the provided Reader r.
+func NopCloser(r Reader) ReadCloser {
+	return nopCloser{r}
+}
+
+// 	@compatible: 此结构在 v1.16 版本添加
+//
+type nopCloser struct {
+	Reader
+}
+
+func (nopCloser) Close() error { return nil }
+
+////////////////////////////////////////
+
+// 	@compatible: addAt v1.16
+//
+// ReadSeekCloser is the interface that groups the basic Read, Seek and Close
+// methods.
+type ReadSeekCloser interface {
+	Reader
+	Seeker
+	Closer
+}
