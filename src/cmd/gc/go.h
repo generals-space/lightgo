@@ -166,12 +166,19 @@ struct	Type
 	uchar	local;		// created in this file
 	uchar	deferwidth;
 	uchar	broke;  	// broken type definition.
-	uchar	isddd;		// TFIELD is ... argument
+	// ddd -> dot dot dot, 即切片列表, 如 fmt.Printf() 原型中的 a
+	// func Printf(format string, a ...interface{}) (n int, err error)
+	//
+	// TFIELD is ... argument
+	uchar	isddd;
 	uchar	align;
 	uchar	haspointers;	// 0 unknown, 1 no, 2 yes
 
 	Node*	nod;		// canonical OTYPE node
-	Type*	orig;		// original type (type literal or predefined type)
+	// 原本的类型, 比如 type myType int, 那么对 myType 类型而言, orig 就是 int
+	//
+	// original type (type literal or predefined type)
+	Type*	orig;
 	// type 对象自身的 lineno 没意义, 这里应该指的是当前 type 所属的 Node 对象的行号
 	int		lineno;
 
@@ -282,6 +289,7 @@ enum
 // Node 在 src/cmd/gc/subr.c -> nod() 函数中初始化
 struct	Node
 {
+	////////////////////////////////////////////////////////////////////////////
 	// Tree structure.
 	// Generic recursive walks should follow these fields.
 	Node*	left;
@@ -317,6 +325,7 @@ struct	Node
 	uchar	noescape;	// func arguments do not escape
 	uchar	builtin;	// built-in name, like len or close
 	uchar	walkdef;
+	// 用于表示当前 node 是否已经做过类型检查了, 1 为是, 0 为否
 	uchar	typecheck;
 	uchar	local;
 	uchar	dodata;
@@ -337,9 +346,11 @@ struct	Node
 	uint	esc;		// EscXXX
 	int	funcdepth;
 
+	////////////////////////////////////////////////////////////////////////////
 	// most nodes
 	Type*	type;
-	Node*	orig;		// original form, for printing, and tracking copies of ONAMEs
+	// original form, for printing, and tracking copies of ONAMEs
+	Node*	orig;
 
 	// func
 	Node*	nname;
@@ -354,6 +365,7 @@ struct	Node
 	NodeList*	inl;	// copy of the body for use in inlining
 	NodeList*	inldcl;	// copy of dcl for use in inlining
 
+	////////////////////////////////////////////////////////////////////////////
 	// 字面量, 比如一个变量的值(可以是整型, 浮点型等),
 	// 或是一个 make() 语句中, 表示 slice 的 len/cap 参数信息
 	//
@@ -387,6 +399,7 @@ struct	Node
 	// OARRAYLIT, OMAPLIT, OSTRUCTLIT.
 	InitPlan*	initplan;
 
+	////////////////////////////////////////////////////////////////////////////
 	// Escape analysis.
 	NodeList* escflowsrc;	// flow(this, src)
 	NodeList* escretval;	// on OCALLxxx, list of dummy return values
@@ -394,6 +407,7 @@ struct	Node
 	// 1:function top level, increased inside function for every loop or label to mark scopes
 	int	escloopdepth;
 
+	////////////////////////////////////////////////////////////////////////////
 	// sym 可以代表一个变量名
 	//
 	// various
@@ -531,11 +545,16 @@ enum
 	// 匿名参数或返回值
 	// unnamed arg or return value: f(int, string) (int, error) { etc }
 	ONONAME,
-	OTYPE,	// type name
+	// 当前 node 节点是一个类型名称, 比如 var i int 中的 int, 或是 type A B 中的 A 和 B.
+	//
+	// type name
+	OTYPE,
 	// 包引用
 	// import
 	OPACK,
-	OLITERAL, // literal
+	// 字面量, 比如 i := 123 中的 123
+	// literal
+	OLITERAL,
 
 	////////////////////////////////////////////////////////////////////////////
 	// expressions 表达式
@@ -1180,7 +1199,8 @@ EXTERN	int32	blockgen;		// max block number
 EXTERN	int32	block;			// current block number
 EXTERN	int	hasdefer;		// flag that curfn has defer statetment
 
-// 全局变量, 表示当前编译器正在处理的函数(作用域)
+// 全局变量, 表示当前编译器正在处理的函数(作用域), 
+// 特指开发者级别的函数, 如果是在函数外定义的变量, 其 curfn 则为 nil.
 EXTERN	Node*	curfn;
 
 EXTERN	int	widthptr;

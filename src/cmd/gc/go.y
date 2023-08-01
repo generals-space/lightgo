@@ -281,9 +281,9 @@ import_there:
 		unimportfile();
 	}
 
-/*
- * declarations
- */
+////////////////////////////////////////////////////////////////////////////////
+// declarations
+
 xdcl:
 	{
 		yyerror("empty top-level declaration");
@@ -304,6 +304,7 @@ xdcl:
 		$$ = nil;
 	}
 
+// 常规的变量声明, 类型别名声明等语句
 common_dcl:
 	// 3种情况:
 	//
@@ -825,9 +826,9 @@ select_stmt:
 		typesw = typesw->left;
 	}
 
-/*
- * expressions
- */
+////////////////////////////////////////////////////////////////////////////////
+// expressions
+
 expr:
 	uexpr
 |	expr LOROR expr
@@ -1168,6 +1169,7 @@ sym:
 		$$ = S;
 	}
 
+// 这种格式没有显式的应用过, 用到的地方应该只在 src/cmd/gc/builtin.c 文件.
 hidden_importsym:
 	'@' LLITERAL '.' LNAME
 	{
@@ -1351,13 +1353,14 @@ interfacetype:
 		fixlbrace($2);
 	}
 
+////////////////////////////////////////////////////////////////////////////////
 // 单行函数声明及定义
-/*
- * function stuff
- * all in one place to show how crappy it all is
- */
+// 
+// function stuff
+// all in one place to show how crappy it all is
+// 
 xfndcl:
-	// func fndcl(函数声明) fnbody(函数体)
+	// func(关键字) fndcl(函数声明) fnbody(函数体)
 	LFUNC fndcl fnbody
 	{
 		$$ = $2;
@@ -1371,8 +1374,9 @@ xfndcl:
 		funcbody($$);
 	}
 
+// 函数声明(这种是没有函数体的)
 fndcl:
-	// 普通函数定义(这里其实是没有 func 的)
+	// 普通函数声明(无函数体)(这里其实是没有 func 关键字的)
 	//       sym              fnres
 	//        |                 |
 	// func name(a, b int) (err error)
@@ -1406,7 +1410,7 @@ fndcl:
 
 		funchdr($$);
 	}
-	// 方法函数定义(这里其实是没有 func 的)
+	// 方法函数定义(无函数体)(这里其实是没有 func 的)
 	//                sym              fnres
 	//                 |                 |
 	// func(r *recv) name(a, b int) (err error)
@@ -1450,6 +1454,7 @@ fndcl:
 	}
 
 hidden_fndcl:
+	// 这种格式没有显式的应用过, 用到的地方应该只在 src/cmd/gc/builtin.c 文件.
 	hidden_pkg_importsym '(' ohidden_funarg_list ')' ohidden_funres
 	{
 		Sym *s;
@@ -1475,6 +1480,9 @@ hidden_fndcl:
 
 		funchdr($$);
 	}
+	// 常规的方法定义
+	//
+	// func关键字 (hidden_funarg_list) sym函数名(ohidden_funarg_list参数列表) ohidden_funres返回值列表
 |	'(' hidden_funarg_list ')' sym '(' ohidden_funarg_list ')' ohidden_funres
 	{
 		$$ = methodname1(newname($4), $2->n->right); 
@@ -1543,6 +1551,9 @@ fnliteral:
 	{
 		$$ = closurebody(nil);
 	}
+
+// 单行函数声明及定义, 结束
+////////////////////////////////////////////////////////////////////////////////
 
 /*
  * lists of things
@@ -1723,17 +1734,23 @@ indcl:
 		$$->rlist = $4;
 	}
 
-/*
- * function arguments.
- */
+////////////////////////////////////////////////////////////////////////////////
+// function arguments.
+
+// 参数名称及类型声明
 arg_type:
 	name_or_type
+	// 函数/方法中, 普通的参数名称及类型声明, 如 func xxx(a int)
 |	sym name_or_type
 	{
 		$$ = nod(ONONAME, N, N);
 		$$->sym = $1;
+		// 	@todo
+		// 这里的语法看起来有点奇怪, 为什么不直接 nod(OKEY, $1, $2), 还要 $$ 中转一下;
 		$$ = nod(OKEY, $$, $2);
 	}
+	// 切片类型参数时的3个点号, 如
+	// func Printf(format string, a ...interface{}) 
 |	sym dotdotdot
 	{
 		$$ = nod(ONONAME, N, N);
@@ -1742,16 +1759,25 @@ arg_type:
 	}
 |	dotdotdot
 
+// 函数/方法中在参数列表(参数名称+类型声明)
+//                       |          arg_type_list        |
+// 实际场景如 func person(string name, int age, bool gender)
 arg_type_list:
+	// 参数名+类型, 如 string name
 	arg_type
 	{
 		$$ = list1($1);
 	}
+	// string, int, bool
+	// 实际场景如 func person(string name, int age, bool gender)
 |	arg_type_list ',' arg_type
 	{
 		$$ = list($1, $3);
 	}
 
+// 函数/方法中匿名参数的类型列表, 末尾有个逗号
+//                       |          arg_type_list         |
+// 实际场景如 func person(string name, int age, bool gender,)
 oarg_type_list_ocomma:
 	{
 		$$ = nil;
@@ -1761,9 +1787,10 @@ oarg_type_list_ocomma:
 		$$ = $1;
 	}
 
-/*
- * statement
- */
+// function arguments end
+////////////////////////////////////////////////////////////////////////////////
+// statement
+
 stmt:
 	{
 		$$ = N;
@@ -1898,6 +1925,9 @@ expr_or_type_list:
 		$$ = list($1, $3);
 	}
 
+// statement end
+////////////////////////////////////////////////////////////////////////////////
+
 /*
  * list of combo of keyval and val
  */
@@ -2022,6 +2052,7 @@ hidden_import:
 		}
 	}
 
+// 这种格式没有显式的应用过, 用到的地方应该只在 src/cmd/gc/builtin.c 文件.
 hidden_pkg_importsym:
 	hidden_importsym
 	{
@@ -2036,9 +2067,8 @@ hidden_pkgtype:
 		importsym($1, OTYPE);
 	}
 
-/*
- *  importing types
- */
+////////////////////////////////////////////////////////////////////////////////
+// importing types
 
 hidden_type:
 	hidden_type_misc
@@ -2080,6 +2110,9 @@ hidden_type_misc:
 	{
 		$$ = tostruct($3);
 	}
+	// type xxx interface { ohidden_interfacedcl_list }
+	// ohidden_interfacedcl_list 中包含多个函数定义
+	// 
 |	LINTERFACE '{' ohidden_interfacedcl_list '}'
 	{
 		$$ = tointerface($3);
@@ -2167,6 +2200,7 @@ hidden_structdcl:
 	}
 
 hidden_interfacedcl:
+	// sym函数名 (ohidden_funarg_list参数列表) 返回值列表
 	sym '(' ohidden_funarg_list ')' ohidden_funres
 	{
 		$$ = nod(ODCLFIELD, newname($1), typenod(functype(fakethis(), $3, $5)));
@@ -2192,9 +2226,9 @@ hidden_funres:
 		$$ = list1(nod(ODCLFIELD, N, typenod($1)));
 	}
 
-/*
- *  importing constants
- */
+// importing types end
+////////////////////////////////////////////////////////////////////////////////
+// importing constants
 
 hidden_literal:
 	LLITERAL
