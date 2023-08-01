@@ -16,6 +16,8 @@ var (
 	ErrNotExist   = errors.New("file does not exist")
 	// 	@compatible 该错误在 v1.8 版本初次添加
 	ErrClosed     = errors.New("file already closed")
+	// 	@compatible 该错误在 v1.15 版本初次添加
+	ErrDeadlineExceeded = errDeadlineExceeded() // "i/o timeout"
 )
 
 // PathError records an error and the operation and file path that caused it.

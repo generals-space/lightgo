@@ -57,6 +57,9 @@ type Header struct {
 	Devminor   int64     // minor number of character or block device
 	AccessTime time.Time // access time
 	ChangeTime time.Time // status change time
+	// 	@compatible: 此字段在 v1.3 版本初次添加.
+	//
+	Xattrs     map[string]string
 
 	// 	@compatible: 此字段在 v1.10 版本初次添加.
 	//

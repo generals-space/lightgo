@@ -1,6 +1,8 @@
 package io
 
-import "sync"
+import (
+	"sync"
+)
 
 // 	@compatible: 此函数在 v1.5 版本初次添加.
 //
