@@ -241,6 +241,10 @@ type URL struct {
 	Path     string
 	RawQuery string // encoded query values, without '?'
 	Fragment string // fragment for references, without '#'
+
+	// 	@compatible: 此字段在 v1.5 版本添加
+	RawPath  string // encoded path hint (Go 1.5 and later only; see EscapedPath method)
+
 }
 
 // User returns a Userinfo containing the provided username

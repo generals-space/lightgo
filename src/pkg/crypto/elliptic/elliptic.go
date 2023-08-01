@@ -45,6 +45,9 @@ type CurveParams struct {
 	B       *big.Int // the constant of the curve equation
 	Gx, Gy  *big.Int // (x,y) of the base point
 	BitSize int      // the size of the underlying field
+
+	// 	@compatible: 此字段在 v1.5 版本添加
+	Name    string   // the canonical name of the curve
 }
 
 func (curve *CurveParams) Params() *CurveParams {

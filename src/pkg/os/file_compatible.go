@@ -1,6 +1,12 @@
 package os
 
-import "syscall"
+import (
+	"internal/errors"
+	"io"
+	"syscall"
+)
+
+////////////////////////////////////////////////////////////////////////////////
 
 // 	@compatible: 此方法在在 v1.12 版本添加
 //
@@ -13,7 +19,7 @@ func (f *File) SyscallConn() (syscall.RawConn, error) {
 	return newRawConn(f)
 }
 
-// 	@compatible: 此方法在在 v1.12 版本添加
+// 	@compatible: 此方法在 v1.12 版本添加
 //
 // checkValid checks whether f is valid for use.
 // If not, it returns an appropriate error, perhaps incorporating the operation name op.
