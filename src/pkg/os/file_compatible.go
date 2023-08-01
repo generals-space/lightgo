@@ -96,7 +96,7 @@ func ReadFile(name string) ([]byte, error) {
 	}
 }
 
-// 	@compatible: 此函数在在 v1.16 版本添加
+// 	@compatible: 此函数在 v1.16 版本添加
 //
 // WriteFile writes data to the named file, creating it if necessary.
 // If the file does not exist, WriteFile creates it with permissions perm (before umask);
@@ -111,4 +111,49 @@ func WriteFile(name string, data []byte, perm FileMode) error {
 		err = err1
 	}
 	return err
+}
+
+// 	@implementOf: src/pkg/os/dir.go -> DirEntry 接口
+// 	@compatible: 此结构在 v1.16 版本添加
+//
+type unixDirent struct {
+	parent string
+	name   string
+	typ    FileMode
+	info   FileInfo
+}
+
+func (d *unixDirent) Name() string   { return d.name }
+func (d *unixDirent) IsDir() bool    { return d.typ.IsDir() }
+func (d *unixDirent) Type() FileMode { return d.typ }
+
+func (d *unixDirent) Info() (FileInfo, error) {
+	if d.info != nil {
+		return d.info, nil
+	}
+	return lstat(d.parent + "/" + d.name)
+}
+
+// 	@compatible: 此函数在 v1.16 版本添加
+//
+func newUnixDirent(parent, name string, typ FileMode) (DirEntry, error) {
+	ude := &unixDirent{
+		parent: parent,
+		name:   name,
+		typ:    typ,
+	}
+	if typ != ^FileMode(0) && !testingForceReadDirLstat {
+		return ude, nil
+	}
+
+	info, err := lstat(parent + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+
+	// 	@compatibleNote:
+	// ude.typ = info.Mode().Type()
+	ude.typ = info.(*fileStat).Mode().Type()
+	ude.info = info
+	return ude, nil
 }
