@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // 	@compatible: 该方法在 v1.6 版本初次添加
@@ -114,6 +116,77 @@ func (s *Server) closeListenersLocked() error {
 		delete(s.listeners, ln)
 	}
 	return err
+}
+
+// 	@compatible: addAt v1.8
+//
+// shutdownPollInterval is how often we poll for quiescence
+// during Server.Shutdown. This is lower during tests, to
+// speed up tests.
+// Ideally we could find a solution that doesn't involve polling,
+// but which also doesn't have a high runtime cost (and doesn't
+// involve any contentious mutexes), but that is left as an
+// exercise for the reader.
+var shutdownPollInterval = 500 * time.Millisecond
+
+// 	@compatible: addAt v1.8
+//
+// Shutdown gracefully shuts down the server without interrupting any
+// active connections. Shutdown works by first closing all open
+// listeners, then closing all idle connections, and then waiting
+// indefinitely for connections to return to idle and then shut down.
+// If the provided context expires before the shutdown is complete,
+// then the context's error is returned.
+//
+// Shutdown does not attempt to close nor wait for hijacked
+// connections such as WebSockets. The caller of Shutdown should
+// separately notify such long-lived connections of shutdown and wait
+// for them to close, if desired.
+//
+// 	@compatibleNote: 移除 context 包依赖
+// func (srv *Server) Shutdown(ctx context.Context) error {
+func (srv *Server) Shutdown(ctx interface{}) error {
+	atomic.AddInt32(&srv.inShutdown, 1)
+	defer atomic.AddInt32(&srv.inShutdown, -1)
+
+	srv.mu.Lock()
+	lnerr := srv.closeListenersLocked()
+	srv.closeDoneChanLocked()
+	srv.mu.Unlock()
+
+	ticker := time.NewTicker(shutdownPollInterval)
+	defer ticker.Stop()
+	for {
+		if srv.closeIdleConns() {
+			return lnerr
+		}
+		select {
+		// 	@compatibleNote: 移除 context 包依赖
+		// case <-ctx.Done():
+		// 	return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// 	@compatible: addAt v1.8
+//
+// closeIdleConns closes all idle connections and reports whether the
+// server is quiescent.
+func (s *Server) closeIdleConns() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	quiescent := true
+	for c := range s.activeConn {
+		st, ok := c.curState.Load().(ConnState)
+		if !ok || st != StateIdle {
+			quiescent = false
+			continue
+		}
+		c.rwc.Close()
+		delete(s.activeConn, c)
+	}
+	return quiescent
 }
 
 ////////////////////////////////////////////////////////////////////////////////

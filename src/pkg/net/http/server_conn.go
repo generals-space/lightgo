@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,6 +27,9 @@ type conn struct {
 	clientGone   bool       // if client has disconnected mid-request
 	closeNotifyc chan bool  // made lazily
 	hijackedv    bool       // connection has been hijacked by handler
+
+	//	@compatible: addAt v1.8
+	curState atomic.Value // of ConnState
 }
 
 func (c *conn) hijacked() bool {
