@@ -290,12 +290,24 @@ func lexInsideAction(l *lexer) stateFn {
 	// Either number, quoted string, or identifier.
 	// Spaces separate arguments; runs of spaces turn into itemSpace.
 	// Pipe symbols separate and are emitted.
-	if strings.HasPrefix(l.input[l.pos:], l.rightDelim) {
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatibleNote: 用于实现 "{{-", "-}}" 语法
+	// if strings.HasPrefix(l.input[l.pos:], l.rightDelim) {
+	// 	if l.parenDepth == 0 {
+	// 		return lexRightDelim
+	// 	}
+	// 	return l.errorf("unclosed left paren")
+	// }
+	delim, _ := l.atRightDelim()
+	if delim {
 		if l.parenDepth == 0 {
 			return lexRightDelim
 		}
 		return l.errorf("unclosed left paren")
 	}
+	////////////////////////////////////////////////////////////////////////////
+
 	switch r := l.next(); {
 	case r == eof || isEndOfLine(r):
 		return l.errorf("unclosed action")
