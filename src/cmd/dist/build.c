@@ -366,7 +366,6 @@ static char *buildorder[] = {
 	"pkg/strconv",
 	"pkg/bufio",
 	"pkg/sort",
-	"pkg/container/heap",
 	"pkg/encoding/base64",
 	"pkg/syscall",
 	"pkg/time",

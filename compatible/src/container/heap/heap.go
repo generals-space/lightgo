@@ -18,6 +18,9 @@ package heap
 
 import "sort"
 
+// 	@implementAt: src/cmd/go/build.go -> actionQueue{}
+// 	不过, heap 包移到 compatible 目录后, 双方就没有直接关系了, 只能说是一个使用示例.
+//
 // Any type that implements heap.Interface may be used as a
 // min-heap with the following invariants (established after
 // Init has been called or if the data is empty or sorted):

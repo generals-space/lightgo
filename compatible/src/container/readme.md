@@ -1,1 +1,1 @@
-将 container/list, container/ring 从核心标准库中移除
+将 container/list, container/ring, container/heap 从核心标准库中移除

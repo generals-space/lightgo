@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"container/heap"
 	"errors"
 	"flag"
 	"fmt"
@@ -122,8 +121,8 @@ var buildGcflags []string    // -gcflags flag
 var buildCcflags []string    // -ccflags flag
 var buildLdflags []string    // -ldflags flag
 var buildGccgoflags []string // -gccgoflags flag
-var buildRace       bool     // -race flag
-var buildNoStrict   bool     // -nostrict flag
+var buildRace bool           // -race flag
+var buildNoStrict bool       // -nostrict flag
 
 var buildContext = build.Default
 var buildToolchain toolchain = noToolchain{}
@@ -387,7 +386,7 @@ type action struct {
 	//
 	// the action itself (nil = no-op)
 	f          func(*builder, *action) error
-	ignoreFail bool                          // whether to run f even if dependencies fail
+	ignoreFail bool // whether to run f even if dependencies fail
 
 	// Generated files, directories.
 	link   bool   // target is executable, not just package
@@ -803,7 +802,7 @@ func (b *builder) build(a *action) (err error) {
 	if a.p.Standard && a.p.ImportPath == "runtime" && buildContext.Compiler == "gc" &&
 		!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
 		return fmt.Errorf(
-			"%s/%s must be bootstrapped using make%v", 
+			"%s/%s must be bootstrapped using make%v",
 			buildContext.GOOS, buildContext.GOARCH, defaultSuffix(),
 		)
 	}
@@ -1690,6 +1689,7 @@ func (gcToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) error
 	args := stringList(tool(archChar+"c"), "-F", "-V", "-w", "-I", objdir, "-I", inc, "-o", ofile, buildCcflags, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, cfile)
 	return b.run(p.Dir, p.ImportPath, nil, args)
 }
+
 ////////////////////////////////////////////////////////////////////////////////
 // The Gccgo toolchain.
 type gccgoToolchain struct{}
@@ -2332,7 +2332,7 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 
 	// create shared library
 	osldflags := map[string][]string{
-		"linux":   {"-shared", "-lpthread", "-lm"},
+		"linux": {"-shared", "-lpthread", "-lm"},
 	}
 	var cxxlib []string
 	if cxx {
@@ -2345,6 +2345,8 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 	return obj + goFile, cObj, nil
 }
 
+// 	@implementOf: container/heap/heap.go -> Interface{}
+// 	不过, heap 包移到 compatible 目录后, 双方就没有直接关系了, 只能说是一个使用示例.
 // An actionQueue is a priority queue of actions.
 type actionQueue []*action
 
@@ -2361,11 +2363,46 @@ func (q *actionQueue) Pop() interface{} {
 }
 
 func (q *actionQueue) push(a *action) {
-	heap.Push(q, a)
+	q.Push(a)
+	q.up(q.Len() - 1)
 }
 
 func (q *actionQueue) pop() *action {
-	return heap.Pop(q).(*action)
+	n := q.Len() - 1
+	q.Swap(0, n)
+	q.down(0, n)
+	return q.Pop().(*action)
+}
+
+// 	@compatibleNote: 此方法取自 container/heap -> up()
+func (q *actionQueue) up(j int) {
+	for {
+		i := (j - 1) / 2 // parent
+		if i == j || !q.Less(j, i) {
+			break
+		}
+		q.Swap(i, j)
+		j = i
+	}
+}
+
+// 	@compatibleNote: 此方法取自 container/heap -> down()
+func (q *actionQueue) down(i, n int) {
+	for {
+		j1 := 2*i + 1
+		if j1 >= n || j1 < 0 { // j1 < 0 after int overflow
+			break
+		}
+		j := j1 // left child
+		if j2 := j1 + 1; j2 < n && !q.Less(j1, j2) {
+			j = j2 // = 2*i + 2  // right child
+		}
+		if !q.Less(j, i) {
+			break
+		}
+		q.Swap(i, j)
+		i = j
+	}
 }
 
 func raceInit() {

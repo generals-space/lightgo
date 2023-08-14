@@ -110,7 +110,6 @@ static char *cleantab[] = {
 	"libmach",
 	"pkg/bufio",
 	"pkg/bytes",
-	"pkg/container/heap",
 	"pkg/encoding",
 	"pkg/encoding/base64",
 	"pkg/encoding/json",
