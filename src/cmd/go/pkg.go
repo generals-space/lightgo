@@ -789,14 +789,18 @@ func packages(args []string) []*Package {
 	return pkgs
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
 // packagesAndErrors is like 'packages' but returns a *Package for
 // every argument, even the ones that cannot be loaded at all.
 // The packages that fail to load will have p.Error != nil.
 func packagesAndErrors(args []string) []*Package {
+	// 第1种情况: 构建目标为 n 个 .go 文件
 	if len(args) > 0 && strings.HasSuffix(args[0], ".go") {
 		return []*Package{goFilesPackage(args)}
 	}
 
+	// 第2种情况: 构建目标为某个目录
 	args = importPaths(args)
 	var pkgs []*Package
 	var stk importStack
@@ -813,6 +817,8 @@ func packagesAndErrors(args []string) []*Package {
 	return pkgs
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
 // packagesForBuild is like 'packages' but fails if any of the packages 
 // or their dependencies have errors (cannot be built).
 func packagesForBuild(args []string) []*Package {

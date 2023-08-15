@@ -172,6 +172,10 @@ func (v *stringsFlag) String() string {
 	return "<stringsFlag>"
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
+// caller:
+// 	1. src/cmd/go/main.go -> main() 
 func runBuild(cmd *Command, args []string) {
 	raceInit()
 	var b builder
@@ -363,6 +367,13 @@ func (b *builder) init() {
 	}
 }
 
+// go build 构建的其中一种情况: 目标为 n 个 .go 文件, 为这些 .go 文件单独创建一个 main 包.
+//
+// 	@param gofiles: go build 构建目标的 n 个 .go 文件.
+//
+// caller:
+// 	1. src/cmd/go/pkg.go -> packagesAndErrors()
+//
 // goFilesPackage creates a package for building a collection of Go files
 // (typically named on the command line).  The target is named p.a for
 // package p or named after the first Go file for package main.
