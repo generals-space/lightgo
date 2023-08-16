@@ -6,82 +6,18 @@ package main
 
 import (
 	"fmt"
-	"go/build"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 )
 
-func init() {
-	// break init cycle
-	cmdBuild.Run = runBuild
-	cmdInstall.Run = runInstall
-
-	// 	@compatible: addAt v1.3
-	cmdBuild.Flag.BoolVar(&buildI, "i", false, "")
-
-	addBuildFlags(cmdBuild)
-	addBuildFlags(cmdInstall)
-}
-
-// Flags set by multiple commands.
-var buildA bool               // -a flag
-var buildN bool               // -n flag
-// par 并行构建的线程数
-var buildP = runtime.NumCPU() // -p flag
-var buildV bool               // -v flag
-var buildX bool               // -x flag
-// 	@compatible: addAt v1.3
-var buildI bool               // -i flag
-var buildO = cmdBuild.Flag.String("o", "", "output file")
-var buildWork bool           // -work flag
-var buildGcflags []string    // -gcflags flag
-var buildCcflags []string    // -ccflags flag
-var buildLdflags []string    // -ldflags flag
-var buildGccgoflags []string // -gccgoflags flag
-var buildRace bool           // -race flag
-var buildNoStrict bool       // -nostrict flag
-
-var buildContext = build.Default
-var buildToolchain toolchain = noToolchain{}
-
-func init() {
-	switch build.Default.Compiler {
-	case "gc":
-		buildToolchain = gcToolchain{}
-	case "gccgo":
-		buildToolchain = gccgoToolchain{}
-	}
-}
-
-// addBuildFlags adds the flags common to the build and install commands.
-func addBuildFlags(cmd *Command) {
-	// NOTE: If you add flags here, also add them to testflag.go.
-	cmd.Flag.BoolVar(&buildA, "a", false, "")
-	cmd.Flag.BoolVar(&buildN, "n", false, "")
-	cmd.Flag.IntVar(&buildP, "p", buildP, "")
-	cmd.Flag.StringVar(&buildContext.InstallSuffix, "installsuffix", "", "")
-	cmd.Flag.BoolVar(&buildV, "v", false, "")
-	cmd.Flag.BoolVar(&buildX, "x", false, "")
-	cmd.Flag.BoolVar(&buildWork, "work", false, "")
-	cmd.Flag.Var((*stringsFlag)(&buildGcflags), "gcflags", "")
-	cmd.Flag.Var((*stringsFlag)(&buildCcflags), "ccflags", "")
-	cmd.Flag.Var((*stringsFlag)(&buildLdflags), "ldflags", "")
-	cmd.Flag.Var((*stringsFlag)(&buildGccgoflags), "gccgoflags", "")
-	cmd.Flag.Var((*stringsFlag)(&buildContext.BuildTags), "tags", "")
-	cmd.Flag.Var(buildCompiler{}, "compiler", "")
-	cmd.Flag.BoolVar(&buildRace, "race", false, "")
-	cmd.Flag.BoolVar(&buildNoStrict, "nostrict", false, "disable strict mode for unused variable and package")
-}
-
 // 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
 //
 // caller:
-// 	1. src/cmd/go/main.go -> main() 
+// 	1. src/cmd/go/main.go -> main()
 func runBuild(cmd *Command, args []string) {
 	raceInit()
 	var b builder
@@ -130,51 +66,6 @@ func runBuild(cmd *Command, args []string) {
 	b.do(a)
 }
 
-func runInstall(cmd *Command, args []string) {
-	raceInit()
-	pkgs := packagesForBuild(args)
-
-	for _, p := range pkgs {
-		if p.Target == "" && (!p.Standard || p.ImportPath != "unsafe") {
-			if p.cmdline {
-				errorf("go install: no install location for .go files listed on command line (GOBIN not set)")
-			} else if p.ConflictDir != "" {
-				errorf("go install: no install location for %s: hidden by %s", p.Dir, p.ConflictDir)
-			} else {
-				errorf("go install: no install location for directory %s outside GOPATH", p.Dir)
-			}
-		}
-	}
-	exitIfErrors()
-
-	var b builder
-	b.init()
-	a := &action{}
-	for _, p := range pkgs {
-		a.deps = append(a.deps, b.action(modeInstall, modeInstall, p))
-	}
-	b.do(a)
-}
-
-// Global build parameters (used during package load)
-var (
-	goarch    string
-	goos      string
-	archChar  string
-	exeSuffix string
-)
-
-func init() {
-	goarch = buildContext.GOARCH
-	goos = buildContext.GOOS
-
-	var err error
-	archChar, err = build.ArchChar(goarch)
-	if err != nil {
-		fatalf("%s", err)
-	}
-}
-
 // A builder holds global state about a build.
 // It does not hold per-package state, because we
 // build packages in parallel, and the builder is shared.
@@ -197,27 +88,6 @@ type cacheKey struct {
 	mode buildMode
 	p    *Package
 }
-
-// buildMode 构建的两种模式, 一般 go run/build 的模式是 modeBuild, ta们的入口必须是 main 包,
-// 而 go install 的模式是 modeInstall, 不需要 main 包.
-//
-// buildMode specifies the build mode:
-// are we just building things or also installing the results?
-type buildMode int
-
-const (
-	modeBuild buildMode = iota
-	modeInstall
-)
-
-var (
-	goroot       = filepath.Clean(runtime.GOROOT())
-	gobin        = os.Getenv("GOBIN")
-	gorootBin    = filepath.Join(goroot, "bin")
-	gorootSrcPkg = filepath.Join(goroot, "src/pkg")
-	gorootPkg    = filepath.Join(goroot, "pkg")
-	gorootSrc    = filepath.Join(goroot, "src")
-)
 
 func (b *builder) init() {
 	var err error
@@ -257,10 +127,10 @@ func (b *builder) do(root *action) {
 	// The original implementation here was a true queue
 	// (using a channel) but it had the effect of getting
 	// distracted by low-level leaf actions to the detriment
-	// of completing higher-level actions. 
+	// of completing higher-level actions.
 	// The order of work does not matter much to overall execution time,
 	// but when running "go test std" it is nice to see each test
-	// results as soon as possible. 
+	// results as soon as possible.
 	// The priorities assigned ensure that, all else being equal,
 	// the execution prefers to do what it would have done first in
 	// a simple depth-first(深度优先) dependency order traversal.
@@ -313,7 +183,7 @@ func (b *builder) do(root *action) {
 			if a.failed {
 				a0.failed = true
 			}
-			// 当前 action 构建完成, 父级 action 所依赖的包就少了一个, 
+			// 当前 action 构建完成, 父级 action 所依赖的包就少了一个,
 			// 但也可能父级 action 还有其他子 action 没编译, 可以用 pending 表示.
 			// 如果确认父级 action 的 pending = 0, 则可以进行父级 action 的编译了.
 			if a0.pending--; a0.pending == 0 {
@@ -412,6 +282,7 @@ func (b *builder) build(a *action) (err error) {
 		)
 	}
 
+	// obj: 如 /tmp/go-build321795794/sort/_obj/
 	// Make build directory.
 	obj := a.objdir
 	if err := b.mkdir(obj); err != nil {
@@ -503,6 +374,7 @@ func (b *builder) build(a *action) (err error) {
 		gofiles = append(gofiles, outGo...)
 	}
 
+	// inc 如 ["-I", "/tmp/go-build321795794"]
 	// Prepare Go import path list.
 	inc := b.includeArgs("-I", a.deps)
 
@@ -600,52 +472,4 @@ func (b *builder) build(a *action) (err error) {
 	}
 
 	return nil
-}
-
-// install is the action for installing a single package or executable.
-func (b *builder) install(a *action) (err error) {
-	defer func() {
-		if err != nil && err != errPrintedOutput {
-			err = fmt.Errorf("go install %s: %v", a.p.ImportPath, err)
-		}
-	}()
-	a1 := a.deps[0]
-	perm := os.FileMode(0666)
-	if a1.link {
-		perm = 0777
-	}
-
-	// make target directory
-	dir, _ := filepath.Split(a.target)
-	if dir != "" {
-		if err := b.mkdir(dir); err != nil {
-			return err
-		}
-	}
-
-	// remove object dir to keep the amount of
-	// garbage down in a large build.  On an operating system
-	// with aggressive buffering, cleaning incrementally like
-	// this keeps the intermediate objects from hitting the disk.
-	if !buildWork {
-		defer os.RemoveAll(a1.objdir)
-		defer os.Remove(a1.target)
-	}
-
-	if a.p.usesSwig() {
-		for _, f := range stringList(a.p.SwigFiles, a.p.SwigCXXFiles) {
-			dir = a.p.swigDir(&buildContext)
-			if err := b.mkdir(dir); err != nil {
-				return err
-			}
-			soname := a.p.swigSoname(f)
-			source := filepath.Join(a.objdir, soname)
-			target := filepath.Join(dir, soname)
-			if err = b.copyFile(a, target, source, perm); err != nil {
-				return err
-			}
-		}
-	}
-
-	return b.copyFile(a, a.target, a1.target, perm)
 }

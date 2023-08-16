@@ -81,6 +81,8 @@ func (gcToolchain) pkgpath(basedir string, p *Package) string {
 	return filepath.Join(basedir, end)
 }
 
+// caller:
+// 	1. src/cmd/go/build.go -> builder.build()
 func (gcToolchain) pack(b *builder, p *Package, objDir, afile string, ofiles []string) error {
 	var absOfiles []string
 	for _, f := range ofiles {
