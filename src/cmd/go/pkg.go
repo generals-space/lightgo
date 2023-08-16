@@ -80,9 +80,10 @@ type Package struct {
 	// Unexported fields are not part of the public API.
 	build        *build.Package
 	pkgdir       string // overrides build.PkgDir
-	// 当前 package 所引入的其他 package 列表
+	// 当前 package 通过 import() 语句引入的其他 package 列表
+	// 除了开发者显式引用的, golang 默认还会自动引入 runtime 包.
 	imports      []*Package
-	// 	@todo: imports 与 deps 有什么区别和联系???
+	// 当前 package 所依赖的所有包, 包含依赖包的子依赖包.
 	deps         []*Package
 	// 当前 package 下的所有 *.go 文件列表, 是 GoFiles 成员列表的超集
 	// GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths

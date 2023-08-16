@@ -26,7 +26,10 @@ type action struct {
 	ignoreFail bool // whether to run f even if dependencies fail
 
 	// Generated files, directories.
-	link   bool   // target is executable, not just package
+
+	// 当 package 为 main 包时, link 为 true, 如果是非 main 包则为 false.
+	// target is executable, not just package
+	link   bool
 	pkgdir string // the -I or -L argument to use when importing this package
 	objdir string // directory for intermediate objects
 	objpkg string // the intermediate package .a file created during the action
@@ -40,7 +43,7 @@ type action struct {
 	failed   bool // whether the action failed
 }
 
-// action ...
+// action 按 import 层级组织 action 并返回, main 包的 action 就像是一棵树的根节点.
 //
 // caller:
 // 	1. src/cmd/go/run.go -> runRun()
