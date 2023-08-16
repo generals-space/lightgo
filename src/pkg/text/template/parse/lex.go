@@ -211,12 +211,29 @@ const (
 // lexText scans until an opening action delimiter, "{{".
 func lexText(l *lexer) stateFn {
 	for {
-		if strings.HasPrefix(l.input[l.pos:], l.leftDelim) {
+		////////////////////////////////////////////////////////////////////////
+		// 	@compatibleNote: updateAt v1.6
+		// if strings.HasPrefix(l.input[l.pos:], l.leftDelim) {
+		// 	if l.pos > l.start {
+		// 		l.emit(itemText)
+		// 	}
+		// 	return lexLeftDelim
+		// }
+		delim, trimSpace := l.atLeftDelim()
+		if delim {
+			trimLength := Pos(0)
+			if trimSpace {
+				trimLength = rightTrimLength(l.input[l.start:l.pos])
+			}
+			l.pos -= trimLength
 			if l.pos > l.start {
 				l.emit(itemText)
 			}
+			l.pos += trimLength
+			l.ignore()
 			return lexLeftDelim
 		}
+		////////////////////////////////////////////////////////////////////////
 		if l.next() == eof {
 			break
 		}
@@ -229,16 +246,18 @@ func lexText(l *lexer) stateFn {
 	return nil
 }
 
+// 	@compatibleNote: 在 v1.6 版本添加了 "{{-" 和 "-}}", 用于抹除两侧的 \n 换行符.
+//
 // lexLeftDelim scans the left delimiter, which is known to be present.
-func lexLeftDelim(l *lexer) stateFn {
-	l.pos += Pos(len(l.leftDelim))
-	if strings.HasPrefix(l.input[l.pos:], leftComment) {
-		return lexComment
-	}
-	l.emit(itemLeftDelim)
-	l.parenDepth = 0
-	return lexInsideAction
-}
+// func lexLeftDelim(l *lexer) stateFn {
+// 	l.pos += Pos(len(l.leftDelim))
+// 	if strings.HasPrefix(l.input[l.pos:], leftComment) {
+// 		return lexComment
+// 	}
+// 	l.emit(itemLeftDelim)
+// 	l.parenDepth = 0
+// 	return lexInsideAction
+// }
 
 // lexComment scans a comment. The left comment marker is known to be present.
 func lexComment(l *lexer) stateFn {
@@ -257,24 +276,38 @@ func lexComment(l *lexer) stateFn {
 	return lexText
 }
 
+// 	@compatibleNote: 在 v1.6 版本添加了 "{{-" 和 "-}}", 用于抹除两侧的 \n 换行符.
+//
 // lexRightDelim scans the right delimiter, which is known to be present.
-func lexRightDelim(l *lexer) stateFn {
-	l.pos += Pos(len(l.rightDelim))
-	l.emit(itemRightDelim)
-	return lexText
-}
+// func lexRightDelim(l *lexer) stateFn {
+// 	l.pos += Pos(len(l.rightDelim))
+// 	l.emit(itemRightDelim)
+// 	return lexText
+// }
 
 // lexInsideAction scans the elements inside action delimiters.
 func lexInsideAction(l *lexer) stateFn {
 	// Either number, quoted string, or identifier.
 	// Spaces separate arguments; runs of spaces turn into itemSpace.
 	// Pipe symbols separate and are emitted.
-	if strings.HasPrefix(l.input[l.pos:], l.rightDelim) {
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatibleNote: 用于实现 "{{-", "-}}" 语法
+	// if strings.HasPrefix(l.input[l.pos:], l.rightDelim) {
+	// 	if l.parenDepth == 0 {
+	// 		return lexRightDelim
+	// 	}
+	// 	return l.errorf("unclosed left paren")
+	// }
+	delim, _ := l.atRightDelim()
+	if delim {
 		if l.parenDepth == 0 {
 			return lexRightDelim
 		}
 		return l.errorf("unclosed left paren")
 	}
+	////////////////////////////////////////////////////////////////////////////
+
 	switch r := l.next(); {
 	case r == eof || isEndOfLine(r):
 		return l.errorf("unclosed action")
