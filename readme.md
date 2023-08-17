@@ -59,7 +59,7 @@ golang v1.2 过于陈旧, 当前的 vscode go 扩展已经无法正确安装, �
 首先启动容器环境
 
 ```
-docker run -d --name golang-src.v1.2 --privileged -p 2222:22 -v /usr/local/go:/usr/local/go.v1.2 registry.cn-hangzhou.aliyuncs.com/generals-space/golang-src:latest
+docker run -d --name golang-src --privileged -p 2222:22 -v /usr/local/go1.2:/usr/local/go registry.cn-hangzhou.aliyuncs.com/generals-space/golang-src:latest
 ```
 
 然后进入容器, 克隆当前仓库到`/usr/local/go`目录
