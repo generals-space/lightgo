@@ -69,6 +69,10 @@ var testFlagDefn = []*testFlagSpec{
 	{name: "i", boolVar: &testI},
 	{name: "cover", boolVar: &testCover},
 	{name: "coverpkg"},
+	// 	@compatible: addAt v1.10
+	// 	@compatibleNote: Name -> name, BoolVar -> boolVar
+	// {Name: "json", BoolVar: &testJSON},
+	{name: "json", boolVar: &testJSON},
 
 	// build flags.
 	{name: "a", boolVar: &buildA},
