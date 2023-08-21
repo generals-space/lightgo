@@ -12,50 +12,6 @@ import (
 	"strings"
 )
 
-var cmdClean = &Command{
-	UsageLine: "clean [-i] [-r] [-n] [-x] [packages]",
-	Short:     "remove object files",
-	Long: `
-Clean removes object files from package source directories.
-The go command builds most objects in a temporary directory,
-so go clean is mainly concerned with object files left by other
-tools or by manual invocations of go build.
-
-Specifically, clean removes the following files from each of the
-source directories corresponding to the import paths:
-
-	_obj/            old object directory, left from Makefiles
-	_test/           old test directory, left from Makefiles
-	_testmain.go     old gotest file, left from Makefiles
-	test.out         old test log, left from Makefiles
-	build.out        old test log, left from Makefiles
-	*.[568ao]        object files, left from Makefiles
-
-	DIR(.exe)        from go build
-	DIR.test(.exe)   from go test -c
-	MAINFILE(.exe)   from go build MAINFILE.go
-	*.so             from SWIG
-
-In the list, DIR represents the final path element of the
-directory, and MAINFILE is the base name of any Go source
-file in the directory that is not included when building
-the package.
-
-The -i flag causes clean to remove the corresponding installed
-archive or binary (what 'go install' would create).
-
-The -n flag causes clean to print the remove commands it would execute,
-but not run them.
-
-The -r flag causes clean to be applied recursively to all the
-dependencies of the packages named by the import paths.
-
-The -x flag causes clean to print remove commands as it executes them.
-
-For more about specifying packages, see 'go help packages'.
-	`,
-}
-
 var cleanI bool // clean -i flag
 var cleanN bool // clean -n flag
 var cleanR bool // clean -r flag

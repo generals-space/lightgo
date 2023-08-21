@@ -31,7 +31,10 @@ type Package struct {
 	Doc         string `json:",omitempty"` // package documentation string
 	Target      string `json:",omitempty"` // install path
 	Goroot      bool   `json:",omitempty"` // is this package found in the Go root?
-	Standard    bool   `json:",omitempty"` // is this package part of the standard Go library?
+	// Standard 判断当前 package 是属于标准库还是属于第三方库.
+	// 	@assignAt: Package.copyBuild()
+	// is this package part of the standard Go library?
+	Standard    bool   `json:",omitempty"`
 	Stale       bool   `json:",omitempty"` // would 'go install' do anything for this package?
 	Root        string `json:",omitempty"` // Go root or Go path dir containing this package
 	ConflictDir string `json:",omitempty"` // Dir is hidden by this other directory
