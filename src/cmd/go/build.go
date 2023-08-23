@@ -1036,25 +1036,8 @@ func (b *builder) copyFile(a *action, dst, src string, perm os.FileMode) error {
 		}
 	}
 
-	// On Windows, remove lingering ~ file from last attempt.
-	if toolIsWindows {
-		if _, err := os.Stat(dst + "~"); err == nil {
-			os.Remove(dst + "~")
-		}
-	}
-
 	os.Remove(dst)
 	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
-	if err != nil && toolIsWindows {
-		// Windows does not allow deletion of a binary file
-		// while it is executing.  Try to move it out of the way.
-		// If the move fails, which is likely, we'll try again the
-		// next time we do an install of this binary.
-		if err := os.Rename(dst, dst+"~"); err == nil {
-			os.Remove(dst + "~")
-		}
-		df, err = os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
-	}
 	if err != nil {
 		return err
 	}
@@ -1865,13 +1848,6 @@ func (b *builder) ccompilerCmd(envvar, defcmd, objdir string) []string {
 		a = append(a, "-Qunused-arguments")
 	}
 
-	// On OS X, some of the compilers behave as if -fno-common
-	// is always set, and the Mach-O linker in 6l/8l assumes this.
-	// See http://golang.org/issue/3253.
-	if goos == "darwin" {
-		a = append(a, "-fno-common")
-	}
-
 	return a
 }
 
@@ -1999,9 +1975,6 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string, gxxfile
 			if f == "-l" {
 				i++
 			}
-		// skip "-framework X" on Darwin
-		case goos == "darwin" && f == "-framework":
-			i++
 		// skip "*.{dylib,so,dll}"
 		case strings.HasSuffix(f, ".dylib"),
 			strings.HasSuffix(f, ".so"),
@@ -2330,8 +2303,8 @@ func raceInit() {
 	if !buildRace {
 		return
 	}
-	if goarch != "amd64" || goos != "linux" && goos != "darwin" && goos != "windows" {
-		fmt.Fprintf(os.Stderr, "go %s: -race is only supported on linux/amd64, darwin/amd64 and windows/amd64\n", flag.Args()[0])
+	if goarch != "amd64" || goos != "linux" {
+		fmt.Fprintf(os.Stderr, "go %s: -race is only supported on linux/amd64\n", flag.Args()[0])
 		os.Exit(2)
 	}
 	buildGcflags = append(buildGcflags, "-race")
