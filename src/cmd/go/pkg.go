@@ -22,6 +22,8 @@ import (
 
 // A Package describes a single package found in a directory.
 type Package struct {
+	// 当前 package 所在的绝对路径, 一般是 $GOPATH/src/xxx/xxx
+	//
 	// Note: These fields are part of the go command's public API.
 	// See list.go.  It is okay to add fields, but not to change or
 	// remove existing ones.  Keep in sync with list.go
@@ -36,9 +38,11 @@ type Package struct {
 	// is this package part of the standard Go library?
 	Standard    bool   `json:",omitempty"`
 	Stale       bool   `json:",omitempty"` // would 'go install' do anything for this package?
+	// Dir 路径所属的 gopath 路径(gopath可能有多个).
 	Root        string `json:",omitempty"` // Go root or Go path dir containing this package
 	ConflictDir string `json:",omitempty"` // Dir is hidden by this other directory
 
+	// 当前 package 下的所有 *.go 文件列表, 是 gofiles 成员列表的子集
 	// Source files
 	GoFiles        []string `json:",omitempty"` // .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
 	CgoFiles       []string `json:",omitempty"` // .go sources files that import "C"
@@ -76,9 +80,13 @@ type Package struct {
 	// Unexported fields are not part of the public API.
 	build        *build.Package
 	pkgdir       string // overrides build.PkgDir
+	// 当前 package 所引入的其他 package 列表
 	imports      []*Package
+	// 	@todo: imports 与 deps 有什么区别和联系???
 	deps         []*Package
-	gofiles      []string // GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths
+	// 当前 package 下的所有 *.go 文件列表, 是 GoFiles 成员列表的超集
+	// GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths
+	gofiles      []string 
 	sfiles       []string
 	allgofiles   []string             // gofiles + IgnoredGoFiles, absolute paths
 	target       string               // installed file for this package (may be executable)
