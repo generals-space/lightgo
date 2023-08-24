@@ -31,6 +31,7 @@ func init() {
 // Flags set by multiple commands.
 var buildA bool               // -a flag
 var buildN bool               // -n flag
+// par 并行构建的线程数
 var buildP = runtime.NumCPU() // -p flag
 var buildV bool               // -v flag
 var buildX bool               // -x flag
@@ -242,13 +243,16 @@ func (b *builder) init() {
 	}
 }
 
-// 	@param root: 一般为 main 包的 action, deps 中包含着 main 包引入的依赖包.
+// 	@param root: 一般为 main 包的 action, deps 中包含着 main 包引入的依赖包信息.
 //
 // caller:
 // 	1. runBuild()
 //
 // do runs the action graph rooted at root.
 func (b *builder) do(root *action) {
+	// 从根节点进行深度优先遍历, 得到的所有节点.
+	// 将 root 具象化成树, all 可以看成是从最底层叶子节点一层一层向上排列的列表.
+	//
 	// Build list of all actions, assigning depth-first post-order priority.
 	// The original implementation here was a true queue
 	// (using a channel) but it had the effect of getting
@@ -270,8 +274,11 @@ func (b *builder) do(root *action) {
 	// Initialize per-action execution state.
 	for _, a := range all {
 		for _, a1 := range a.deps {
+			// a1 是 a 的依赖包, triggers 中保留着哪些 package 依赖了自己.
 			a1.triggers = append(a1.triggers, a)
 		}
+		// pending 表示 a 包所依赖的子包中, 还未编译的数量.
+		// 当 pending = 0 时, 表示所有条件已准备就绪, 可以编译 a 包本身了.
 		a.pending = len(a.deps)
 		if a.pending == 0 {
 			b.ready.push(a)
@@ -301,16 +308,23 @@ func (b *builder) do(root *action) {
 			a.failed = true
 		}
 
+		// 当前 action 已经构建完成, 可以通知父级 action 了.
 		for _, a0 := range a.triggers {
 			if a.failed {
 				a0.failed = true
 			}
+			// 当前 action 构建完成, 父级 action 所依赖的包就少了一个, 
+			// 但也可能父级 action 还有其他子 action 没编译, 可以用 pending 表示.
+			// 如果确认父级 action 的 pending = 0, 则可以进行父级 action 的编译了.
 			if a0.pending--; a0.pending == 0 {
 				b.ready.push(a0)
 				b.readySema <- true
 			}
 		}
 
+		// 由于在 go build 时, 依赖关系是已树结构形式存在的, 而且一定是优先构建
+		// 最底层的 package(不依赖其他 package 的包).
+		// 当 action == root 时, 表示最后的结构被构建完成(一般是 main 包).
 		if a == root {
 			close(b.readySema)
 		}
@@ -318,6 +332,8 @@ func (b *builder) do(root *action) {
 
 	var wg sync.WaitGroup
 
+	// par 并行构建的线程数
+	//
 	// Kick off goroutines according to parallelism.
 	// If we are using the -n flag (just printing commands)
 	// drop the parallelism to 1, both to make the output
@@ -349,7 +365,7 @@ func (b *builder) do(root *action) {
 			}
 		}()
 	}
-
+	// 等待上面 for{} 循环中所有 go func() 后台线程全部完成.
 	wg.Wait()
 }
 

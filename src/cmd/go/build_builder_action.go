@@ -8,9 +8,21 @@ import (
 
 // An action represents a single action in the action graph.
 type action struct {
-	p          *Package      // the package this action works on
-	deps       []*action     // actions that must happen before this one
-	triggers   []*action     // inverse of deps
+	// the package this action works on
+	p          *Package
+	// 当前 package 所依赖的子 package, 只包括通过 import 直接引入的 package
+	// 当然, 子 package 也可以拥有自己的子 package, 不过并没有全部放在,
+	// 而是通过 action.deps 以树形结构存储
+	//
+	// actions that must happen before this one
+	deps       []*action
+	// 如果说 deps 是当前 package 直接引入的 package 列表,
+	// 那 triggers 则是反过来的, 这是所有直接引入当前 package 的父级 package 列表.
+	//
+	// 该列表在 src/cmd/go/build.go -> builder.do() 中循环添加
+	//
+	// inverse of deps
+	triggers   []*action
 	cgo        *action       // action for cgo binary if needed
 	args       []string      // additional args for runProgram
 	testOutput *bytes.Buffer // test output buffer
@@ -38,7 +50,12 @@ type action struct {
 	target string
 
 	// Execution state.
-	pending  int  // number of deps yet to complete
+	// pending 表示当前 package 所依赖的子 package 还剩几个没有编译.
+	// 假设 main 包引入了 log/bytes 两个包, 那么在编译初始, pending 为 2.
+	// 当 log 包编译完成后, pending 自减为1, 在 bytes 也完成后, pending 自减为 0.
+	//
+	// number of deps yet to complete
+	pending  int
 	priority int  // relative execution priority
 	failed   bool // whether the action failed
 }
@@ -155,6 +172,9 @@ func (b *builder) action(mode buildMode, depMode buildMode, p *Package) *action 
 }
 
 // 可以把 root 看成是一棵树的根节点, 本函数使用后序遍历返回其中的所有节点列表.
+//
+// 将 root 具象化成树, all 可以看成是从最底层叶子节点一层一层向上排列的列表.
+//
 // 后序遍历: 左子树->右子树->树本身
 // 
 //    1
