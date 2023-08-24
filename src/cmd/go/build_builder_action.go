@@ -45,6 +45,13 @@ type action struct {
 
 // action 按 import 层级组织 action 并返回, main 包的 action 就像是一棵树的根节点.
 //
+//                      action{main}
+//                           deps
+//                [action{log}, action{bytes}]
+//                 deps                   deps
+//                /                           \
+//[action{fmt}, action{io}]     [action{unicode}, action{unicode/utf8}]
+//
 // caller:
 // 	1. src/cmd/go/run.go -> runRun()
 //
@@ -74,6 +81,7 @@ func (b *builder) action(mode buildMode, depMode buildMode, p *Package) *action 
 	// a package is using it.  If this is a cross-build, then the cgo we
 	// are writing is not the cgo we need to use.
 	if goos == runtime.GOOS && goarch == runtime.GOARCH && !buildRace {
+		// 该 if 块只适用于 cgo 场景.
 		if len(p.CgoFiles) > 0 || p.Standard && p.ImportPath == "runtime/cgo" {
 			var stk importStack
 			p1 := loadPackage("cmd/cgo", &stk)
@@ -107,7 +115,8 @@ func (b *builder) action(mode buildMode, depMode buildMode, p *Package) *action 
 	}
 
 	if p.local && p.target == "" {
-		// Imported via local path.  No permanent target.
+		// 进入该块, 一般表示 p 为 main 包.
+		// Imported via local path. No permanent target.
 		mode = modeBuild
 	}
 	work := p.pkgdir

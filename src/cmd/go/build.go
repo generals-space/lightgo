@@ -237,19 +237,24 @@ func (b *builder) init() {
 	}
 }
 
+// 	@param root: 一般为 main 包的 action, deps 中包含着 main 包引入的依赖包.
+//
+// caller:
+// 	1. runBuild()
+//
 // do runs the action graph rooted at root.
 func (b *builder) do(root *action) {
 	// Build list of all actions, assigning depth-first post-order priority.
 	// The original implementation here was a true queue
 	// (using a channel) but it had the effect of getting
 	// distracted by low-level leaf actions to the detriment
-	// of completing higher-level actions.  The order of
-	// work does not matter much to overall execution time,
+	// of completing higher-level actions. 
+	// The order of work does not matter much to overall execution time,
 	// but when running "go test std" it is nice to see each test
-	// results as soon as possible.  The priorities assigned
-	// ensure that, all else being equal, the execution prefers
-	// to do what it would have done first in a simple depth-first
-	// dependency order traversal.
+	// results as soon as possible. 
+	// The priorities assigned ensure that, all else being equal,
+	// the execution prefers to do what it would have done first in
+	// a simple depth-first(深度优先) dependency order traversal.
 	all := actionList(root)
 	for i, a := range all {
 		a.priority = i

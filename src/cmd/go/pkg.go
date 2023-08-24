@@ -778,6 +778,11 @@ func loadPackage(arg string, stk *importStack) *Package {
 	return loadImport(arg, cwd, stk, nil)
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
+// caller:
+// 	1. src/cmd/go/build.go -> runBuild() 执行 go build 命令时被调用
+//
 // packages returns the packages named by the
 // command line arguments 'args'.  If a named package
 // cannot be loaded at all (for example, if the directory does not exist),
