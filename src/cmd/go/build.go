@@ -105,6 +105,9 @@ func init() {
 	cmdBuild.Run = runBuild
 	cmdInstall.Run = runInstall
 
+	// 	@compatible: addAt v1.3
+	cmdBuild.Flag.BoolVar(&buildI, "i", false, "")
+
 	addBuildFlags(cmdBuild)
 	addBuildFlags(cmdInstall)
 }
@@ -115,6 +118,8 @@ var buildN bool               // -n flag
 var buildP = runtime.NumCPU() // -p flag
 var buildV bool               // -v flag
 var buildX bool               // -x flag
+// 	@compatible: addAt v1.3
+var buildI bool               // -i flag
 var buildO = cmdBuild.Flag.String("o", "", "output file")
 var buildWork bool           // -work flag
 var buildGcflags []string    // -gcflags flag
