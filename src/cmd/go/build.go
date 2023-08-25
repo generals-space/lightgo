@@ -70,7 +70,9 @@ func runBuild(cmd *Command, args []string) {
 // It does not hold per-package state, because we
 // build packages in parallel, and the builder is shared.
 type builder struct {
-	work        string               // the temporary work directory (ends in filepath.Separator)
+	// 如 /tmp/go-build642732376
+	// the temporary work directory (ends in filepath.Separator)
+	work        string
 	actionCache map[cacheKey]*action // a cache of already-constructed actions
 	mkdirCache  map[string]bool      // a cache of created directories
 	print       func(args ...interface{}) (int, error)
@@ -382,6 +384,7 @@ func (b *builder) build(a *action) (err error) {
 	// 编译开始
 	// Compile Go.
 	if len(gofiles) > 0 {
+		// ofile /tmp/go-build642732376/sort/_obj/_go_.6
 		ofile, out, err := buildToolchain.gc(b, a.p, obj, inc, gofiles)
 		if len(out) > 0 {
 			b.showOutput(a.p.Dir, a.p.ImportPath, b.processOutput(out))
@@ -427,6 +430,7 @@ func (b *builder) build(a *action) (err error) {
 		objExt = "o"
 	}
 
+	// clang源码
 	for _, file := range cfiles {
 		out := file[:len(file)-len(".c")] + "." + objExt
 		if err := buildToolchain.cc(b, a.p, obj, obj+out, file); err != nil {
@@ -434,7 +438,7 @@ func (b *builder) build(a *action) (err error) {
 		}
 		objects = append(objects, out)
 	}
-
+	// 汇编源码
 	// Assemble .s files.
 	for _, file := range sfiles {
 		out := file[:len(file)-len(".s")] + "." + objExt
@@ -460,10 +464,12 @@ func (b *builder) build(a *action) (err error) {
 		return err
 	}
 
+	// 依赖包的 link 都是 false, 只有最终的 main 包才是 true, 进入该 if 块,
+	// 生成最终的二进制可执行文件.
 	// Link if needed.
 	if a.link {
-		// The compiler only cares about direct imports, but the
-		// linker needs the whole dependency tree.
+		// The compiler only cares about direct imports,
+		// but the linker needs the whole dependency tree.
 		all := actionList(a)
 		all = all[:len(all)-1] // drop a
 		if err := buildToolchain.ld(b, a.p, a.target, all, a.objpkg, objects); err != nil {
