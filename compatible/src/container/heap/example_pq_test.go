@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// pq: priority queue优先级队列
+
 // This example demonstrates a priority queue built using the heap interface.
 package heap_test
 
@@ -15,7 +17,8 @@ type Item struct {
 	value    string // The value of the item; arbitrary.
 	priority int    // The priority of the item in the queue.
 	// The index is needed by update and is maintained by the heap.Interface methods.
-	index int // The index of the item in the heap.
+	// The index of the item in the heap.
+	index int
 }
 
 // A PriorityQueue implements heap.Interface and holds Items.
@@ -24,7 +27,8 @@ type PriorityQueue []*Item
 func (pq PriorityQueue) Len() int { return len(pq) }
 
 func (pq PriorityQueue) Less(i, j int) bool {
-	// We want Pop to give us the highest, not lowest, priority so we use greater than here.
+	// We want Pop to give us the highest, not lowest, priority,
+	// so we use greater than here.
 	return pq[i].priority > pq[j].priority
 }
 

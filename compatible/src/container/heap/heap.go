@@ -2,17 +2,29 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/*
+
+这里的 heap 指的是小根堆(也叫小顶堆, 最小堆).
+即某个节点的值小于其左右子树中任意节点的值, 这就意味着, 根节点是整棵树中最小的.
+(但对于左右节点之间的大小没有限制, 可以是左>右, 也可以是左<右)
+
+heap 是实现优先级队列的一种常用方式.
+
+*/
+
 // Package heap provides heap operations for any type that implements
-// heap.Interface. A heap is a tree with the property that each node is the
-// minimum-valued node in its subtree.
+// heap.Interface.
+// A heap is a tree with the property that
+// each node is the minimum-valued node in its subtree.
 //
 // The minimum element in the tree is the root, at index 0.
 //
-// A heap is a common way to implement a priority queue. To build a priority
-// queue, implement the Heap interface with the (negative) priority as the
-// ordering for the Less method, so Push adds items while Pop removes the
-// highest-priority item from the queue. The Examples include such an
-// implementation; the file example_pq_test.go has the complete source.
+// A heap is a common way to implement a priority queue.
+// To build a priority queue, implement the Heap interface with the
+// (negative) priority as the ordering for the Less method, 
+// so Push adds items while Pop removes the highest-priority item from the queue.
+// The Examples include such an implementation; 
+// the file example_pq_test.go has the complete source.
 //
 package heap
 
@@ -28,16 +40,16 @@ import "sort"
 //	!h.Less(j, i) for 0 <= i < h.Len() and j = 2*i+1 or 2*i+2 and j < h.Len()
 //
 // Note that Push and Pop in this interface are for package heap's
-// implementation to call.  To add and remove things from the heap,
-// use heap.Push and heap.Pop.
+// implementation to call. 
+// To add and remove things from the heap, use heap.Push and heap.Pop.
 type Interface interface {
 	sort.Interface
 	Push(x interface{}) // add x as element Len()
 	Pop() interface{}   // remove and return element Len() - 1.
 }
 
-// A heap must be initialized before any of the heap operations
-// can be used. Init is idempotent with respect to the heap invariants
+// A heap must be initialized before any of the heap operations can be used.
+// Init is idempotent with respect to the heap invariants
 // and may be called whenever the heap invariants may have been invalidated.
 // Its complexity is O(n) where n = h.Len().
 //
@@ -49,16 +61,16 @@ func Init(h Interface) {
 	}
 }
 
-// Push pushes the element x onto the heap. The complexity is
-// O(log(n)) where n = h.Len().
+// Push pushes the element x onto the heap.
+// The complexity is O(log(n)) where n = h.Len().
 //
 func Push(h Interface, x interface{}) {
 	h.Push(x)
 	up(h, h.Len()-1)
 }
 
-// Pop removes the minimum element (according to Less) from the heap
-// and returns it. The complexity is O(log(n)) where n = h.Len().
+// Pop removes the minimum element (according to Less) from the heap and returns it.
+// The complexity is O(log(n)) where n = h.Len().
 // It is equivalent to Remove(h, 0).
 //
 func Pop(h Interface) interface{} {
