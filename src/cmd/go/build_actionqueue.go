@@ -1,11 +1,17 @@
 package main
 
+// actionQueue 优先级队列.
+//
+// 其实就是一个有序数组, 借助堆排序实现升序, 即 actionQueue[0]最小, actionQueue[n]最大.
+//
+// Push() 和 Pop() 操作的都是数组的末尾元素.
+//
 // 	@implementOf: container/heap/heap.go -> Interface{}
 // 	不过, heap 包移到 compatible 目录后, 双方就没有直接关系了, 只能说是一个使用示例.
+//
 // An actionQueue is a priority queue of actions.
 type actionQueue []*action
 
-// Implement heap.Interface
 func (q *actionQueue) Len() int           { return len(*q) }
 func (q *actionQueue) Swap(i, j int)      { (*q)[i], (*q)[j] = (*q)[j], (*q)[i] }
 func (q *actionQueue) Less(i, j int) bool { return (*q)[i].priority < (*q)[j].priority }
