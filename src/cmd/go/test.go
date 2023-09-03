@@ -281,6 +281,8 @@ var (
 	testBench        bool
 	testStreamOutput bool // show output as it is generated
 	testShowPass     bool // show passing output
+	// 	@compatible: addAt v1.10
+	testJSON         bool            // -json flag
 
 	testKillTimeout = 10 * time.Minute
 )

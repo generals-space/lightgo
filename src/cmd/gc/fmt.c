@@ -1094,6 +1094,7 @@ static int opprec[] = {
 	[OEMPTY] = -1,
 	[OFALL] = -1,
 	[OFOR] = -1,
+	[OGOTO] = -1,
 	[OIF] = -1,
 	[OLABEL] = -1,
 	[OPROC] = -1,

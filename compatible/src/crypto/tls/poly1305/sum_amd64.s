@@ -12,6 +12,8 @@
 	ADCQ $1, h2;      \
 	LEAQ 16(msg), msg
 
+// 	@compatible: 修复 syntax error, last name: R14 问题
+// SHRQ  $2, t3, t2; -> SHRQ  $2, t3:t2;
 #define POLY1305_MUL(h0, h1, h2, r0, r1, t0, t1, t2, t3) \
 	MOVQ  r0, AX;                  \
 	MULQ  h0;                      \
@@ -48,7 +50,7 @@
 	ADDQ  t0, h0;                  \
 	ADCQ  t3, h1;                  \
 	ADCQ  $0, h2;                  \
-	SHRQ  $2, t3, t2;              \
+	SHRQ  $2, t3:t2;              \
 	SHRQ  $2, t3;                  \
 	ADDQ  t2, h0;                  \
 	ADCQ  t3, h1;                  \
@@ -94,7 +96,9 @@ bytes_between_0_and_15:
 	ADDQ  R15, SI
 
 flush_buffer:
-	SHLQ $8, BX, CX
+	// 	@compatible: 修复 syntax error, last name: 8 问题
+	// SHLQ $8, BX, CX
+	SHLQ $8, BX:CX
 	SHLQ $8, BX
 	SHLQ $8, BX
 	MOVB -1(SI), R13

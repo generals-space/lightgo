@@ -55,6 +55,14 @@ bool matchfield(char *f)
 	return res;
 }
 
+// shouldbuild
+//
+// 	@param file: dir目录下的某个文件, 可以是 .go .c .h 或 .s, 如 pkg/runtime/runtime.c
+// 	@param *dir: buildorder[]数组中的成员
+//
+// caller:
+// 	1. src/cmd/dist/build.c -> install() 只有这一处
+//
 // shouldbuild reports whether we should build this file.
 // It applies the same rules that are used with context tags
 // in package go/build, except that the GOOS and GOARCH
@@ -72,11 +80,13 @@ bool shouldbuild(char *file, char *dir)
 	// Check file name for GOOS or GOARCH.
 	name = lastelem(file);
 	for(i=0; i<nelem(okgoos); i++) {
+		// 如果文件名包含某个 os 类型, 但又不符合当前主机的 os 类型, 则不编译
 		if(contains(name, okgoos[i]) && !streq(okgoos[i], goos)) {
 			return 0;
 		}
 	}
 	for(i=0; i<nelem(okgoarch); i++) {
+		// 如果文件名包含某个 arch 类型, 但又不符合当前主机的 arch 类型, 则不编译
 		if(contains(name, okgoarch[i]) && !streq(okgoarch[i], goarch)) {
 			return 0;
 		}

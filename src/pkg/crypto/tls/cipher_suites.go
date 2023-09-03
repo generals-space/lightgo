@@ -316,4 +316,11 @@ const (
 	// that the client is doing version fallback. See
 	// https://tools.ietf.org/html/draft-ietf-tls-downgrade-scsv-00.
 	TLS_FALLBACK_SCSV uint16 = 0x5600
+
+	// 	@compatible: 如下变量在 v1.12 版本初次添加
+	//
+	// TLS 1.3 cipher suites.
+	TLS_AES_128_GCM_SHA256       uint16 = 0x1301
+	TLS_AES_256_GCM_SHA384       uint16 = 0x1302
+	TLS_CHACHA20_POLY1305_SHA256 uint16 = 0x1303
 )

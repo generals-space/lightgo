@@ -33,7 +33,6 @@ For more about each tool command, see 'go tool command -h'.
 var (
 	toolGOOS      = runtime.GOOS
 	toolGOARCH    = runtime.GOARCH
-	toolIsWindows = toolGOOS == "windows"
 	toolDir       = build.ToolDir
 
 	toolN bool
@@ -54,9 +53,7 @@ const toolWindowsExtension = ".exe"
 // 	通过调用该函数先获取工具的绝对路径, 然后由主调函数再次调用.
 func tool(toolName string) string {
 	toolPath := filepath.Join(toolDir, toolName)
-	if toolIsWindows && toolName != "pprof" {
-		toolPath += toolWindowsExtension
-	}
+
 	// Give a nice message if there is no tool with that name.
 	if _, err := os.Stat(toolPath); err != nil {
 		if isInGoToolsRepo(toolName) {
@@ -98,16 +95,7 @@ func runTool(cmd *Command, args []string) {
 	if toolPath == "" {
 		return
 	}
-	if toolIsWindows && toolName == "pprof" {
-		args = append([]string{"perl", toolPath}, args[1:]...)
-		var err error
-		toolPath, err = exec.LookPath("perl")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "go tool: perl not found\n")
-			setExitStatus(3)
-			return
-		}
-	}
+
 	if toolN {
 		fmt.Printf("%s %s\n", toolPath, strings.Join(args[1:], " "))
 		return
@@ -154,10 +142,6 @@ func listTools() {
 	for _, name := range names {
 		// Unify presentation by going to lower case.
 		name = strings.ToLower(name)
-		// If it's windows, don't show the .exe suffix.
-		if toolIsWindows && strings.HasSuffix(name, toolWindowsExtension) {
-			name = name[:len(name)-len(toolWindowsExtension)]
-		}
 		fmt.Println(name)
 	}
 }

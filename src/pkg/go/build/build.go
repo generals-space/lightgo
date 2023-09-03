@@ -832,6 +832,9 @@ func ImportDir(dir string, mode ImportMode) (*Package, error) {
 
 var slashslash = []byte("//")
 
+// caller:
+// 	1. Context.matchFile() 只有这一处
+//
 // shouldBuild reports whether it is okay to use this file,
 // The rule is that in the file's leading run of // comments
 // and blank lines, which must be followed by a blank line
@@ -1122,6 +1125,11 @@ func (ctxt *Context) match(name string, allTags map[string]bool) bool {
 	return false
 }
 
+// 判断目标文件是否需要编译, 如果目标文件中包含已知的 os/arch 名称(如 sys_plan9_arm64.go),
+// 但与当前所在主机不符, 则不编译.
+//
+// 	@name: 待编译的文件名(无路径, 有后缀)
+//
 // goodOSArchFile returns false if the name contains a $GOOS or $GOARCH
 // suffix which does not match the current system.
 // The recognized name formats are:
@@ -1134,9 +1142,32 @@ func (ctxt *Context) match(name string, allTags map[string]bool) bool {
 //     name_$(GOOS)_$(GOARCH)_test.*
 //
 func (ctxt *Context) goodOSArchFile(name string, allTags map[string]bool) bool {
+	// 移除后缀名
 	if dot := strings.Index(name, "."); dot != -1 {
 		name = name[:dot]
 	}
+
+	////////////////////////////////////////////////////////////////////////////
+	// 	@compatible: src/pkg/go/build/syslist.go -> [goosList, goarchList] 中,
+	// 扩大了 os/arch 范围, 但源文件中有可能出现 linux.go, amd64.go 这种,
+	// 包含 os/arch 名称, 但又明显不是用来做多系统兼容的, 
+	// 我们要的是 linux_arm64.go 这种, 必须是用下划线分割 os/arch 的才算.
+	//
+	// Before Go 1.4, a file called "linux.go" would be equivalent to having a
+	// build tag "linux" in that file. For Go 1.4 and beyond, we require this
+	// auto-tagging to apply only to files with a non-empty prefix, so
+	// "foo_linux.go" is tagged but "linux.go" is not. This allows new operating
+	// systems, such as android, to arrive without breaking existing code with
+	// innocuous source code in "android.go". The easiest fix: cut everything
+	// in the name before the initial _.
+	i := strings.Index(name, "_")
+	if i < 0 {
+		return true
+	}
+	name = name[i:] // ignore everything before first _
+	////////////////////////////////////////////////////////////////////////////
+
+	// _test.go 文件也有可能包含 os/arch 信息
 	l := strings.Split(name, "_")
 	if n := len(l); n > 0 && l[n-1] == "test" {
 		l = l[:n-1]

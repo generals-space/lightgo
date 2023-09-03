@@ -22,22 +22,37 @@ import (
 
 // A Package describes a single package found in a directory.
 type Package struct {
+	// 当前 package 所在的绝对路径, 一般是 $GOPATH/src/xxx/xxx
+	//
+	// directory containing package sources
+	//
 	// Note: These fields are part of the go command's public API.
 	// See list.go.  It is okay to add fields, but not to change or
 	// remove existing ones.  Keep in sync with list.go
-	Dir         string `json:",omitempty"` // directory containing package sources
-	ImportPath  string `json:",omitempty"` // import path of package in dir
-	Name        string `json:",omitempty"` // package name
-	Doc         string `json:",omitempty"` // package documentation string
-	Target      string `json:",omitempty"` // install path
-	Goroot      bool   `json:",omitempty"` // is this package found in the Go root?
-	Standard    bool   `json:",omitempty"` // is this package part of the standard Go library?
-	Stale       bool   `json:",omitempty"` // would 'go install' do anything for this package?
+	Dir string `json:",omitempty"`
+	// 当前 path 可以被 import 语句引入的路径, 如"sort", "strings"
+	// import path of package in dir
+	ImportPath string `json:",omitempty"`
+	Name       string `json:",omitempty"` // package name
+	Doc        string `json:",omitempty"` // package documentation string
+	Target     string `json:",omitempty"` // install path
+	Goroot     bool   `json:",omitempty"` // is this package found in the Go root?
+	// Standard 判断当前 package 是属于标准库还是属于第三方库.
+	// 	@assignAt: Package.copyBuild()
+	//
+	// is this package part of the standard Go library?
+	Standard bool `json:",omitempty"`
+	Stale    bool `json:",omitempty"` // would 'go install' do anything for this package?
+	// Dir 路径所属的 gopath 路径(gopath可能有多个).
 	Root        string `json:",omitempty"` // Go root or Go path dir containing this package
 	ConflictDir string `json:",omitempty"` // Dir is hidden by this other directory
 
 	// Source files
-	GoFiles        []string `json:",omitempty"` // .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
+
+	// 当前 package 下的所有 *.go 文件列表, 是 gofiles 成员列表的子集
+	//
+	// .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
+	GoFiles        []string `json:",omitempty"`
 	CgoFiles       []string `json:",omitempty"` // .go sources files that import "C"
 	IgnoredGoFiles []string `json:",omitempty"` // .go sources ignored due to build constraints
 	CFiles         []string `json:",omitempty"` // .c source files
@@ -71,11 +86,16 @@ type Package struct {
 	XTestImports []string `json:",omitempty"` // imports from XTestGoFiles
 
 	// Unexported fields are not part of the public API.
-	build        *build.Package
-	pkgdir       string // overrides build.PkgDir
-	imports      []*Package
-	deps         []*Package
-	gofiles      []string // GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths
+	build  *build.Package
+	pkgdir string // overrides build.PkgDir
+	// 当前 package 通过 import() 语句引入的其他 package 列表
+	// 除了开发者显式引用的, golang 默认还会自动引入 runtime 包.
+	imports []*Package
+	// 当前 package 所依赖的所有包, 包含依赖包的子依赖包.
+	deps []*Package
+	// 当前 package 下的所有 *.go 文件列表, 是 GoFiles 成员列表的超集
+	// GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths
+	gofiles      []string
 	sfiles       []string
 	allgofiles   []string             // gofiles + IgnoredGoFiles, absolute paths
 	target       string               // installed file for this package (may be executable)
@@ -741,8 +761,8 @@ func loadPackage(arg string, stk *importStack) *Package {
 		if p.Error == nil && p.Name != "main" {
 			p.Error = &PackageError{
 				ImportStack: stk.copy(),
-				Err:         fmt.Sprintf(
-					"expected package main but found package %s in %s", 
+				Err: fmt.Sprintf(
+					"expected package main but found package %s in %s",
 					p.Name, p.Dir,
 				),
 			}
@@ -766,6 +786,11 @@ func loadPackage(arg string, stk *importStack) *Package {
 	return loadImport(arg, cwd, stk, nil)
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
+// caller:
+// 	1. src/cmd/go/build.go -> runBuild() 执行 go build 命令时被调用
+//
 // packages returns the packages named by the
 // command line arguments 'args'.  If a named package
 // cannot be loaded at all (for example, if the directory does not exist),
@@ -786,14 +811,18 @@ func packages(args []string) []*Package {
 	return pkgs
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
 // packagesAndErrors is like 'packages' but returns a *Package for
 // every argument, even the ones that cannot be loaded at all.
 // The packages that fail to load will have p.Error != nil.
 func packagesAndErrors(args []string) []*Package {
+	// 第1种情况: 构建目标为 n 个 .go 文件
 	if len(args) > 0 && strings.HasSuffix(args[0], ".go") {
 		return []*Package{goFilesPackage(args)}
 	}
 
+	// 第2种情况: 构建目标为某个目录
 	args = importPaths(args)
 	var pkgs []*Package
 	var stk importStack
@@ -810,7 +839,9 @@ func packagesAndErrors(args []string) []*Package {
 	return pkgs
 }
 
-// packagesForBuild is like 'packages' but fails if any of the packages 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
+// packagesForBuild is like 'packages' but fails if any of the packages
 // or their dependencies have errors (cannot be built).
 func packagesForBuild(args []string) []*Package {
 	pkgs := packagesAndErrors(args)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 )
 
 // interrupted is closed, if go process is interrupted.
@@ -29,3 +30,9 @@ var onceProcessSignals sync.Once
 func startSigHandlers() {
 	onceProcessSignals.Do(processSignals)
 }
+
+var signalsToIgnore = []os.Signal{os.Interrupt, syscall.SIGQUIT}
+
+// signalTrace is the signal to send to make a Go program
+// crash with a stack trace.
+var signalTrace os.Signal = syscall.SIGQUIT

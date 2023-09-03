@@ -37,3 +37,20 @@ package runtime
 // syscall.Read, closing the file descriptor before syscall.Read makes
 // the actual system call.
 func KeepAlive(interface{}) {}
+
+// 	@compatible: 此方法是为了实现 Fastrand() 函数新增的
+//
+func fastrand1() uint32
+// 	@compatible: 此方法是为了实现 runtime.fastrand() 的妥协
+// 	见 src/pkg/os/tempfile_compatible.go -> fastrand()
+//
+// 原本 fastrand() 是 runtime 中的一个函数, 通过 linkname 直接调用,
+// 后来自行暴露了一个 runtime.Fastrand() 函数.
+//
+// [golang v1.8 fastrand](https://github.com/golang/go/tree/go1.8/src/runtime/asm_amd64.s#L2166)
+// [golang v1.9 fastrand](https://github.com/golang/go/tree/go1.9/src/runtime/stubs.go#L97)
+//
+// 	@implementAt: src/pkg/runtime/runtime.c -> runtime·fastrand1()
+func Fastrand() uint32 {
+	return fastrand1()
+}

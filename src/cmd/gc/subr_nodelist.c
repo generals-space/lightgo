@@ -24,8 +24,9 @@ NodeList* list1(Node *n)
 {
 	NodeList *l;
 
-	if(n == nil)
+	if(n == nil) {
 		return nil;
+	}
 	if(n->op == OBLOCK && n->ninit == nil) {
 		// Flatten list and steal storage.
 		// Poison pointer to catch errant uses.
@@ -43,6 +44,12 @@ NodeList* list1(Node *n)
 NodeList* list(NodeList *l, Node *n)
 {
 	return concat(l, list1(n));
+}
+
+// list 将目标 node 节点 n 加入到指定的 nodelist 链表 l 开头.
+NodeList* list_insert(NodeList *l, Node *n)
+{
+	return concat(list1(n), l);
 }
 
 void listsort(NodeList** l, int(*f)(Node*, Node*))

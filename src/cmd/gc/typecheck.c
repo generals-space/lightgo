@@ -57,15 +57,15 @@ static void sprint_depchain(Fmt *fmt, NodeList *stack, Node *cur, Node *first)
 	}
 }
 
-/*
- * type check node *np.
- * replaces *np with a new pointer in some cases.
- * returns the final value of *np as a convenience(为了方便起见).
- */
 // caller:
 // 	1. typecheck1()
 // 	2. typechecklist()
 // 	3. src/cmd/gc/walk.c -> walk()
+// 
+// type check node *np.
+// replaces *np with a new pointer in some cases.
+// returns the final value of *np as a convenience(为了方便起见).
+// 
 Node* typecheck(Node **np, int top)
 {
 	Node *n;

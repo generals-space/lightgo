@@ -17,6 +17,12 @@ type Decoder struct {
 	d    decodeState
 	scan scanner
 	err  error
+	// 	@compatible: addAt v1.5
+	scanp int // start of unread data in buf
+	// 	@compatible: addAt v1.5
+	tokenState int
+	// 	@compatible: addAt v1.5
+	tokenStack []int
 }
 
 // NewDecoder returns a new decoder that reads from r.

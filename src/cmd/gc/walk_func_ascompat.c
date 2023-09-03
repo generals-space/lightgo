@@ -137,12 +137,17 @@ static char* dumpnodetypes(NodeList *l, char *what)
 	return fmtstrflush(&fmt);
 }
 
-/*
- * check assign expression list to a type list.
- * called in
- *	return expr-list
- *	func(expr-list)
- */
+// 在发生函数调用及return返回值的时候, 隐藏了变量的类型转换与赋值过程, 这里就是那些隐藏的部分.
+//
+// caller:
+// 	1. src/cmd/gc/walk_expr.c -> walkexpr()
+// 	2. src/cmd/gc/walk_stmt.c -> walkstmt()
+// 
+// check assign expression list to a type list.
+// called in
+// 	return expr-list
+// 	func(expr-list)
+// 
 NodeList* ascompatte(int op, Node *call, int isddd, Type **nl, NodeList *lr, int fp, NodeList **init)
 {
 	int esc;

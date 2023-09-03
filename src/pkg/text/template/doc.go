@@ -36,6 +36,9 @@ Here is a trivial example that prints "17 items are made of wool".
 
 More intricate examples appear below.
 
+////////////////////////////////////////////////////////////////////////////////
+// 	@compatibleNote: 在 v1.6 版本添加了 "{{-" 和 "-}}", 用于抹除两侧的 \n 换行符.
+
 Actions
 
 Here is the list of actions. "Arguments" and "pipelines" are evaluations of

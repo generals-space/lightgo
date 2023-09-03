@@ -7,6 +7,7 @@
 #include "go.h"
 
 // renameinit 编译期间遇到名为 init 的函数的 Sym 对象, 将其重命名.
+// 因为 golang 中同一个 package 下允许多个名为 init() 的函数存在, 因此需要给ta们加上后缀.
 //
 // caller:
 // 	1. src/cmd/gc/go.y -> fndcl{}, 只有这一处
@@ -18,6 +19,7 @@
 // 
 Sym* renameinit(void)
 {
+	// 	@todo: 这里 static 变量, 是可以累加的?
 	static int initgen;
 
 	snprint(namebuf, sizeof(namebuf), "init·%d", ++initgen);
@@ -96,12 +98,16 @@ static int anyinit(NodeList *n)
 	return 0;
 }
 
+// 每当使用 6g 编译某个 package 时, 都会调用本函数对该 package 中 init() 函数进行处理.
+// (对于一个完整的工程, 会根据各个 package 的引用顺序, 依次编译.)
+//
 // 	@param n: src/cmd/gc/go.h -> xtop
 //
 // caller:
 // 	1. src/cmd/gc/lex.c -> main() 只有这一处
 void fninit(NodeList *n)
 {
+
 	int i;
 	Node *gatevar;
 	Node *a, *b, *fn;
@@ -130,7 +136,15 @@ void fninit(NodeList *n)
 	maxarg = 0;
 	snprint(namebuf, sizeof(namebuf), "init");
 
+	// 与开发者级别的各 package 中的 init() 函数不同, fn 是一个内置的全局 init() 函数.
+	// 这里就是初始化了一个全局的 fn 对象, 把前者中所有的 init() 函数, 
+	// 都按照 package 的引入顺序添加到这个 fn 对象的函数体中,
+	// 然后在程序启动时由 runtime 统一调用.
+	//
+	// 见 src/pkg/runtime/proc.c -> main·init
+	//
 	fn = nod(ODCLFUNC, N, N);
+	// lookup 查询内置的全局 init 函数, 如果没找到就初始化并返回一个空的对象.
 	initsym = lookup(namebuf);
 	fn->nname = newname(initsym);
 	fn->nname->defn = fn;
@@ -159,21 +173,30 @@ void fninit(NodeList *n)
 	r = list(r, a);
 
 	// (7)
+	// 遍历
 	for(h=0; h<NHASH; h++) {
 		for(s = hash[h]; s != S; s = s->link) {
+			// 忽略掉函数名不为 init() 的函数
 			if(s->name[0] != 'i' || strcmp(s->name, "init") != 0) {
 				continue;
 			}
+			// 忽略掉函数体为 nil 的函数
 			if(s->def == N) {
 				continue;
 			}
+			// initsym 是上面刚创建的全局 init 主调函数, 需要避开.
 			if(s == initsym) {
 				continue;
 			}
 
 			// could check that it is fn of no args/returns
 			a = nod(OCALL, s->def, N);
-			r = list(r, a);
+			// 	@compatible: 在 v1.5+ 版本中, 按照 package 的引入顺序执行对应的 init() 函数,
+			// 在此之前各 package 的 init() 函数执行顺序都是与 package 的引入顺序相反的.
+			//
+			// r = list(r, a);
+			// 这里将 a(init()函数) 添加到 r 的链表开头, 而不是末尾.
+			r = list_insert(r, a);
 		}
 	}
 
@@ -181,6 +204,10 @@ void fninit(NodeList *n)
 	r = concat(r, n);
 
 	// (9)
+	// 遍历 localpkg 中所有的 init() 函数, 将他们都添加到 fn 中.
+	// 在编译期, 编译工具会调用 renameinit() 函数将开发者级别的 init() 函数,
+	// 重命名为 pkg.init·1 这种形式, 使得开发者可以在同一个 package 定义多个 init() 函数.
+	//
 	// could check that it is fn of no args/returns
 	for(i=1;; i++) {
 		snprint(namebuf, sizeof(namebuf), "init·%d", i);

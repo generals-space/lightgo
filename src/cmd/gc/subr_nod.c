@@ -91,6 +91,10 @@ Node* nodbool(int b)
 	return c;
 }
 
+// 为目标 node 设置 orig 属性
+//
+// caller:
+// 	1. src/cmd/gc/typecheck1.c -> typecheck1() 只有这一处
 void saveorignode(Node *n)
 {
 	Node *norig;

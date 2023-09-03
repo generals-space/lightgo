@@ -1357,19 +1357,29 @@ type Server struct {
 	// is zero, the value of ReadTimeout is used. If both are
 	// zero, there is no timeout.
 	IdleTimeout time.Duration
-	// 	@compatible: 该字段在 v1.8 版本初次添加
+	// 	@compatible: addAt v1.8
 	//
 	listeners map[net.Listener]struct{}
+	// 	@compatible: addAt v1.8
+	// ReadHeaderTimeout is the amount of time allowed to read
+	// request headers. The connection's read deadline is reset
+	// after reading the headers and the Handler can decide what
+	// is considered too slow for the body.
+	ReadHeaderTimeout time.Duration
+	// 	@compatible: addAt v1.8
+	// accessed atomically (non-zero means we're in Shutdown)
+	inShutdown        int32
 	////////////////////////////////////////////////////////////////////////////
-	// 	@compatible: 该字段在 v1.9 版本初次添加
+	// 	@compatible: addAt v1.9
 	//
 	onShutdown []func()
-	// 	@compatible: 该字段在 v1.9 版本初次添加
+	// 	@compatible: addAt v1.9
 	//
 	doneChan chan struct{}
-	// 	@compatible: 该字段在 v1.9 版本初次添加
+	// 	@compatible: addAt v1.9
 	//
 	activeConn map[*conn]struct{}
+
 }
 
 // serverHandler delegates to either the server's Handler or

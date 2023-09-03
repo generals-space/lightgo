@@ -87,6 +87,12 @@ type Unmarshaler interface {
 type UnmarshalTypeError struct {
 	Value string       // description of JSON value - "bool", "array", "number -5"
 	Type  reflect.Type // type of Go value it could not be assigned to
+
+	// // 	@compatible: 此字段在 v1.5 版本添加
+	Offset int64        // error occurred after reading Offset bytes
+	// // 	@compatible: 此字段在 v1.8 版本添加
+	Struct string       // name of the struct type containing the field
+	Field  string       // name of the field holding the Go value
 }
 
 func (e *UnmarshalTypeError) Error() string {
@@ -370,7 +376,9 @@ func (d *decodeState) array(v reflect.Value) {
 		return
 	}
 	if ut != nil {
-		d.saveError(&UnmarshalTypeError{"array", v.Type()})
+		// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+		// d.saveError(&UnmarshalTypeError{"array", v.Type()})
+		d.saveError(&UnmarshalTypeError{Value: "array", Type: v.Type()})
 		d.off--
 		d.next()
 		return
@@ -389,7 +397,9 @@ func (d *decodeState) array(v reflect.Value) {
 		// Otherwise it's invalid.
 		fallthrough
 	default:
-		d.saveError(&UnmarshalTypeError{"array", v.Type()})
+		// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+		// d.saveError(&UnmarshalTypeError{"array", v.Type()})
+		d.saveError(&UnmarshalTypeError{Value: "array", Type: v.Type()})
 		d.off--
 		d.next()
 		return
@@ -483,7 +493,9 @@ func (d *decodeState) object(v reflect.Value) {
 		return
 	}
 	if ut != nil {
-		d.saveError(&UnmarshalTypeError{"object", v.Type()})
+		// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+		// d.saveError(&UnmarshalTypeError{"object", v.Type()})
+		d.saveError(&UnmarshalTypeError{Value: "object", Type: v.Type()})
 		d.off--
 		d.next() // skip over { } in input
 		return
@@ -502,7 +514,9 @@ func (d *decodeState) object(v reflect.Value) {
 		// map must have string kind
 		t := v.Type()
 		if t.Key().Kind() != reflect.String {
-			d.saveError(&UnmarshalTypeError{"object", v.Type()})
+			// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+			// d.saveError(&UnmarshalTypeError{"object", v.Type()})
+			d.saveError(&UnmarshalTypeError{Value: "object", Type: v.Type()})
 			break
 		}
 		if v.IsNil() {
@@ -511,7 +525,9 @@ func (d *decodeState) object(v reflect.Value) {
 	case reflect.Struct:
 
 	default:
-		d.saveError(&UnmarshalTypeError{"object", v.Type()})
+		// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+		// d.saveError(&UnmarshalTypeError{"object", v.Type()})
+		d.saveError(&UnmarshalTypeError{Value: "object", Type: v.Type()})
 		d.off--
 		d.next() // skip over { } in input
 		return
@@ -636,7 +652,9 @@ func (d *decodeState) convertNumber(s string) (interface{}, error) {
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return nil, &UnmarshalTypeError{"number " + s, reflect.TypeOf(0.0)}
+		// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+		// return nil, &UnmarshalTypeError{"number " + s, reflect.TypeOf(0.0)}
+		return nil, &UnmarshalTypeError{Value: "number " + s, Type: reflect.TypeOf(0.0)}
 	}
 	return f, nil
 }
@@ -669,7 +687,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			if fromQuoted {
 				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
-				d.saveError(&UnmarshalTypeError{"string", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"string", v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type()})
 			}
 		}
 		s, ok := unquoteBytes(item)
@@ -703,7 +723,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			if fromQuoted {
 				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
-				d.saveError(&UnmarshalTypeError{"bool", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"bool", v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "bool", Type: v.Type()})
 			}
 		case reflect.Bool:
 			v.SetBool(value)
@@ -711,7 +733,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			if v.NumMethod() == 0 {
 				v.Set(reflect.ValueOf(value))
 			} else {
-				d.saveError(&UnmarshalTypeError{"bool", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"bool", v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "bool", Type: v.Type()})
 			}
 		}
 
@@ -726,10 +750,14 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		}
 		switch v.Kind() {
 		default:
-			d.saveError(&UnmarshalTypeError{"string", v.Type()})
+			// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+			// d.saveError(&UnmarshalTypeError{"string", v.Type()})
+			d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type()})
 		case reflect.Slice:
 			if v.Type() != byteSliceType {
-				d.saveError(&UnmarshalTypeError{"string", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"string", v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type()})
 				break
 			}
 			b := make([]byte, base64.StdEncoding.DecodedLen(len(s)))
@@ -745,7 +773,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			if v.NumMethod() == 0 {
 				v.Set(reflect.ValueOf(string(s)))
 			} else {
-				d.saveError(&UnmarshalTypeError{"string", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"string", v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "string", Type: v.Type()})
 			}
 		}
 
@@ -767,7 +797,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			if fromQuoted {
 				d.error(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
-				d.error(&UnmarshalTypeError{"number", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.error(&UnmarshalTypeError{"number", v.Type()})
+				d.error(&UnmarshalTypeError{Value: "number", Type: v.Type()})
 			}
 		case reflect.Interface:
 			n, err := d.convertNumber(s)
@@ -776,7 +808,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 				break
 			}
 			if v.NumMethod() != 0 {
-				d.saveError(&UnmarshalTypeError{"number", v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"number", v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "number", Type: v.Type()})
 				break
 			}
 			v.Set(reflect.ValueOf(n))
@@ -784,7 +818,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			n, err := strconv.ParseInt(s, 10, 64)
 			if err != nil || v.OverflowInt(n) {
-				d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "number " + s, Type: v.Type()})
 				break
 			}
 			v.SetInt(n)
@@ -792,7 +828,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 			n, err := strconv.ParseUint(s, 10, 64)
 			if err != nil || v.OverflowUint(n) {
-				d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "number " + s, Type: v.Type()})
 				break
 			}
 			v.SetUint(n)
@@ -800,7 +838,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		case reflect.Float32, reflect.Float64:
 			n, err := strconv.ParseFloat(s, v.Type().Bits())
 			if err != nil || v.OverflowFloat(n) {
-				d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				// 	@compatibleNote: 避免出现 "too few values in struct initializer"错误
+				// d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				d.saveError(&UnmarshalTypeError{Value: "number " + s, Type: v.Type()})
 				break
 			}
 			v.SetFloat(n)

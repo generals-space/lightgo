@@ -114,6 +114,9 @@ void runtime·schedinit(void)
 	}
 }
 
+// 由汇编代码实现, 不过没什么实际意义, 实际调用的 init() 函数应该是
+// src/cmd/gc/init.c -> fninit() 中的 fn, 这是一个内置的全局 init() 函数,
+// ta的函数体中包含了所有开发者级别的 init() 函数, 并且是按照 package 引入的顺序去执行的.
 extern void main·init(void);
 extern void main·main(void);
 

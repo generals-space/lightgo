@@ -16,8 +16,7 @@
 void esc(char*);
 void fatal(char*, ...);
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	char *name;
 	FILE *fin;
@@ -37,9 +36,11 @@ main(int argc, char **argv)
 	}
 
 	// look for $$ that introduces imports
-	while(fgets(buf, sizeof buf, fin) != NULL)
-		if(strstr(buf, "$$"))
+	while(fgets(buf, sizeof buf, fin) != NULL) {
+		if(strstr(buf, "$$")) {
 			goto begin;
+		}
+	}
 	fatal("did not find beginning of imports");
 
 begin:
@@ -48,16 +49,19 @@ begin:
 	// process imports, stopping at $$ that closes them
 	while(fgets(buf, sizeof buf, fin) != NULL) {
 		buf[strlen(buf)-1] = 0;	// chop \n
-		if(strstr(buf, "$$"))
+		if(strstr(buf, "$$")) {
 			goto end;
+		}
 
 		// chop leading white space
-		for(p=buf; *p==' ' || *p == '\t'; p++)
+		for(p=buf; *p==' ' || *p == '\t'; p++) {
 			;
+		}
 
 		// cut out decl of init_$1_function - it doesn't exist
-		if(strstr(buf, initfunc))
+		if(strstr(buf, initfunc)) {
 			continue;
+		}
 
 		// sys.go claims to be in package PACKAGE to avoid
 		// conflicts during "6g sys.go".  rename PACKAGE to $2.
@@ -79,18 +83,17 @@ end:
 	return 0;
 }
 
-void
-esc(char *p)
+void esc(char *p)
 {
 	for(; *p; p++) {
-		if(*p == '\\' || *p == '\"')
+		if(*p == '\\' || *p == '\"') {
 			printf("\\");
+		}
 		putchar(*p);
 	}
 }
 
-void
-fatal(char *msg, ...)
+void fatal(char *msg, ...)
 {
 	va_list arg;
 	

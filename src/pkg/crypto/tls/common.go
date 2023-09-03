@@ -20,6 +20,8 @@ const (
 	VersionTLS10 = 0x0301
 	VersionTLS11 = 0x0302
 	VersionTLS12 = 0x0303
+	// 	@compatible: 此变量在 v1.12 版本添加
+	VersionTLS13 = 0x0304
 )
 
 const (

@@ -284,6 +284,8 @@ func help(args []string) {
 	os.Exit(2) // failed at 'go help cmd'
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
 // importPathsNoDotExpansion returns the import paths to use for the given
 // command line, but it does no ... expansion.
 func importPathsNoDotExpansion(args []string) []string {
@@ -317,6 +319,8 @@ func importPathsNoDotExpansion(args []string) []string {
 	return out
 }
 
+// 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
 // importPaths returns the import paths to use for the given command line.
 func importPaths(args []string) []string {
 	args = importPathsNoDotExpansion(args)
