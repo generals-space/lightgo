@@ -31,9 +31,9 @@ heap 是实现优先级队列的一种常用方式(其实就是按照元素的 p
 //
 // A heap is a common way to implement a priority queue.
 // To build a priority queue, implement the Heap interface with the
-// (negative) priority as the ordering for the Less method, 
+// (negative) priority as the ordering for the Less method,
 // so Push adds items while Pop removes the highest-priority item from the queue.
-// The Examples include such an implementation; 
+// The Examples include such an implementation;
 // the file example_pq_test.go has the complete source.
 //
 package heap
@@ -50,7 +50,7 @@ import "sort"
 //	!h.Less(j, i) for 0 <= i < h.Len() and j = 2*i+1 or 2*i+2 and j < h.Len()
 //
 // Note that Push and Pop in this interface are for package heap's
-// implementation to call. 
+// implementation to call.
 // To add and remove things from the heap, use heap.Push and heap.Pop.
 type Interface interface {
 	sort.Interface
@@ -124,23 +124,24 @@ func Fix(h Interface, i int) {
 	up(h, i)
 }
 
-// 从下往上调整, 将完全二叉树调整为小顶替.
+// 从下往上调整, 将完全二叉树重新调整为小顶堆.
 //
 // 	@param j: 完全二叉树中某个节点的索引值.
 //
 // caller:
 // 	1. Push()
 //
-// 从唯一一个主调函数来看, Push()的元素只会加在结构的末尾, 调整时先从末尾元素(即新增的元素)
-// 所在的子树开始, 调整节点与其父结点的结构, 依次向上调整其所在的子树, 直到根节点.
+// 从唯一一个主调函数来看, 由于Push()的元素只会加在结构的末尾, 
+// 调整时就会先从末尾元素(即新增的元素)所在的子树开始, 调整节点与其父结点的结构, 
+// 依次向上调整其所在的子树, 直到根节点.
 //
-//                1                                     1              
-//            /       \                             /       \          
-//        2               3           =>        2               3      
-//      /   \           /   \                 /   \           /   \    
-//    4       5       6       7             4       5       6       7  
-//                                         /
-//                                        8
+//       1                     1        
+//      / \                   / \       
+//   2       3      =>     2       3    
+//  / \     / \           / \     / \   
+// 4    5 6     7        4    5 6     7 
+//                     /                
+//                    8                 
 //
 // 那么 up() 方法调整的顺序应该是按照 8 -> 4 -> 2 -> 1 这一路径完成的.
 //
@@ -157,21 +158,56 @@ func up(h Interface, j int) {
 	}
 }
 
-// 从下往上调整, 将完全二叉树调整为小顶替
+// 从上往下调整, 将完全二叉树重新调整为小顶堆
+//
+// 	@param i: 0, 数组的第0个元素, 即堆顶元素;
+// 	@param i: h.Len() - 1, 数组的末尾元素;
+//
+// caller:
+// 	1. Pop() 只有这一处
+//
+// 从唯一一个主调函数来看, 在调用 down() 时会先将堆顶元素与数组末尾元素调换位置.
+// 之后要将末尾元素弹出, 即弹出原本的堆顶元素, 也就是数组中最小的元素.
+//
+// Pop()调用时, 参数中的 i 虽然为0, 但已经是数组中最大的元素了.
+// 这个调换行为破坏了小顶堆的结构, 因此需要从上向下调整.
+//
+//        1                      7       
+//       / \                    / \      
+//    2       3      =>      2       3   
+//   / \     / \            / \     / \  
+// 4     5 6     7        4     5 6     1
+//
+// 接下来就是 down() 函数的处理过程了(记得要把末尾元素1排除).
+//
+//        7                    2                    2       
+//       / \      down()      / \      down()      / \      
+//    2       3     =>     7       3     =>     4       3   
+//   / \     / \          / \     / \          / \     / \  
+// 4     5 6     1      4     5 6     1      7     5 6     1
 //
 func down(h Interface, i, n int) {
 	for {
+		// j1 表示 i 元素的左节点索引
 		j1 := 2*i + 1
-		if j1 >= n || j1 < 0 { // j1 < 0 after int overflow
+		// j1 < 0 after int overflow
+		if j1 >= n || j1 < 0 {
 			break
 		}
-		j := j1 // left child
+		// j 表示左右节点中更小的那个
+		j := j1
+		// j1 + 1, 即为 i 元素的右节点
+		// 如果 i 有右节点(右节点不能是末尾节点, 因为之后末尾节点要被弹出的),
+		// 那么找到左右节点中, 比较小的那个
 		if j2 := j1 + 1; j2 < n && !h.Less(j1, j2) {
 			j = j2 // = 2*i + 2  // right child
 		}
+		// 如果 j(i的左右节点), 都小于 i 自身, 说明此时已满足小顶堆,
+		// 不必继续向下处理了.
 		if !h.Less(j, i) {
 			break
 		}
+		// 根节点与左右节点较小的那个做交换, 然后到对应的子树递归处理.
 		h.Swap(i, j)
 		i = j
 	}

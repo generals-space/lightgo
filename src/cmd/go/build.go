@@ -125,6 +125,14 @@ func (b *builder) do(root *action) {
 	// 从根节点进行深度优先遍历, 得到的所有节点.
 	// 将 root 具象化成树, all 可以看成是从最底层叶子节点一层一层向上排列的列表.
 	//
+	// 画图描述的话可以为
+	//
+	//               .
+	//             ---->
+	//         ------------>
+	//     -------------------->
+	// ---------------------------->
+	//
 	// Build list of all actions, assigning depth-first post-order priority.
 	// The original implementation here was a true queue
 	// (using a channel) but it had the effect of getting
@@ -138,6 +146,7 @@ func (b *builder) do(root *action) {
 	// a simple depth-first(深度优先) dependency order traversal.
 	all := actionList(root)
 	for i, a := range all {
+		// 将序号作为优先级, 即越底层的优先级越小
 		a.priority = i
 	}
 

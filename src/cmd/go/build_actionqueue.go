@@ -4,8 +4,6 @@ package main
 //
 // 其实就是一个有序数组, 借助堆排序实现升序, 即 actionQueue[0]最小, actionQueue[n]最大.
 //
-// Push() 和 Pop() 操作的都是数组的末尾元素.
-//
 // 	@implementOf: container/heap/heap.go -> Interface{}
 // 	不过, heap 包移到 compatible 目录后, 双方就没有直接关系了, 只能说是一个使用示例.
 //
@@ -28,6 +26,12 @@ func (q *actionQueue) push(a *action) {
 	q.up(q.Len() - 1)
 }
 
+// pop() 弹出的是数组的第0个元素, 也是堆顶元素, 是整个数组中 priority 最小的元素.
+//
+// 在主调函数构建依赖树的时候, 是按序号作为优先级的, 越底层的包, 优先级越小.
+//
+// caller:
+// 	1. main()
 func (q *actionQueue) pop() *action {
 	n := q.Len() - 1
 	q.Swap(0, n)
@@ -35,6 +39,8 @@ func (q *actionQueue) pop() *action {
 	return q.Pop().(*action)
 }
 
+// 从下往上调整, 将完全二叉树重新调整为小顶堆.
+//
 // 	@compatibleNote: 此方法取自 container/heap -> up()
 func (q *actionQueue) up(j int) {
 	for {
@@ -47,6 +53,8 @@ func (q *actionQueue) up(j int) {
 	}
 }
 
+// 从上往下调整, 将完全二叉树重新调整为小顶堆
+//
 // 	@compatibleNote: 此方法取自 container/heap -> down()
 func (q *actionQueue) down(i, n int) {
 	for {
