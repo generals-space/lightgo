@@ -190,6 +190,10 @@ func Split(path string) (dir, file string) {
 	for i >= len(vol) && !os.IsPathSeparator(path[i]) {
 		i--
 	}
+
+	// 如下是 path.Split() 中的实现, 这里暂时不选用.
+	// i := strings.LastIndex(path, "/")
+
 	return path[:i+1], path[i+1:]
 }
 
@@ -418,14 +422,25 @@ func Base(path string) string {
 	}
 	// Throw away volume name
 	path = path[len(VolumeName(path)):]
+
+	// 	@note: 这里用 path.Base() 中的部分实现替代.
+	// 直接调用 strings.LastIndex(), 而不是手动做循环.
+
 	// Find the last element
-	i := len(path) - 1
-	for i >= 0 && !os.IsPathSeparator(path[i]) {
-		i--
-	}
-	if i >= 0 {
+	//
+	// i := len(path) - 1
+	// for i >= 0 && !os.IsPathSeparator(path[i]) {
+	// 	i--
+	// }
+	// if i >= 0 {
+	// 	path = path[i+1:]
+	// }
+
+	// Find the last element
+	if i := strings.LastIndex(path, "/"); i >= 0 {
 		path = path[i+1:]
 	}
+
 	// If empty now, it had only slashes.
 	if path == "" {
 		return string(Separator)
@@ -441,11 +456,19 @@ func Base(path string) string {
 // The returned path does not end in a separator unless it is the root directory.
 func Dir(path string) string {
 	vol := VolumeName(path)
-	i := len(path) - 1
-	for i >= len(vol) && !os.IsPathSeparator(path[i]) {
-		i--
-	}
-	dir := Clean(path[len(vol) : i+1])
+
+	// 	@note: 这里借用了 path.Dir() 中的部分实现替代.
+	// 调用 Split() 函数, 不再手动循环.
+
+	// i := len(path) - 1
+	// for i >= len(vol) && !os.IsPathSeparator(path[i]) {
+	// 	i--
+	// }
+	// dir := Clean(path[len(vol) : i+1])
+
+	dir, _ := Split(path)
+	dir = Clean(dir)
+
 	last := len(dir) - 1
 	if last > 0 && os.IsPathSeparator(dir[last]) {
 		dir = dir[:last]
@@ -456,6 +479,8 @@ func Dir(path string) string {
 	return vol + dir
 }
 
+// VolumeName 获取盘符名称, 如 windows 中的"C:"(linux 没有盘符的概念, 直接返回"")
+//
 // VolumeName returns leading volume name.
 // Given "C:\foo\bar" it returns "C:" under windows.
 // Given "\\host\share\foo" it returns "\\host\share".
