@@ -44,7 +44,6 @@ type tagCmd struct {
 
 // vcsList lists the known version control systems
 var vcsList = []*vcsCmd{
-	vcsHg,
 	vcsGit,
 	vcsSvn,
 	vcsBzr,
@@ -59,30 +58,6 @@ func vcsByCmd(cmd string) *vcsCmd {
 		}
 	}
 	return nil
-}
-
-// vcsHg describes how to use Mercurial.
-var vcsHg = &vcsCmd{
-	name: "Mercurial",
-	cmd:  "hg",
-
-	createCmd:   "clone -U {repo} {dir}",
-	downloadCmd: "pull",
-
-	// We allow both tag and branch names as 'tags'
-	// for selecting a version.  This lets people have
-	// a go.release.r60 branch and a go1 branch
-	// and make changes in both, without constantly
-	// editing .hgtags.
-	tagCmd: []tagCmd{
-		{"tags", `^(\S+)`},
-		{"branches", `^(\S+)`},
-	},
-	tagSyncCmd:     "update -r {tag}",
-	tagSyncDefault: "update default",
-
-	scheme:  []string{"https", "http", "ssh"},
-	pingCmd: "identify {scheme}://{repo}",
 }
 
 // vcsGit describes how to use Git.
