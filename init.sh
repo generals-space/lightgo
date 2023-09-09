@@ -17,7 +17,7 @@ export GO_PATH_EXTENSION=/usr/local/gopath_extension
 ## 兼容标准库
 export GO_PATH_COMPATIBLE=/usr/local/go/compatible
 
-export GOPATH=/usr/local/gopath:${GO_PATH_LOCAL}:${GO_PATH_EXTENSION}:${GO_PATH_COMPATIBLE}
+export GOPATH=/usr/local/gopath:${GO_PATH_LOCAL}:${GO_PATH_EXTENSION}:${GO_PATH_COMPATIBLE}:/usr/local/bison/bin
 
 ## 将 dist, 6g, 6l 等命令加入 PATH
 export PATH=$PATH:${GOROOT}/bin:${GO_TOOL}:${GO_TOOLLIST}

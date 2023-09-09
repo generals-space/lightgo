@@ -4,6 +4,10 @@ FROM registry.cn-hangzhou.aliyuncs.com/generals-space/remote-dev:latest as gopat
 RUN cd /root/ && git clone https://gitee.com/skeyes/go-vs-extension.git
 
 ################################################################################
+
+FROM registry.cn-hangzhou.aliyuncs.com/generals-space/bison:2.5 as bison
+
+################################################################################
 ## 容器环境配置可参考 [go-vs-extension](https://gitee.com/skeyes/go-vs-extension) 
 
 FROM registry.cn-hangzhou.aliyuncs.com/generals-space/remote-dev:latest
@@ -31,11 +35,14 @@ ENV PATH $PATH:/usr/local/gopath/bin:${GO_PATH_LOCAL}/bin:${GO_PATH_EXTENSION}/b
 
 RUN mkdir -p /usr/local/gopath_extension/{bin,vsix}
 RUN echo 'source /usr/local/go/init.sh' >> /etc/profile; 
+RUN echo 'source /usr/local/go/init.sh' >> /root/.bashrc; 
 COPY --from=gopath_extension /root/go-vs-extension/bin/go-outline               /usr/local/gopath_extension/bin/
 COPY --from=gopath_extension /root/go-vs-extension/bin/gocode                   /usr/local/gopath_extension/bin/
 COPY --from=gopath_extension /root/go-vs-extension/bin/godef                    /usr/local/gopath_extension/bin/
 COPY --from=gopath_extension /root/go-vs-extension/vsix/golang.Go-0.14.4.vsix   /usr/local/gopath_extension/vsix/
 COPY --from=gopath_extension /root/go-vs-extension/vsix/cpptools-linux.vsix     /usr/local/gopath_extension/vsix/
 COPY --from=gopath_extension /root/go-vs-extension/vsix/git-graph-1.30.0.vsix   /usr/local/gopath_extension/vsix/
+
+COPY --from=bison /usr/local/bison /usr/local/bison
 
 WORKDIR /usr/local/go
