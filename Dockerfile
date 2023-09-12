@@ -39,6 +39,9 @@ RUN echo 'source /usr/local/go/init.sh' >> /root/.bashrc;
 COPY --from=gopath_extension /root/go-vs-extension/bin/go-outline               /usr/local/gopath_extension/bin/
 COPY --from=gopath_extension /root/go-vs-extension/bin/gocode                   /usr/local/gopath_extension/bin/
 COPY --from=gopath_extension /root/go-vs-extension/bin/godef                    /usr/local/gopath_extension/bin/
+COPY --from=gopath_extension /root/go-vs-extension/bin/goimports                /usr/local/gopath_extension/bin/
+COPY --from=gopath_extension /root/go-vs-extension/bin/golint                   /usr/local/gopath_extension/bin/
+COPY --from=gopath_extension /root/go-vs-extension/bin/gopkgs                   /usr/local/gopath_extension/bin/
 COPY --from=gopath_extension /root/go-vs-extension/vsix/golang.Go-0.14.4.vsix   /usr/local/gopath_extension/vsix/
 COPY --from=gopath_extension /root/go-vs-extension/vsix/cpptools-linux.vsix     /usr/local/gopath_extension/vsix/
 COPY --from=gopath_extension /root/go-vs-extension/vsix/git-graph-1.30.0.vsix   /usr/local/gopath_extension/vsix/
