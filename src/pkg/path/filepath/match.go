@@ -35,11 +35,9 @@ var ErrBadPattern = errors.New("syntax error in pattern")
 //		lo '-' hi   matches character c for lo <= c <= hi
 //
 // Match requires pattern to match all of name, not just a substring.
-// The only possible returned error is ErrBadPattern, when pattern
-// is malformed.
+// The only possible returned error is ErrBadPattern, when pattern is malformed.
 //
-// On Windows, escaping is disabled. Instead, '\\' is treated as
-// path separator.
+// On Windows, escaping is disabled. Instead, '\\' is treated as path separator.
 //
 func Match(pattern, name string) (matched bool, err error) {
 Pattern:
