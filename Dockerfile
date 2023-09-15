@@ -1,5 +1,5 @@
 ## docker build -t registry.cn-hangzhou.aliyuncs.com/generals-space/golang-src:v1.2.2 .
-## docker run -d --name golang-src.v1.2 --privileged -p 2222:22 -v /usr/local/go:/usr/local/go registry.cn-hangzhou.aliyuncs.com/generals-space/golang-src:latest
+## docker run -d --name golang-src --privileged -p 2222:22 -v /usr/local/go1.2:/usr/local/go registry.cn-hangzhou.aliyuncs.com/generals-space/golang-src:latest
 FROM registry.cn-hangzhou.aliyuncs.com/generals-space/remote-dev:latest as gopath_extension
 RUN cd /root/ && git clone https://gitee.com/skeyes/go-vs-extension.git
 
