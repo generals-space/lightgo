@@ -45,33 +45,48 @@ Pattern:
 		var star bool
 		var chunk string
 		star, chunk, pattern = scanChunk(pattern)
+		// 如果找到了 star, 但 chunk 为空, 表示 * 号在 pattern[0] 的位置
 		if star && chunk == "" {
 			// Trailing * matches rest of string unless it has a /.
 			return strings.Index(name, string(Separator)) < 0, nil
 		}
+		// 用不包含 * 号的 chunk 部分, 与 name 进行匹配.
+		// 匹配过程中双方会同步消除, 直到 chunk 被清空, rest 为 name 中剩余的部分.
+		//
 		// Look for match at current position.
-		t, ok, err := matchChunk(chunk, name)
+		rest, ok, err := matchChunk(chunk, name)
+
+		// 如果上面的 matchChunk() 匹配流程成功完成, 且满足下面任一条件:
+		// 1. 剩余的 name (即 rest)已经完全消除
+		// 2. pattern 还有剩余
+		//
 		// if we're the last chunk, make sure we've exhausted the name
 		// otherwise we'll give a false result even if we could still match
 		// using the star
-		if ok && (len(t) == 0 || len(pattern) > 0) {
-			name = t
+		if ok && (len(rest) == 0 || len(pattern) > 0) {
+			name = rest
 			continue
 		}
 		if err != nil {
 			return false, err
 		}
+
+		// 运行到这里, 说明 ok == false, 上面的 matchChunk(chunk, name) 匹配失败.
+		// 但如果 star == true, 则可以跳过不匹配的部分, 下面 if{} 块中的 for{} 循环,
+		// 就是从 name[i+1:], 继续匹配, 这里 name[i] 就是用 * 号跳过的部分.
 		if star {
+			// 注意: * 号不能匹配斜杠字符, 即 for{} 循环中的"name[i] != Separator"语句
+			//
 			// Look for match skipping i+1 bytes.
 			// Cannot skip /.
 			for i := 0; i < len(name) && name[i] != Separator; i++ {
-				t, ok, err := matchChunk(chunk, name[i+1:])
+				rest, ok, err := matchChunk(chunk, name[i+1:])
 				if ok {
 					// if we're the last chunk, make sure we exhausted the name
-					if len(pattern) == 0 && len(t) > 0 {
+					if len(pattern) == 0 && len(rest) > 0 {
 						continue
 					}
-					name = t
+					name = rest
 					continue Pattern
 				}
 				if err != nil {
@@ -79,11 +94,18 @@ Pattern:
 				}
 			}
 		}
+		// 运行到这里, 就没希望了.
 		return false, nil
 	}
 	return len(name) == 0, nil
 }
 
+// scanChunk 找到 pattern 中第1个"*"号, 并按该其索引将原 pattern 切割成 chunk, rest 两个部分.
+//
+// 	@return star: 是否找到了 * 号
+// 	@return chunk: 原 pattern 中第1个*号前的部分, 比如 pattern = "a*/b", chunk = "a"
+// 	@return rest: 原 pattern 中第1个*号后的部分, 比如 pattern = "a*/b", rest = "*/b"
+//
 // scanChunk gets the next segment of pattern, which is a non-star string
 // possibly preceded by a star.
 func scanChunk(pattern string) (star bool, chunk, rest string) {
@@ -116,19 +138,29 @@ Scan:
 	return star, pattern[0:i], pattern[i:]
 }
 
-// matchChunk checks whether chunk matches the beginning of s.
-// If so, it returns the remainder of s (after the match).
+// matchChunk 对 chunk 部分与 name 字符串进行匹配, 直到把 chunk 消耗完毕.
+//
+// 	@param chunk: 原 pattern 中第1个*号前的部分, 比如 pattern = "a*/b", chunk = "a";
+// 	即, 传入的 chunk 参数中是不会出现*号的.
+// 	@paarm name: 待匹配的路径字符串
+//
+// 	@return rest: 匹配完成后, name 剩余的部分
+// 	@return ok: 是否正常完成匹配流程
+//
+// matchChunk checks whether chunk matches the beginning of name.
+// If so, it returns the remainder of name (after the match).
 // Chunk is all single-character operators: literals, char classes, and ?.
-func matchChunk(chunk, s string) (rest string, ok bool, err error) {
+func matchChunk(chunk, name string) (rest string, ok bool, err error) {
 	for len(chunk) > 0 {
-		if len(s) == 0 {
+		// 	@todo: chunk 不为空, 但是 name 被消耗光了, 会发生什么?
+		if len(name) == 0 {
 			return
 		}
 		switch chunk[0] {
 		case '[':
 			// character class
-			r, n := utf8.DecodeRuneInString(s)
-			s = s[n:]
+			r, n := utf8.DecodeRuneInString(name)
+			name = name[n:]
 			chunk = chunk[1:]
 			// We can't end right after '[', we're expecting at least
 			// a closing bracket and possibly a caret.
@@ -169,14 +201,15 @@ func matchChunk(chunk, s string) (rest string, ok bool, err error) {
 			}
 
 		case '?':
-			if s[0] == Separator {
+			if name[0] == Separator {
 				return
 			}
-			_, n := utf8.DecodeRuneInString(s)
-			s = s[n:]
+			_, n := utf8.DecodeRuneInString(name)
+			name = name[n:]
 			chunk = chunk[1:]
 
 		case '\\':
+			// 转义字符
 			if runtime.GOOS != "windows" {
 				chunk = chunk[1:]
 				if len(chunk) == 0 {
@@ -187,14 +220,16 @@ func matchChunk(chunk, s string) (rest string, ok bool, err error) {
 			fallthrough
 
 		default:
-			if chunk[0] != s[0] {
+			// 非 *, ? 等特殊字符, 需要一对一进行匹配.
+			if chunk[0] != name[0] {
 				return
 			}
-			s = s[1:]
+			// 普通字符匹配成功后, chunk 和 name 分别右移一位
+			name = name[1:]
 			chunk = chunk[1:]
 		}
 	}
-	return s, true, nil
+	return name, true, nil
 }
 
 // getEsc gets a possibly-escaped character from chunk, for a character class.
