@@ -26,6 +26,10 @@ var SkipDir = errors.New("skip this directory")
 // the next file.
 type WalkFunc func(path string, info os.FileInfo, err error) error
 
+// Walk 遍历目标目录 root 下的所有文件与子目录, 对每个成员执行目标函数 walkFn.
+//
+// 递归遍历(深度优先)
+// 
 // walk recursively descends path, calling w.
 func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 	err := walkFn(path, info, nil)
@@ -36,10 +40,12 @@ func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 		return err
 	}
 
+	// 如果当前对象是"文件", 则直接返回
 	if !info.IsDir() {
 		return nil
 	}
 
+	// 如果当前对象是"目录", 则获取该目录下的子级内容.
 	list, err := readDir(path)
 	if err != nil {
 		return walkFn(path, info, err)
@@ -56,20 +62,32 @@ func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 	return nil
 }
 
+// Walk 遍历目标目录 root 下的所有文件与子目录, 对每个成员执行目标函数 walkFn.
+//
+// 递归遍历(深度优先)
+//
 // Walk walks the file tree rooted at root, calling walkFn for each file or
-// directory in the tree, including root. All errors that arise visiting files
-// and directories are filtered by walkFn. The files are walked in lexical
-// order, which makes the output deterministic but means that for very
-// large directories Walk can be inefficient.
+// directory in the tree, including root.
+// All errors that arise visiting files and directories are filtered by walkFn.
+// The files are walked in lexical order, which makes the output deterministic
+// but means that for very large directories Walk can be inefficient.
 // Walk does not follow symbolic links.
 func Walk(root string, walkFn WalkFunc) error {
 	info, err := os.Lstat(root)
 	if err != nil {
+		// 即使有 err, 也要对 root 调用一次 walkFn(), 并把 err 传入.
 		return walkFn(root, nil, err)
 	}
 	return walk(root, info, walkFn)
 }
 
+// readDir 获取目标目录下所有子级内容并返回(按照文件名排序)
+//
+// 	@param dirname: 由主调函数保证该字符串一定是"目录"类型的路径.
+//
+// caller:
+// 	1. walk()
+//
 // readDir reads the directory named by dirname and returns
 // a sorted list of directory entries.
 // Copied from io/ioutil to avoid the circular import.

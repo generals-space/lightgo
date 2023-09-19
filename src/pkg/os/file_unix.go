@@ -142,9 +142,17 @@ func Stat(name string) (fi FileInfo, err error) {
 	return fileInfoFromStat(&stat, name), nil
 }
 
+// Lstat 检测并返回目标文件信息.
+//
+// 如果目标文件是个软链接, 则只会返回软链接本身的信息, 不会进一步追踪其源文件.
+//
+// 	@param name: 文件路径(路径+文件名)
+//
+// 	@return err: 如目标文件不存在
+//
 // Lstat returns a FileInfo describing the named file.
-// If the file is a symbolic link, the returned FileInfo
-// describes the symbolic link.  Lstat makes no attempt to follow the link.
+// If the file is a symbolic link, the returned FileInfo describes the
+// symbolic link. Lstat makes no attempt to follow the link.
 // If there is an error, it will be of type *PathError.
 func Lstat(name string) (fi FileInfo, err error) {
 	var stat syscall.Stat_t
