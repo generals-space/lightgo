@@ -10,7 +10,8 @@ import (
 	"unicode/utf8"
 )
 
-// explode splits s into an array of UTF-8 sequences, one per Unicode character (still strings) up to a maximum of n (n < 0 means no limit).
+// explode splits s into an array of UTF-8 sequences, one per Unicode character
+// (still strings) up to a maximum of n (n < 0 means no limit).
 // Invalid UTF-8 sequences become correct encodings of U+FFF8.
 func explode(s string, n int) []string {
 	if n == 0 {

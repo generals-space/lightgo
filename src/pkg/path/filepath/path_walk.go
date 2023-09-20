@@ -28,7 +28,7 @@ type WalkFunc func(path string, info os.FileInfo, err error) error
 
 // Walk 遍历目标目录 root 下的所有文件与子目录, 对每个成员执行目标函数 walkFn.
 //
-// 递归遍历(深度优先)
+// 	@alg: 递归遍历(深度优先)
 // 
 // walk recursively descends path, calling w.
 func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
@@ -64,7 +64,7 @@ func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 
 // Walk 遍历目标目录 root 下的所有文件与子目录, 对每个成员执行目标函数 walkFn.
 //
-// 递归遍历(深度优先)
+// 	@alg: 递归遍历(深度优先)
 //
 // Walk walks the file tree rooted at root, calling walkFn for each file or
 // directory in the tree, including root.

@@ -2,13 +2,88 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// 20230921 重命名 search.go -> replace_search.go
+
 package strings
 
-// stringFinder efficiently finds strings in a source text. It's implemented
-// using the Boyer-Moore string search algorithm:
+import "io"
+
+// singleStringReplacer is the implementation that's used when there is only
+// one string to replace (and that string has more than one byte).
+type singleStringReplacer struct {
+	finder *stringFinder
+	// value is the new string that replaces that pattern when it's found.
+	value string
+}
+
+// makeSingleStringReplacer 该结构用于对某个字符串中的部分字符进行替换,
+// 之所以叫"singleStringReplacer", 是因为该结构针对的只是 old -> new 一对一替换的场景,
+// 其他还有 old1 -> new1, old2 -> new2 等多对多的场景.
+//
+// 	@param pattern: old 字符串, 原字符串中需要被替换的部分
+// 	@param value: new 字符串, 将要替换成的部分
+//
+// caller:
+// 	1. NewReplacer() 只有这一处
+func makeSingleStringReplacer(pattern string, value string) *singleStringReplacer {
+	return &singleStringReplacer{
+		finder: makeStringFinder(pattern),
+		value:  value,
+	}
+}
+
+func (r *singleStringReplacer) Replace(s string) string {
+	var buf []byte
+	i, matched := 0, false
+	for {
+		match := r.finder.next(s[i:])
+		if match == -1 {
+			break
+		}
+		matched = true
+		buf = append(buf, s[i:i+match]...)
+		buf = append(buf, r.value...)
+		i += match + len(r.finder.pattern)
+	}
+	if !matched {
+		return s
+	}
+	buf = append(buf, s[i:]...)
+	return string(buf)
+}
+
+func (r *singleStringReplacer) WriteString(w io.Writer, s string) (n int, err error) {
+	sw := getStringWriter(w)
+	var i, wn int
+	for {
+		match := r.finder.next(s[i:])
+		if match == -1 {
+			break
+		}
+		wn, err = sw.WriteString(s[i : i+match])
+		n += wn
+		if err != nil {
+			return
+		}
+		wn, err = sw.WriteString(r.value)
+		n += wn
+		if err != nil {
+			return
+		}
+		i += match + len(r.finder.pattern)
+	}
+	wn, err = sw.WriteString(s[i:])
+	n += wn
+	return
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// stringFinder efficiently finds strings in a source text.
+// It's implemented using the Boyer-Moore string search algorithm:
 // http://en.wikipedia.org/wiki/Boyer-Moore_string_search_algorithm
-// http://www.cs.utexas.edu/~moore/publications/fstrpos.pdf (note: this aged
-// document uses 1-based indexing)
+// http://www.cs.utexas.edu/~moore/publications/fstrpos.pdf
+// (note: this aged document uses 1-based indexing)
 type stringFinder struct {
 	// pattern is the string that we are searching for in the text.
 	pattern string
@@ -45,6 +120,8 @@ type stringFinder struct {
 	goodSuffixSkip []int
 }
 
+// caller:
+// 	1. src/pkg/strings/replace.go -> makeSingleStringReplacer() 只有这一处
 func makeStringFinder(pattern string) *stringFinder {
 	f := &stringFinder{
 		pattern:        pattern,
