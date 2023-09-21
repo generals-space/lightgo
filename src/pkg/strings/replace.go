@@ -14,14 +14,6 @@ type replacer interface {
 	WriteString(w io.Writer, s string) (n int, err error)
 }
 
-// byteBitmap represents bytes which are sought(seek的被动, 搜索) for replacement.
-// byteBitmap is 256 bits wide, with a bit set for each old byte to be replaced.
-type byteBitmap [256 / 32]uint32
-
-func (m *byteBitmap) set(b byte) {
-	m[b>>5] |= uint32(1 << (b & 31))
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
 // 	@implementOf: replacer 接口
@@ -127,8 +119,52 @@ func (r *Replacer) WriteString(w io.Writer, s string) (n int, err error) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// byteReplacer is the implementation that's used when all the "old"
-// and "new" values are single ASCII bytes.
+// 	@alg: bitmap 位图, 基本原理就是用一个 bit 位来存放某种状态，适用于大规模数据，
+// 但数据的状态又不是很多的情况。通常是用来判断某个数据存是否存在的。
+//
+// 这里的 byteBitmap 只在 byteReplacer{} 和 byteStringReplacer{} 中被用到,
+// 目的在于, 遍历目标字符串 s 中所有字符时, 用来判断当前字符是否需要"被替换".
+// (这两种结构体明确被应用于, 被替换字符为单个字符的场景)
+//
+// 一般来说, 判断某个字符是否存在, 以及ta应该被替换成哪个字符(或字符串), 用 map[byte]string
+// 就可以实现. 但是为了空间利用率, 这里选用了 bitmap 位图.
+//
+// 标准 ASCII 码表为256个字符, 因此需要256个 bit 位来表示, 1表示已存在, 0表示不存在.
+// 而这可以 256 / 32 = 16 个 uint32 数字的数组来表示, 如:
+// byteBitmap[0] = 31-0  bit表示[00000000000000000000000000000000]
+// byteBitmap[1] = 63-32 bit表示[00000000000000000000000000000000]
+// byteBitmap[2] = 95-64 bit表示[00000000000000000000000000000000]
+// byteBitmap[...]
+//
+// 在设置/查找某个 char 对应的 bit 位时, 需要先找到该 char 在哪个 uint32 成员中,
+// 即同样需要先除以 32, 这就是 "b >> 5" 的作用, 用来找到 byteBitmap 中的成员索引.
+// 比如 'a' = 97, ta 的 bit 在 byteBitmap[3] 中, 而 97 / 32 = 97 >> 5 = 3
+//
+// 接下来就是在 uint32 中找到对应的 bit,
+// 对于整除找到索引, 很容易想到另一种常用的配套方案, 即, 取模.
+// char % 32 的结果, 就对应在 uint32 的 bit 位中, 右移的位数.
+// 还是以'a'为例, 97 % 32 = 97 & 31 = 1, 就是 byteBitmap[3] 的第1个bit(从0开始计数)
+//
+// byteBitmap[3] = 127-96 [00000000000000000000000000000010]
+// 
+// byteBitmap represents bytes which are sought(seek的被动, 搜索) for replacement.
+// byteBitmap is 256 bits wide, with a bit set for each old byte to be replaced.
+type byteBitmap [256 / 32]uint32
+
+// 	@param b: 原字符串中将要被替换的 old 字符.
+//
+// caller:
+// 	1. NewReplacer() 只有这一处
+func (m *byteBitmap) set(b byte) {
+	// 31 的二进制表示为 11111
+	// |= 对目标 b 对应的 bit 设置标志位.
+	m[b >> 5] |= uint32(1 << (b & 31))
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// byteReplacer is the implementation that's used when all the "old" and "new"
+// values are single ASCII bytes.
 type byteReplacer struct {
 	// 原字符串中待替换的字符表, 可视作一个 map
 	// old has a bit set for each old byte that should be replaced.
@@ -148,7 +184,7 @@ func (r *byteReplacer) Replace(s string) string {
 	var buf []byte // lazily allocated
 	for i := 0; i < len(s); i++ {
 		b := s[i]
-		if r.old[b>>5]&uint32(1<<(b&31)) != 0 {
+		if r.old[b >> 5]&uint32(1<<(b&31)) != 0 {
 			if buf == nil {
 				buf = []byte(s)
 			}
@@ -173,7 +209,7 @@ func (r *byteReplacer) WriteString(w io.Writer, s string) (n int, err error) {
 		ncopy := copy(buf, s[:])
 		s = s[ncopy:]
 		for i, b := range buf[:ncopy] {
-			if r.old[b>>5]&uint32(1<<(b&31)) != 0 {
+			if r.old[b >> 5]&uint32(1<<(b&31)) != 0 {
 				buf[i] = r.new[b]
 			}
 		}
@@ -189,8 +225,7 @@ func (r *byteReplacer) WriteString(w io.Writer, s string) (n int, err error) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // byteStringReplacer is the implementation that's used when all the
-// "old" values are single ASCII bytes but the "new" values vary in
-// size.
+// "old" values are single ASCII bytes but the "new" values vary in size.
 type byteStringReplacer struct {
 	// old has a bit set for each old byte that should be replaced.
 	old byteBitmap
@@ -200,12 +235,18 @@ type byteStringReplacer struct {
 	new [256][]byte
 }
 
+// Replace 与 byteReplacer{} 相比, old 字符串同样是单个字符, 但是 new 是无法确定的.
+// 因为将要替换进来的新字符长度不为1, 所以不能在原字符串上完成, 需要新建一个字符串.
 func (r *byteStringReplacer) Replace(s string) string {
+	// 由于替换进来的新字符长度不为1, 但又不清楚 old 字符在原字符串中出现了几次,
+	// 无法确认新字符串的长度, 下面第1个 for{} 循环就是计算新字符串的长度, 赋值给 newSize.
 	newSize := 0
 	anyChanges := false
+	// 第1次遍历, 确认目标字符串中是否存在需要被替换的字符, 并计算新字符串的长度.
+	// 遍历目标字符串 s 中的所有字符, 如果在 r.old 这个 bitmap 中不存在, 表示不需要替换.
 	for i := 0; i < len(s); i++ {
 		b := s[i]
-		if r.old[b>>5]&uint32(1<<(b&31)) != 0 {
+		if r.old[b >> 5]&uint32(1<<(b&31)) != 0 {
 			anyChanges = true
 			newSize += len(r.new[b])
 		} else {
@@ -213,13 +254,17 @@ func (r *byteStringReplacer) Replace(s string) string {
 		}
 	}
 	if !anyChanges {
+		// 不需要替换, 返回原字符串
 		return s
 	}
+
+	// 第2次遍历, 对原字符串逐个字符拷贝到新串中.
+	// 为新字符串创建定长切片
 	buf := make([]byte, newSize)
 	bi := buf
 	for i := 0; i < len(s); i++ {
 		b := s[i]
-		if r.old[b>>5]&uint32(1<<(b&31)) != 0 {
+		if r.old[b >> 5]&uint32(1<<(b&31)) != 0 {
 			n := copy(bi[:], r.new[b])
 			bi = bi[n:]
 		} else {
@@ -245,7 +290,7 @@ func (r *byteStringReplacer) WriteString(w io.Writer, s string) (n int, err erro
 	for i := 0; i < len(s); i++ {
 		b := s[i]
 		var new []byte
-		if r.old[b>>5]&uint32(1<<(b&31)) != 0 {
+		if r.old[b >> 5]&uint32(1<<(b&31)) != 0 {
 			new = r.new[b]
 		} else {
 			bi = append(bi, b)

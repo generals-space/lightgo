@@ -2,9 +2,13 @@ package strings
 
 import "io"
 
-// trieNode is a node in a lookup trie for prioritized key/value pairs. Keys
-// and values may be empty. For example, the trie containing keys "ax", "ay",
-// "bcbc", "x" and "xy" could have eight nodes:
+// 	@alg: Trie树，单词查找树，是一种树形结构，是一种哈希树的变种。
+// 典型应用是用于统计，排序和保存大量的字符串（但不仅限于字符串），所以经常被搜索引擎系统用于文本词频统计。
+//
+// trieNode is a node in a lookup trie for prioritized key/value pairs.
+// Keys and values may be empty.
+// For example, the trie containing keys "ax", "ay", "bcbc", "x" and "xy"
+// could have eight nodes:
 //
 //  n0  -
 //  n1  a-
@@ -20,8 +24,8 @@ import "io"
 // with a trailing "-") are partial keys, and nodes n2, n3, n5, n6 and n7
 // (marked with a trailing "+") are complete keys.
 type trieNode struct {
-	// value is the value of the trie node's key/value pair. It is empty if
-	// this node is not a complete key.
+	// value is the value of the trie node's key/value pair.
+	// It is empty if this node is not a complete key.
 	value string
 	// priority is the priority (higher is more important) of the trie node's
 	// key/value pair; keys are not necessarily matched shortest- or longest-
@@ -157,20 +161,29 @@ func (r *genericReplacer) lookup(s string, ignoreRoot bool) (val string, keylen 
 // It's used as a fallback when nothing faster can be used.
 type genericReplacer struct {
 	root trieNode
-	// tableSize is the size of a trie node's lookup table. It is the number
-	// of unique key bytes.
+	// tableSize 表示 mapping 表key的数量
+	//
+	// tableSize is the size of a trie node's lookup table.
+	// It is the number of unique key bytes.
 	tableSize int
 	// mapping maps from key bytes to a dense index for trieNode.table.
 	mapping [256]byte
 }
 
+// 	@param oldnew: 为 Replacer{} 对象预设的规则, 成对存在, 如: old1,new1,old2,new2...
+//
+// caller:
+// 	1. NewReplacer() 只有这一处
 func makeGenericReplacer(oldnew []string) *genericReplacer {
 	r := new(genericReplacer)
+
+	// 遍历 oldnew 列表, 选取 old 成员, 将 old 成员中所有字符都添加到 mapping 表中.
+	//
 	// Find each byte used, then assign them each an index.
 	for i := 0; i < len(oldnew); i += 2 {
-		key := oldnew[i]
-		for j := 0; j < len(key); j++ {
-			r.mapping[key[j]] = 1
+		old := oldnew[i]
+		for j := 0; j < len(old); j++ {
+			r.mapping[old[j]] = 1
 		}
 	}
 
