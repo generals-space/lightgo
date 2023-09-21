@@ -228,9 +228,11 @@ func (f *File) Chdir() error {
 	return nil
 }
 
-// Open opens the named file for reading.  If successful, methods on
-// the returned file can be used for reading; the associated file
-// descriptor has mode O_RDONLY.
+// Open 以只读方式打开目标文件.
+//
+// Open opens the named file for reading. 
+// If successful, methods on the returned file can be used for reading;
+// the associated file descriptor has mode O_RDONLY.
 // If there is an error, it will be of type *PathError.
 func Open(name string) (file *File, err error) {
 	return OpenFile(name, O_RDONLY, 0)

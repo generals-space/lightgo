@@ -449,8 +449,8 @@ const (
 //
 const (
 	Nanosecond  Duration = 1
-	Microsecond          = 1000 * Nanosecond
-	Millisecond          = 1000 * Microsecond
+	Microsecond          = 1000 * Nanosecond  // 微秒(千分之一毫秒)
+	Millisecond          = 1000 * Microsecond // 毫秒(千分之一秒)
 	Second               = 1000 * Millisecond
 	Minute               = 60 * Second
 	Hour                 = 60 * Minute

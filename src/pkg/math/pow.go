@@ -12,6 +12,8 @@ func isOddInt(x float64) bool {
 // Special cases taken from FreeBSD's /usr/src/lib/msun/src/e_pow.c
 // updated by IEEE Std. 754-2008 "Section 9.2.1 Special values".
 
+// Pow 求 x 的 y 次方.
+//
 // Pow returns x**y, the base-x exponential of y.
 //
 // Special cases are (in order):

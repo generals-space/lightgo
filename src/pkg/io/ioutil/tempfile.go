@@ -35,6 +35,15 @@ func nextSuffix() string {
 	return strconv.Itoa(int(1e9 + r%1e9))[1:]
 }
 
+// TempFile 在目标目录 dir 下创建一个以 prefix 为前缀的临时文件, 将其以读写模式打开并返回.
+//
+// 	@param dir: 如果为空, 则在"/tmp"目录下创建;
+// 	@param prefix: 便于识别的文件名前缀;
+//
+// 注意: 
+// 	1. 调用者可以通过 f.Name() 获取文件的完整路径;
+// 	2. 调用本函数所创建的临时文件, 应该由调用者自己删除;
+// 
 // TempFile creates a new temporary file in the directory dir
 // with a name beginning with prefix, opens the file for reading
 // and writing, and returns the resulting *os.File.
@@ -64,6 +73,15 @@ func TempFile(dir, prefix string) (f *os.File, err error) {
 	return
 }
 
+// TempDir 在目标目录下创建一个临时目录并返回该目录路径.
+//
+// 	@param dir: 如果为空, 则在"/tmp"目录下创建;
+// 	@param prefix: 便于识别的路径前缀;
+//
+// 操作系统中一般都会提供临时目录, 比如linux下的/tmp目录（通过os.TempDir()可以获取到).
+// 有时候, 我们自己需要创建临时目录, 比如Go工具链源码中（src/cmd/go/build.go）,
+// 通过 TempDir 创建一个临时目录, 用于存放编译过程的临时文件.
+//
 // TempDir creates a new temporary directory in the directory dir
 // with a name beginning with prefix and returns the path of the
 // new directory.  If dir is the empty string, TempDir uses the

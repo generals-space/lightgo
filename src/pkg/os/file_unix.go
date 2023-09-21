@@ -68,10 +68,13 @@ func epipecheck(file *File, e error) {
 // On Unix-like systems, it is "/dev/null"; on Windows, "NUL".
 const DevNull = "/dev/null"
 
+// caller:
+// 	1. Open()
+//
 // OpenFile is the generalized open call; most users will use Open
 // or Create instead.  It opens the named file with specified flag
-// (O_RDONLY etc.) and perm, (0666 etc.) if applicable.  If successful,
-// methods on the returned File can be used for I/O.
+// (O_RDONLY etc.) and perm, (0666 etc.) if applicable. 
+// If successful, methods on the returned File can be used for I/O.
 // If there is an error, it will be of type *PathError.
 func OpenFile(name string, flag int, perm FileMode) (file *File, err error) {
 	r, e := syscall.Open(name, flag|syscall.O_CLOEXEC, syscallMode(perm))

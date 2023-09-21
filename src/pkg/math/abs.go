@@ -4,6 +4,8 @@
 
 package math
 
+// Abs 求目标 x 的绝对值.
+//
 // Abs returns the absolute value of x.
 //
 // Special cases are:
