@@ -2,6 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// QuoteXXX 函数族, 用于将目标字符串中指定范围的字符转换成转义字符(\t, \n, \xFF, \u0100)
+//
+// Quote() 转义的范围较小, ta只会将目标字符串中的换行, 回车, tab 等转换成 \n, \r, \t 等;
+// QuoteToASCII() 则会将所有非 ASCII 字符都进行转换, 比如中文字符就会转换成"\u4e16"这种;
+//
+// QuoteRune() 可以算是Quote()的单字符版, 只会转换换行, 回车, tab 等, 忽略中文或表情字符;
+// QuoteRuneToASCII() 则为 QuoteToASCII()的单字符版, 所有非 ASCII 字符都会被转义;
+
 package strconv
 
 import (
@@ -83,10 +91,9 @@ func quoteWith(s string, quote byte, ASCIIonly bool) string {
 
 }
 
-// Quote returns a double-quoted Go string literal representing s.  The
-// returned string uses Go escape sequences (\t, \n, \xFF, \u0100) for
-// control characters and non-printable characters as defined by
-// IsPrint.
+// Quote returns a double-quoted Go string literal representing s. 
+// The returned string uses Go escape sequences (\t, \n, \xFF, \u0100) for
+// control characters and non-printable characters as defined by IsPrint.
 func Quote(s string) string {
 	return quoteWith(s, '"', false)
 }
@@ -110,8 +117,8 @@ func AppendQuoteToASCII(dst []byte, s string) []byte {
 	return append(dst, QuoteToASCII(s)...)
 }
 
-// QuoteRune returns a single-quoted Go character literal representing the
-// rune.  The returned string uses Go escape sequences (\t, \n, \xFF, \u0100)
+// QuoteRune returns a single-quoted Go character literal representing the rune. 
+// The returned string uses Go escape sequences (\t, \n, \xFF, \u0100)
 // for control characters and non-printable characters as defined by IsPrint.
 func QuoteRune(r rune) string {
 	// TODO: avoid the allocation here.
@@ -125,9 +132,9 @@ func AppendQuoteRune(dst []byte, r rune) []byte {
 }
 
 // QuoteRuneToASCII returns a single-quoted Go character literal representing
-// the rune.  The returned string uses Go escape sequences (\t, \n, \xFF,
-// \u0100) for non-ASCII characters and non-printable characters as defined
-// by IsPrint.
+// the rune. 
+// The returned string uses Go escape sequences (\t, \n, \xFF, \u0100)
+// for non-ASCII characters and non-printable characters as defined by IsPrint.
 func QuoteRuneToASCII(r rune) string {
 	// TODO: avoid the allocation here.
 	return quoteWith(string(r), '\'', true)

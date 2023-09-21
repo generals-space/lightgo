@@ -10,6 +10,9 @@ import (
 	"unicode/utf8"
 )
 
+// caller:
+// 	1. genSplit() 只有这一处
+//
 // explode splits s into an array of UTF-8 sequences, one per Unicode character
 // (still strings) up to a maximum of n (n < 0 means no limit).
 // Invalid UTF-8 sequences become correct encodings of U+FFF8.
@@ -39,209 +42,6 @@ func explode(s string, n int) []string {
 		a[i] = s[cur:]
 	}
 	return a
-}
-
-// primeRK is the prime base used in Rabin-Karp algorithm.
-const primeRK = 16777619
-
-// hashstr returns the hash and the appropriate multiplicative
-// factor for use in Rabin-Karp algorithm.
-func hashstr(sep string) (uint32, uint32) {
-	hash := uint32(0)
-	for i := 0; i < len(sep); i++ {
-		hash = hash*primeRK + uint32(sep[i])
-
-	}
-	var pow, sq uint32 = 1, primeRK
-	for i := len(sep); i > 0; i >>= 1 {
-		if i&1 != 0 {
-			pow *= sq
-		}
-		sq *= sq
-	}
-	return hash, pow
-}
-
-// Count 计算目标 sep 子串在目标字符串 s 中出现的次数.
-//
-// Count counts the number of non-overlapping instances of sep in s.
-func Count(s, sep string) int {
-	n := 0
-	// special cases
-	switch {
-	case len(sep) == 0:
-		return utf8.RuneCountInString(s) + 1
-	case len(sep) == 1:
-		// special case worth making fast
-		c := sep[0]
-		for i := 0; i < len(s); i++ {
-			if s[i] == c {
-				n++
-			}
-		}
-		return n
-	case len(sep) > len(s):
-		return 0
-	case len(sep) == len(s):
-		if sep == s {
-			return 1
-		}
-		return 0
-	}
-
-	// ...啥情况才会运行到这里???
-	hashsep, pow := hashstr(sep)
-	h := uint32(0)
-	for i := 0; i < len(sep); i++ {
-		h = h*primeRK + uint32(s[i])
-	}
-	lastmatch := 0
-	if h == hashsep && s[:len(sep)] == sep {
-		n++
-		lastmatch = len(sep)
-	}
-	for i := len(sep); i < len(s); {
-		h *= primeRK
-		h += uint32(s[i])
-		h -= pow * uint32(s[i-len(sep)])
-		i++
-		if h == hashsep && lastmatch <= i-len(sep) && s[i-len(sep):i] == sep {
-			n++
-			lastmatch = i
-		}
-	}
-	return n
-}
-
-// Contains returns true if substr is within s.
-func Contains(s, substr string) bool {
-	return Index(s, substr) >= 0
-}
-
-// ContainsAny returns true if any Unicode code points in chars are within s.
-func ContainsAny(s, chars string) bool {
-	return IndexAny(s, chars) >= 0
-}
-
-// ContainsRune returns true if the Unicode code point r is within s.
-func ContainsRune(s string, r rune) bool {
-	return IndexRune(s, r) >= 0
-}
-
-// Index returns the index of the first instance of sep in s, or -1 if sep is not present in s.
-func Index(s, sep string) int {
-	n := len(sep)
-	switch {
-	case n == 0:
-		return 0
-	case n == 1:
-		return IndexByte(s, sep[0])
-	case n == len(s):
-		if sep == s {
-			return 0
-		}
-		return -1
-	case n > len(s):
-		return -1
-	}
-	// Hash sep.
-	hashsep, pow := hashstr(sep)
-	var h uint32
-	for i := 0; i < n; i++ {
-		h = h*primeRK + uint32(s[i])
-	}
-	if h == hashsep && s[:n] == sep {
-		return 0
-	}
-	for i := n; i < len(s); {
-		h *= primeRK
-		h += uint32(s[i])
-		h -= pow * uint32(s[i-n])
-		i++
-		if h == hashsep && s[i-n:i] == sep {
-			return i - n
-		}
-	}
-	return -1
-}
-
-// LastIndex returns the index of the last instance of sep in s, or -1 if sep is not present in s.
-func LastIndex(s, sep string) int {
-	n := len(sep)
-	if n == 0 {
-		return len(s)
-	}
-	c := sep[0]
-	if n == 1 {
-		// special case worth making fast
-		for i := len(s) - 1; i >= 0; i-- {
-			if s[i] == c {
-				return i
-			}
-		}
-		return -1
-	}
-	// n > 1
-	for i := len(s) - n; i >= 0; i-- {
-		if s[i] == c && s[i:i+n] == sep {
-			return i
-		}
-	}
-	return -1
-}
-
-// IndexRune returns the index of the first instance of the Unicode code point
-// r, or -1 if rune is not present in s.
-func IndexRune(s string, r rune) int {
-	switch {
-	case r < 0x80:
-		b := byte(r)
-		for i := 0; i < len(s); i++ {
-			if s[i] == b {
-				return i
-			}
-		}
-	default:
-		for i, c := range s {
-			if c == r {
-				return i
-			}
-		}
-	}
-	return -1
-}
-
-// IndexAny returns the index of the first instance of any Unicode code point
-// from chars in s, or -1 if no Unicode code point from chars is present in s.
-func IndexAny(s, chars string) int {
-	if len(chars) > 0 {
-		for i, c := range s {
-			for _, m := range chars {
-				if c == m {
-					return i
-				}
-			}
-		}
-	}
-	return -1
-}
-
-// LastIndexAny returns the index of the last instance of any Unicode code
-// point from chars in s, or -1 if no Unicode code point from chars is
-// present in s.
-func LastIndexAny(s, chars string) int {
-	if len(chars) > 0 {
-		for i := len(s); i > 0; {
-			rune, size := utf8.DecodeLastRuneInString(s[0:i])
-			i -= size
-			for _, m := range chars {
-				if rune == m {
-					return i
-				}
-			}
-		}
-	}
-	return -1
 }
 
 // Generic split: splits after each instance of sep,
@@ -306,9 +106,12 @@ func SplitAfter(s, sep string) []string {
 	return genSplit(s, sep, len(sep), -1)
 }
 
-// Fields splits the string s around each instance of one or more consecutive white space
-// characters, as defined by unicode.IsSpace, returning an array of substrings of s or an
-// empty list if s contains only white space.
+// Fields 将目标字符串 s 按空白符号分隔, 返回切片对象(类似于 Split() 函数). 
+// 如果 s 只包含空白符号, 则返回一个长度为 0 的 slice.
+//
+// Fields splits the string s around each instance of one or more consecutive
+// white space characters, as defined by unicode.IsSpace, returning an array of
+// substrings of s or an empty list if s contains only white space.
 func Fields(s string) []string {
 	return FieldsFunc(s, unicode.IsSpace)
 }
@@ -372,59 +175,8 @@ func Join(a []string, sep string) string {
 	return string(b)
 }
 
-// HasPrefix tests whether the string s begins with prefix.
-func HasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[0:len(prefix)] == prefix
-}
-
-// HasSuffix tests whether the string s ends with suffix.
-func HasSuffix(s, suffix string) bool {
-	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
-}
-
-// Map returns a copy of the string s with all its characters modified
-// according to the mapping function. If mapping returns a negative value, the character is
-// dropped from the string with no replacement.
-func Map(mapping func(rune) rune, s string) string {
-	// In the worst case, the string can grow when mapped, making
-	// things unpleasant.  But it's so rare we barge in assuming it's
-	// fine.  It could also shrink but that falls out naturally.
-	maxbytes := len(s) // length of b
-	nbytes := 0        // number of bytes encoded in b
-	// The output buffer b is initialized on demand, the first
-	// time a character differs.
-	var b []byte
-
-	for i, c := range s {
-		r := mapping(c)
-		if b == nil {
-			if r == c {
-				continue
-			}
-			b = make([]byte, maxbytes)
-			nbytes = copy(b, s[:i])
-		}
-		if r >= 0 {
-			wid := 1
-			if r >= utf8.RuneSelf {
-				wid = utf8.RuneLen(r)
-			}
-			if nbytes+wid > maxbytes {
-				// Grow the buffer.
-				maxbytes = maxbytes*2 + utf8.UTFMax
-				nb := make([]byte, maxbytes)
-				copy(nb, b[0:nbytes])
-				b = nb
-			}
-			nbytes += utf8.EncodeRune(b[nbytes:maxbytes], r)
-		}
-	}
-	if b == nil {
-		return s
-	}
-	return string(b[0:nbytes])
-}
-
+// Repeat 用于重复 count 次字符串 s 并返回一个新的字符串(比较无聊的一个函数).
+//
 // Repeat returns a new string consisting of count copies of the string s.
 func Repeat(s string, count int) string {
 	b := make([]byte, len(s)*count)
@@ -433,33 +185,6 @@ func Repeat(s string, count int) string {
 		bp += copy(b[bp:], s)
 	}
 	return string(b)
-}
-
-// ToUpper returns a copy of the string s with all Unicode letters mapped to their upper case.
-func ToUpper(s string) string { return Map(unicode.ToUpper, s) }
-
-// ToLower returns a copy of the string s with all Unicode letters mapped to their lower case.
-func ToLower(s string) string { return Map(unicode.ToLower, s) }
-
-// ToTitle returns a copy of the string s with all Unicode letters mapped to their title case.
-func ToTitle(s string) string { return Map(unicode.ToTitle, s) }
-
-// ToUpperSpecial returns a copy of the string s with all Unicode letters mapped to their
-// upper case, giving priority to the special casing rules.
-func ToUpperSpecial(_case unicode.SpecialCase, s string) string {
-	return Map(func(r rune) rune { return _case.ToUpper(r) }, s)
-}
-
-// ToLowerSpecial returns a copy of the string s with all Unicode letters mapped to their
-// lower case, giving priority to the special casing rules.
-func ToLowerSpecial(_case unicode.SpecialCase, s string) string {
-	return Map(func(r rune) rune { return _case.ToLower(r) }, s)
-}
-
-// ToTitleSpecial returns a copy of the string s with all Unicode letters mapped to their
-// title case, giving priority to the special casing rules.
-func ToTitleSpecial(_case unicode.SpecialCase, s string) string {
-	return Map(func(r rune) rune { return _case.ToTitle(r) }, s)
 }
 
 // isSeparator reports whether the rune could mark a word boundary.
@@ -508,35 +233,6 @@ func Title(s string) string {
 		s)
 }
 
-// TrimLeftFunc returns a slice of the string s with all leading
-// Unicode code points c satisfying f(c) removed.
-func TrimLeftFunc(s string, f func(rune) bool) string {
-	i := indexFunc(s, f, false)
-	if i == -1 {
-		return ""
-	}
-	return s[i:]
-}
-
-// TrimRightFunc returns a slice of the string s with all trailing
-// Unicode code points c satisfying f(c) removed.
-func TrimRightFunc(s string, f func(rune) bool) string {
-	i := lastIndexFunc(s, f, false)
-	if i >= 0 && s[i] >= utf8.RuneSelf {
-		_, wid := utf8.DecodeRuneInString(s[i:])
-		i += wid
-	} else {
-		i++
-	}
-	return s[0:i]
-}
-
-// TrimFunc returns a slice of the string s with all leading
-// and trailing Unicode code points c satisfying f(c) removed.
-func TrimFunc(s string, f func(rune) bool) string {
-	return TrimRightFunc(TrimLeftFunc(s, f), f)
-}
-
 // IndexFunc returns the index into s of the first Unicode
 // code point satisfying f(c), or -1 if none do.
 func IndexFunc(s string, f func(rune) bool) int {
@@ -549,9 +245,8 @@ func LastIndexFunc(s string, f func(rune) bool) int {
 	return lastIndexFunc(s, f, true)
 }
 
-// indexFunc is the same as IndexFunc except that if
-// truth==false, the sense of the predicate function is
-// inverted.
+// indexFunc is the same as IndexFunc except that if truth==false,
+// the sense of the predicate function is inverted.
 func indexFunc(s string, f func(rune) bool, truth bool) int {
 	start := 0
 	for start < len(s) {
@@ -568,9 +263,8 @@ func indexFunc(s string, f func(rune) bool, truth bool) int {
 	return -1
 }
 
-// lastIndexFunc is the same as LastIndexFunc except that if
-// truth==false, the sense of the predicate function is
-// inverted.
+// lastIndexFunc is the same as LastIndexFunc except that if truth==false,
+// the sense of the predicate function is inverted.
 func lastIndexFunc(s string, f func(rune) bool, truth bool) int {
 	for i := len(s); i > 0; {
 		r, size := utf8.DecodeLastRuneInString(s[0:i])
@@ -580,65 +274,6 @@ func lastIndexFunc(s string, f func(rune) bool, truth bool) int {
 		}
 	}
 	return -1
-}
-
-func makeCutsetFunc(cutset string) func(rune) bool {
-	return func(r rune) bool { return IndexRune(cutset, r) >= 0 }
-}
-
-// Trim 移除目标字符串左右两侧的"指定字符"
-//
-// 	@param cutset: 一般在清除两侧空格时, 该值需要为" "
-//
-// Trim returns a slice of the string s with all leading and
-// trailing Unicode code points contained in cutset removed.
-func Trim(s string, cutset string) string {
-	if s == "" || cutset == "" {
-		return s
-	}
-	return TrimFunc(s, makeCutsetFunc(cutset))
-}
-
-// TrimLeft returns a slice of the string s with all leading
-// Unicode code points contained in cutset removed.
-func TrimLeft(s string, cutset string) string {
-	if s == "" || cutset == "" {
-		return s
-	}
-	return TrimLeftFunc(s, makeCutsetFunc(cutset))
-}
-
-// TrimRight returns a slice of the string s, with all trailing
-// Unicode code points contained in cutset removed.
-func TrimRight(s string, cutset string) string {
-	if s == "" || cutset == "" {
-		return s
-	}
-	return TrimRightFunc(s, makeCutsetFunc(cutset))
-}
-
-// TrimSpace returns a slice of the string s, with all leading
-// and trailing white space removed, as defined by Unicode.
-func TrimSpace(s string) string {
-	return TrimFunc(s, unicode.IsSpace)
-}
-
-// TrimPrefix returns s without the provided leading prefix string.
-// If s doesn't start with prefix, s is returned unchanged.
-func TrimPrefix(s, prefix string) string {
-	if HasPrefix(s, prefix) {
-		return s[len(prefix):]
-	}
-	return s
-}
-
-// TrimSuffix returns s without the provided trailing suffix string.
-// If s doesn't end with suffix, s is returned unchanged.
-func TrimSuffix(s, suffix string) string {
-	if HasSuffix(s, suffix) {
-		return s[:len(s)-len(suffix)]
-	}
-	return s
 }
 
 // Replace 替换目标字符串 s 中的指针字符(将 old 替换为 new).

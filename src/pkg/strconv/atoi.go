@@ -131,20 +131,30 @@ Error:
 	return n, &NumError{"ParseUint", s0, err}
 }
 
-// ParseInt interprets a string s in the given base (2 to 36) and
-// returns the corresponding value i.  If base == 0, the base is
-// implied by the string's prefix: base 16 for "0x", base 8 for
-// "0", and base 10 otherwise.
+// ParseInt 按照指定进制值 base, 读取目标字符串 s, 将其转换成十进制整型数值并返回.
 //
-// The bitSize argument specifies the integer type
-// that the result must fit into.  Bit sizes 0, 8, 16, 32, and 64
-// correspond to int, int8, int16, int32, and int64.
+// 与此相对的是 FormatInt() 函数
+//
+// 	@param s: 待读取的目标字符串, 比如二进制字符串"0101", 十六进制"f0f0".
+// 	@param base: 参数 s 所使用的进制值, 如2进制, 16进制等.
+// 	@param bitSize: 最终转换出来的数值的位数上限(32位/64位)???
+//
+// 	@return i: 转换得到的十进制结果, 如果 bitSize 指定为32位, 则可能会舍弃前面的32位???
+//
+// ParseInt interprets a string s in the given base (2 to 36) and
+// returns the corresponding value i. 
+// If base == 0, the base is implied by the string's prefix:
+// base 16 for "0x", base 8 for "0", and base 10 otherwise.
+//
+// The bitSize argument specifies the integer type that the result must fit into. 
+// Bit sizes 0, 8, 16, 32, and 64 correspond to int, int8, int16, int32,
+// and int64.
 //
 // The errors that ParseInt returns have concrete type *NumError
-// and include err.Num = s.  If s is empty or contains invalid
-// digits, err.Err = ErrSyntax; if the value corresponding
-// to s cannot be represented by a signed integer of the
-// given size, err.Err = ErrRange.
+// and include err.Num = s. 
+// If s is empty or contains invalid digits, err.Err = ErrSyntax;
+// if the value corresponding to s cannot be represented by a signed integer of
+// the given size, err.Err = ErrRange.
 func ParseInt(s string, base int, bitSize int) (i int64, err error) {
 	const fnParseInt = "ParseInt"
 
@@ -189,6 +199,12 @@ func ParseInt(s string, base int, bitSize int) (i int64, err error) {
 	return n, nil
 }
 
+// Atoi 将目标字符串 s 转换成十进制整型数值并返回.
+//
+// ASCII -> Int
+//
+// 本函数是对 ParseInt() 函数的封装.
+//
 // Atoi is shorthand for ParseInt(s, 10, 0).
 func Atoi(s string) (i int, err error) {
 	i64, err := ParseInt(s, 10, 0)

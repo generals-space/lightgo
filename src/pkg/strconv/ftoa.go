@@ -22,6 +22,24 @@ type floatInfo struct {
 var float32info = floatInfo{23, 8, -127}
 var float64info = floatInfo{52, 11, -1023}
 
+// FormatFloat 将目标浮点数 f 转换为字符串形式并返回.
+//
+// 	@param f: 要转换的浮点数
+// 	@param fmt: 格式标记（b、e、E、f、g、G）
+// 	@param prec: 精度（小数部分的长度, 不包括指数部分）
+// 	@param bitSize: 指定浮点类型（32:float32、64:float64）, 结果会据此进行舍入.
+//
+// 格式标记(这里的"指数"指的是"±dd"这一串小尾巴):
+// 'b' (-ddddp±ddd, 二进制指数)
+// 'e' (-d.dddde±dd, 十进制指数)
+// 'E' (-d.ddddE±dd, 十进制指数) (大E与小e的区别只在于指数前的字母e的大小写, 没有其他区别)
+// 'f' (-ddd.dddd, 没有指数)
+// 'g' ('e':大指数, 'f':其它情况)
+// 'G' ('E':大指数, 'f':其它情况)
+//
+// 如果格式标记为 'e', 'E'和'f', 则 prec 表示小数点后的数字位数
+// 如果格式标记为 'g', 'G', 则 prec 表示总的数字位数（整数部分+小数部分）
+//
 // FormatFloat converts the floating-point number f to a string,
 // according to the format fmt and precision prec.  It rounds the
 // result assuming that the original was obtained from a floating-point
