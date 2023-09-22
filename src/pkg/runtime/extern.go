@@ -6,14 +6,14 @@
 Package runtime contains operations that interact with Go's runtime system,
 such as functions to control goroutines.
 
-It also includes the low-level type information used by the reflect package; 
-see reflect's documentation for the programmable interface to the run-time 
+It also includes the low-level type information used by the reflect package;
+see reflect's documentation for the programmable interface to the run-time
 type system.
 
 Environment Variables
 
 The following environment variables ($name or %name%, depending on the host
-operating system) control the run-time behavior of Go programs. 
+operating system) control the run-time behavior of Go programs.
 The meanings and use may change from release to release.
 
 The GOGC variable sets the initial garbage collection target percentage.
@@ -21,7 +21,7 @@ A collection is triggered when the ratio of freshly allocated data to live data
 remaining after the previous collection reaches this percentage. The default
 is GOGC=100. Setting GOGC=off disables the garbage collector entirely.
 The runtime/debug package's SetGCPercent function allows changing this
-percentage at run time. 
+percentage at run time.
 See http://golang.org/pkg/runtime/debug/#SetGCPercent.
 
 The GODEBUG variable controls debug output from the runtime. GODEBUG value is
@@ -66,7 +66,7 @@ of the run-time system.
 */
 package runtime
 
-// Gosched yields the processor, allowing other goroutines to run. 
+// Gosched yields the processor, allowing other goroutines to run.
 // It does not suspend the current goroutine, so execution resumes automatically.
 func Gosched()
 
@@ -74,10 +74,10 @@ func Gosched()
 // Goexit runs all deferred calls before terminating the goroutine.
 func Goexit()
 
-// Caller 打印向上第 skip 级的主调函数信息.
+// Caller 打印向上第 skip 级的主调函数信息, 包含文件名, 行号等.
 //
 // 	@param skip: 如果 skip 为 0, 打印的是 Caller() 的主调函数自身的信息, 可以表示
-// 	"开发者级别"的当前函数.
+// 	"开发者级别"的当前函数.(由于历史原因, `Caller`与`Callers`的skip参数含义并不相同)
 //
 // 	@return pc: 这个值的含义待确定, 貌似是个地址.
 // 	@return file: 目标主调函数所在源文件的绝对路径
@@ -86,17 +86,17 @@ func Goexit()
 // 	@implementAt: src/pkg/runtime/runtime.c -> runtime·Caller()
 //
 // Caller reports file and line number information about function invocations on
-// the calling goroutine's stack. 
+// the calling goroutine's stack.
 // The argument skip is the number of stack frames to ascend,
-// with 0 identifying the caller of Caller. 
+// with 0 identifying the caller of Caller.
 // (For historical reasons the meaning of skip differs between Caller and Callers.)
 // The return values report the program counter, file name, and line number
-// within the file of the corresponding call. 
+// within the file of the corresponding call.
 // The boolean ok is false if it was not possible to recover the information.
 func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 
 // Callers fills the slice pc with the program counters of function invocations
-// on the calling goroutine's stack. 
+// on the calling goroutine's stack.
 // The argument skip is the number of stack frames to skip before recording in pc,
 // with 0 identifying the frame for Callers itself and 1 identifying
 // the caller of Callers.
@@ -115,6 +115,8 @@ type Func struct {
 // given program counter address, or else nil.
 func FuncForPC(pc uintptr) *Func
 
+// Name 函数名, 一般包含所在包名, 比如 "main.foo", "time.Now"
+//
 // Name returns the name of the function.
 func (f *Func) Name() string {
 	return funcname_go(f)
@@ -134,8 +136,10 @@ func (f *Func) FileLine(pc uintptr) (file string, line int) {
 
 // 	@implementAt: src/pkg/runtime/symtab.c -> runtime·funcline_go()
 func funcline_go(*Func, uintptr) (string, int)
+
 // 	@implementAt: src/pkg/runtime/symtab.c -> runtime·funcname_go()
 func funcname_go(*Func) string
+
 // 	@implementAt: src/pkg/runtime/symtab.c -> runtime·funcentry_go()
 func funcentry_go(*Func) uintptr
 

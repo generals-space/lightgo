@@ -1,21 +1,24 @@
-package main
+package runtime_test
 
 import (
 	"fmt"
 	"runtime"
 )
 
-func main() {
-	println("=========================")
+// 本文件中的 Example() 函数会执行失败, 因为所在文件不同, 文件名与行号信息都有差异.
+// 需要将 Example() 放到 main() 函数中执行, 才能获取真实的结果.
+
+func ExampleCaller() {
 	foo()
+	// Output:
 }
 func foo() {
-	// This is: main.foo, pc: 17385455, file: /Users/general/Code/playground/go-caller/main.go, line: 13, ok: bool
+	// This is: main.foo, pc: 17385455, file: /usr/local/go/gopath/src/test/main.go, line: 13, ok: bool
 	printFuncInfo()
 	bar()
 }
 func bar() {
-	// This is: main.bar, pc: 17385461, file: /Users/general/Code/playground/go-caller/main.go, line: 18, ok: bool
+	// This is: main.bar, pc: 17385461, file: /usr/local/go/gopath/src/test/main.go, line: 18, ok: bool
 	printFuncInfo()
 }
 
@@ -40,6 +43,8 @@ main.printFuncInfo     rpc[1]  Caller(0)
 runtime.Caller         rpc[0]  skip = 0
 
 这是 Caller(0) 的情况, rpc, skip 为 src/pkg/runtime/runtime.c -> runtime·Caller() 中的变量
+
+如果 skip 参数为3, 那么 rpc 所表示的应该是如下情况
 
 ...
 runtime.main           rpc[1]  Caller(3)
