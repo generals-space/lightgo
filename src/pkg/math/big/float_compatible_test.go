@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package big_test
+package big
 
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"strconv"
 	"strings"
 	"testing"

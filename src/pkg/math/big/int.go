@@ -296,6 +296,8 @@ func (z *Int) DivMod(x, y, m *Int) (*Int, *Int) {
 	return z, m
 }
 
+// Cmp 判断当前当前 BigInt 是否大于目标 BigInt 对象.
+//
 // Cmp compares x and y and returns:
 //
 //   -1 if x <  y
