@@ -18,13 +18,17 @@ import (
 	"math/big"
 )
 
+// 命令行执行可用:
+// 	1. go test -timeout 30s -run "^(ExampleInit|ExampleCompute|ExampleCompare|ExamplePrint)$" -v
+// 	2. go test -v -run ./int_example\[大数\ 计算\ 比较\]_test.go
+
 ////////////////////////////////////////////////////////////////////////////////
 // 大数定义与打印输出
 
 func ExampleInit() {
 	// 1. 定义一个简单的大数.
 	simpleBig := big.NewInt(1000)
-	fmt.Printf("tyep: %T, value: %s\n", simpleBig, simpleBig) // *big.Int, 1000
+	fmt.Printf("type: %T, value: %s\n", simpleBig, simpleBig) // *big.Int, 1000
 
 	// 简单整型没什么意思,
 	// 如果想表示一个值为`FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF`的32位16进制整型, 怎么办?
@@ -54,7 +58,7 @@ func ExampleInit() {
 	fmt.Printf("big3: %s\n", big3)
 
 	// Output:
-	// *big.Int, value: 1000
+	// type: *big.Int, value: 1000
 	// big1: 340282366920938463463374607431768211455
 	// big2: 340282366920938463463374607431768211455
 	// big3: 340282366920938463463374607431768211455

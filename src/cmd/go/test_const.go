@@ -232,6 +232,8 @@ See the documentation of the testing package for more information.
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// caller:
+// 	1. src/cmd/go/test.go -> writeTestmain() 只有这一处
 var testmainTmpl = template.Must(template.New("main").Parse(`
 package main
 

@@ -117,7 +117,7 @@ func (f byName) Len() int           { return len(f) }
 func (f byName) Less(i, j int) bool { return f[i].Name() < f[j].Name() }
 func (f byName) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 
-// ReadDir 读取指定目录中的所有目录和文件（不包括子目录下的文件）.
+// ReadDir 读取指定目录中的所有目录和文件（不包括子目录下的文件）并返回.
 //
 // 	@param dirname: 必须是一个目录路径, 否则会出错.
 //

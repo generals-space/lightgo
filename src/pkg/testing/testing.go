@@ -395,6 +395,9 @@ func tRunner(t *T, test *InternalTest) {
 //
 // 	@param tests: *_test.go 文件中, 各 TestXXX()函数.
 //
+// caller:
+// 	1. src/cmd/go/test_const.go -> testmainTmpl()
+//
 // An internal function but exported because it is cross-package;
 // part of the implementation of the "go test" command.
 func Main(

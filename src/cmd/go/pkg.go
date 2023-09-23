@@ -242,6 +242,14 @@ func makeImportValid(r rune) rune {
 	return r
 }
 
+// 	@param path: import 的目录路径, 如"fmt", "math", 也可能是相对路径, 如"."
+// 	@param srcDir: path 参数对应的绝对路径?
+//
+// caller:
+// 	1. Package.load()
+// 	2. loadPackage()
+// 	3. src/cmd/go/test.go -> builder.test()
+//
 // loadImport scans the directory named by path, which must be an import path,
 // but possibly a local import path (an absolute file system path or one beginning
 // with ./ or ../).  A local relative path is interpreted relative to srcDir.
@@ -574,8 +582,7 @@ func (p *Package) swigSoname(file string) string {
 	return strings.Replace(p.ImportPath, "/", "-", -1) + "-" + strings.Replace(file, ".", "-", -1) + ".so"
 }
 
-// swigDir returns the name of the shared SWIG directory for a
-// package.
+// swigDir returns the name of the shared SWIG directory for a package.
 func (p *Package) swigDir(ctxt *build.Context) string {
 	dir := p.build.PkgRoot
 	if ctxt.Compiler == "gccgo" {
@@ -708,10 +715,18 @@ func isStale(p *Package, topRoot map[string]bool) bool {
 	return false
 }
 
+// cwd 执行 go xxx 命令时所在的目录
 var cwd, _ = os.Getwd()
 
 var cmdCache = map[string]*Package{}
 
+// loadPackage 根据传入的 arg 名称, 加载并返回对应的 Package 包对象.
+//
+// 	@param path: import 的目录路径, 如"fmt", "strings"等.
+//
+// caller:
+// 	1. packagesAndErrors() 
+//
 // loadPackage is like loadImport but is used for command-line arguments,
 // not for paths found in import statements.  In addition to ordinary import paths,
 // loadPackage accepts pseudo-paths beginning with cmd/ to denote commands
@@ -786,18 +801,19 @@ func loadPackage(arg string, stk *importStack) *Package {
 	return loadImport(arg, cwd, stk, nil)
 }
 
+// packages 根据传入的 args 列表, 加载并返回对应的 package 列表.
+//
 // 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
 //
 // caller:
 // 	1. src/cmd/go/build.go -> runBuild() 执行 go build 命令时被调用
 //
-// packages returns the packages named by the
-// command line arguments 'args'.  If a named package
-// cannot be loaded at all (for example, if the directory does not exist),
-// then packages prints an error and does not include that
-// package in the results.  However, if errors occur trying
-// to load dependencies of a named package, the named
-// package is still returned, with p.Incomplete = true
+// packages returns the packages named by the command line arguments 'args'. 
+// If a named package cannot be loaded at all
+// (for example, if the directory does not exist),
+// then packages prints an error and does not include that package in the results. 
+// However, if errors occur trying to load dependencies of a named package,
+// the named package is still returned, with p.Incomplete = true
 // and details in p.DepsErrors.
 func packages(args []string) []*Package {
 	var pkgs []*Package
@@ -811,7 +827,13 @@ func packages(args []string) []*Package {
 	return pkgs
 }
 
+// packagesAndErrors 根据传入的 args 列表, 加载并返回对应的 package 列表.
+//
 // 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
+//
+// caller:
+// 	1. packages() 遇到 Package.Error 信息, 只会打印一条日志, 但仍然返回 []Package 列表.
+// 	2. packagesForBuild() 与 packages() 类似, 但遇到 Package.Error 时会直接终止流程.
 //
 // packagesAndErrors is like 'packages' but returns a *Package for
 // every argument, even the ones that cannot be loaded at all.
@@ -823,6 +845,7 @@ func packagesAndErrors(args []string) []*Package {
 	}
 
 	// 第2种情况: 构建目标为某个目录
+	// 如果 args 为空列表, 则返回 ["."]
 	args = importPaths(args)
 	var pkgs []*Package
 	var stk importStack
@@ -839,6 +862,8 @@ func packagesAndErrors(args []string) []*Package {
 	return pkgs
 }
 
+// packagesForBuild 根据传入的 args 列表, 加载并返回对应的 package 列表.
+//
 // 	@param args: go build 所要构建的目标, 一般为 xxx.go,yyy.go 或是某个目录.
 //
 // packagesForBuild is like 'packages' but fails if any of the packages

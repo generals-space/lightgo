@@ -48,17 +48,21 @@ var helpTestfunc = &Command{
 }
 
 var (
-	testC            bool       // -c flag
-	testCover        bool       // -cover flag
-	testCoverMode    string     // -covermode flag
-	testCoverPaths   []string   // -coverpkg flag
-	testCoverPkgs    []*Package // -coverpkg flag
-	testProfile      bool       // some profiling flag
-	testNeedBinary   bool       // profile needs to keep binary around
-	testI            bool       // -i flag
-	testV            bool       // -v flag
-	testFiles        []string   // -file flag(s)  TODO: not respected
-	testTimeout      string     // -timeout flag
+	testC          bool       // -c flag
+	testCover      bool       // -cover flag
+	testCoverMode  string     // -covermode flag
+	testCoverPaths []string   // -coverpkg flag
+	testCoverPkgs  []*Package // -coverpkg flag
+	testProfile    bool       // some profiling flag
+	testNeedBinary bool       // profile needs to keep binary around
+	// -i flag
+	// i, 即 install, 安装 test 目标所需的依赖包, 但并不执行 test 本身.
+	testI     bool
+	testV     bool     // -v flag
+	testFiles []string // -file flag(s)  TODO: not respected
+	// -timeout flag
+	// 指定本次测试的超时时间.
+	testTimeout      string
 	testArgs         []string
 	testBench        bool
 	testStreamOutput bool // show output as it is generated
@@ -76,6 +80,7 @@ var testMainDeps = map[string]bool{
 }
 
 // 	@param cmd: 函数体内没有使用到该参数
+// 	@param args: go test 后面跟的参数选项, 如 -v, -run, xxx_test.go 等
 //
 // caller:
 // 	1. 作为 cmdTest.Run() 函数被调用
@@ -97,9 +102,9 @@ func runTest(cmd *Command, args []string) {
 	}
 
 	// If a test timeout was given and is parseable, set our kill timeout
-	// to that timeout plus one minute.  This is a backup alarm in case
-	// the test wedges with a goroutine spinning and its background
-	// timer does not get a chance to fire.
+	// to that timeout plus one minute.
+	// This is a backup alarm in case the test wedges with a goroutine spinning
+	// and its background timer does not get a chance to fire.
 	if dt, err := time.ParseDuration(testTimeout); err == nil && dt > 0 {
 		testKillTimeout = dt + 1*time.Minute
 	}
@@ -357,8 +362,8 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 	// the usual place in the temporary tree, because then
 	// other tests will see it as the real package.
 	// Instead we make a _test directory under the import path
-	// and then repeat the import path there.  We tell the
-	// compiler and linker to look in that _test directory first.
+	// and then repeat the import path there.
+	// We tell the compiler and linker to look in that _test directory first.
 	//
 	// That is, if the package under test is unicode/utf8,
 	// then the normal place to write the package archive is
@@ -830,6 +835,7 @@ func writeTestmain(out string, pmain, p *Package) error {
 	}
 	defer f.Close()
 
+	// 这里将跳转到 src/pkg/testing/testing.go -> Main() 函数
 	if err := testmainTmpl.Execute(f, t); err != nil {
 		return err
 	}

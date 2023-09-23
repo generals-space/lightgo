@@ -108,6 +108,11 @@ var testFlagDefn = []*testFlagSpec{
 	{name: "v", boolVar: &testV, passToTest: true},
 }
 
+// 	@param args: go test 后面跟的参数选项, 如 -v, -run, xxx_test.go 等
+//
+// caller:
+// 	1. src/cmd/go/test.go -> runTest()
+//
 // testFlags processes the command line, grabbing -x and -c, rewriting known flags
 // to have "test" before them, and reading the command line for the 6.out.
 // Unfortunately for us, we need to do our own flag processing because go test
@@ -155,66 +160,96 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 		switch f.name {
 		// bool flags.
 		case "a", "c", "i", "n", "x", "v", "race", "cover", "work":
-			setBoolFlag(f.boolVar, value)
+			{
+				setBoolFlag(f.boolVar, value)
+			}
 		case "p":
-			setIntFlag(&buildP, value)
+			{
+				setIntFlag(&buildP, value)
+			}
 		case "gcflags":
-			buildGcflags, err = splitQuotedFields(value)
-			if err != nil {
-				fatalf("invalid flag argument for -%s: %v", f.name, err)
+			{
+				buildGcflags, err = splitQuotedFields(value)
+				if err != nil {
+					fatalf("invalid flag argument for -%s: %v", f.name, err)
+				}
 			}
 		case "ldflags":
-			buildLdflags, err = splitQuotedFields(value)
-			if err != nil {
-				fatalf("invalid flag argument for -%s: %v", f.name, err)
+			{
+				buildLdflags, err = splitQuotedFields(value)
+				if err != nil {
+					fatalf("invalid flag argument for -%s: %v", f.name, err)
+				}
 			}
 		case "gccgoflags":
-			buildGccgoflags, err = splitQuotedFields(value)
-			if err != nil {
-				fatalf("invalid flag argument for -%s: %v", f.name, err)
+			{
+				buildGccgoflags, err = splitQuotedFields(value)
+				if err != nil {
+					fatalf("invalid flag argument for -%s: %v", f.name, err)
+				}
 			}
 		case "tags":
-			buildContext.BuildTags = strings.Fields(value)
+			{
+				buildContext.BuildTags = strings.Fields(value)
+			}
 		case "compiler":
-			buildCompiler{}.Set(value)
+			{
+				buildCompiler{}.Set(value)
+			}
 		case "file":
-			testFiles = append(testFiles, value)
+			{
+				testFiles = append(testFiles, value)
+			}
 		case "bench":
-			// record that we saw the flag; don't care about the value
-			testBench = true
+			{
+				// record that we saw the flag; don't care about the value
+				testBench = true
+			}
 		case "timeout":
-			testTimeout = value
+			{
+				testTimeout = value
+			}
 		case "blockprofile", "cpuprofile", "memprofile":
-			testProfile = true
-			testNeedBinary = true
+			{
+				testProfile = true
+				testNeedBinary = true
+			}
 		case "coverpkg":
-			testCover = true
-			if value == "" {
-				testCoverPaths = nil
-			} else {
-				testCoverPaths = strings.Split(value, ",")
+			{
+				testCover = true
+				if value == "" {
+					testCoverPaths = nil
+				} else {
+					testCoverPaths = strings.Split(value, ",")
+				}
 			}
 		case "coverprofile":
-			testCover = true
-			testProfile = true
-		case "covermode":
-			switch value {
-			case "set", "count", "atomic":
-				testCoverMode = value
-			default:
-				fatalf("invalid flag argument for -cover: %q", value)
+			{
+				testCover = true
+				testProfile = true
 			}
-			testCover = true
+		case "covermode":
+			{
+				switch value {
+				case "set", "count", "atomic":
+					testCoverMode = value
+				default:
+					fatalf("invalid flag argument for -cover: %q", value)
+				}
+				testCover = true
+			}
 		case "outputdir":
-			outputDir = value
-		}
+			{
+				outputDir = value
+			}
+		} // switch{} end
 		if extraWord {
 			i++
 		}
 		if f.passToTest {
 			passToTest = append(passToTest, "-test."+f.name+"="+value)
 		}
-	}
+	} // for{} end
 
 	// Tell the test what directory we're running in, so it can write the profiles there.
 	if testProfile && outputDir == "" {
@@ -227,6 +262,20 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 	return
 }
 
+// testFlag 处理参数列表 args 中第i个成员.
+//
+// 之所以要把 args 当作参数传入, 而不是直接传 args[i], 是因为某些参数后面是有值的, 如
+// "-run xxx.go" 这种形式的, xxx.go 就是 -run 的参数值.
+//
+// 	@param args: go test 后面跟的参数选项, 如 -v, -run, xxx_test.go 等
+// 	@param i: args 中的某个索引
+//
+// 	@return value: "-run xxx.go" 这种形式的的参数值部分, 即 xxx.go
+// 	@return extra: 是否为"-run xxx.go"这种形式, 如果是, 则主调函数在遍历时会向后多移一位.
+//
+// caller:
+// 	1. testFlags() 只有这一处, 遍历处理 go test 的所有参数.
+//
 // testFlag sees if argument i is a known flag and returns its definition, value,
 // and whether it consumed an extra word.
 func testFlag(args []string, i int) (f *testFlagSpec, value string, extra bool) {
