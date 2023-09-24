@@ -27,6 +27,9 @@ func NotNilFilter(_ string, v reflect.Value) bool {
 	return true
 }
 
+// caller:
+// 	1. Print()
+//
 // Fprint prints the (sub-)tree starting at AST node x to w.
 // If fset != nil, position information is interpreted relative
 // to that file set. Otherwise positions are printed as integer
@@ -128,6 +131,9 @@ func (p *printer) printf(format string, args ...interface{}) {
 	}
 }
 
+// caller:
+// 	1. Fprint()
+//
 // Implementation note: Print is written for AST nodes but could be
 // used to print arbitrary data structures; such a version should
 // probably be in a different package.

@@ -145,7 +145,9 @@ func ParseFile(
 // returned. If a parse error occurred, a non-nil but incomplete map and the
 // first error encountered are returned.
 //
-func ParseDir(fset *token.FileSet, path string, filter func(os.FileInfo) bool, mode Mode) (pkgs map[string]*ast.Package, first error) {
+func ParseDir(
+	fset *token.FileSet, path string, filter func(os.FileInfo) bool, mode Mode,
+) (pkgs map[string]*ast.Package, first error) {
 	fd, err := os.Open(path)
 	if err != nil {
 		return nil, err
