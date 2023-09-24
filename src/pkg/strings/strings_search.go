@@ -134,7 +134,9 @@ func Index(s, sep string) int {
 	return -1
 }
 
-// LastIndex 反向查找str在字符串s中出现位置的索引（str 的第一个字符的索引）, -1表示未找到
+// LastIndex 反向查找str在字符串s中出现位置的索引（str 的第一个字符的索引）并返回
+//
+// 	@param: -1 表示未找到.
 //
 // LastIndex returns the index of the last instance of sep in s, or -1 if sep is not present in s.
 func LastIndex(s, sep string) int {

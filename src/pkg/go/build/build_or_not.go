@@ -20,8 +20,16 @@ func (ctxt *Context) MatchFile(dir, name string) (match bool, err error) {
 	return
 }
 
+// matchFile 判断目标文件是否参与 go build 构建.
+//
+// 判断条件是文件名中的"CPU架构/OS系统", 以及文件内容中的'// +build'语句.
+//
 // 	@param dir: import 语句中的某个 package 所在的目录(绝对路径)
-// 	@param name: dir 目录下的某个文件的名称(一定是文件, 不可能是子目录)
+// 	@param name: dir 目录下的某个文件的名称(一定是文件, 不可能是子目录, 且包含后缀名)
+//
+// 	@return match: 是否参与构建
+// 	@return data: 文件开头部分的内容, 一般是"[注释] <package> [注释] [import]"
+// 	@return filename: 目标文件的绝对路径
 //
 // caller:
 // 	1. Context.Import()
@@ -38,8 +46,8 @@ func (ctxt *Context) MatchFile(dir, name string) (match bool, err error) {
 func (ctxt *Context) matchFile(
 	dir, name string, returnImports bool, allTags map[string]bool,
 ) (match bool, data []byte, filename string, err error) {
-	if strings.HasPrefix(name, "_") ||
-		strings.HasPrefix(name, ".") {
+	// 1. 如果文件名以下划线或点号开头, 则不参与构建.
+	if strings.HasPrefix(name, "_") || strings.HasPrefix(name, ".") {
 		return
 	}
 
@@ -47,14 +55,18 @@ func (ctxt *Context) matchFile(
 	if i < 0 {
 		i = len(name)
 	}
+	// 如果文件名中不包含点号(即 i = -1), 则 ext 将为空
 	ext := name[i:]
 
+	// 2. 如果文件名中包含不兼容的CPU架构/OS系统, 则不参与构建.
 	if !ctxt.goodOSArchFile(name, allTags) && !ctxt.UseAllFiles {
 		return
 	}
 
+	// 3. 非 .go, .c 等类型的文件, 不参与构建.
 	switch ext {
-	case ".go", ".c", ".cc", ".cxx", ".cpp", ".s", ".h", ".hh", ".hpp", ".hxx", ".S", ".swig", ".swigcxx":
+	case ".go", ".c", ".cc", ".cxx", ".cpp", ".s", ".h",
+		".hh", ".hpp", ".hxx", ".S", ".swig", ".swigcxx":
 		// tentatively okay - read to make sure
 	case ".syso":
 		// binary, no reading
@@ -65,6 +77,7 @@ func (ctxt *Context) matchFile(
 		return
 	}
 
+	// 4. 打开并读取文件内容, '// +build' 语句中不符合 -tag 选项的, 不参与构建
 	filename = ctxt.joinPath(dir, name)
 	f, err := ctxt.openFile(filename)
 	if err != nil {
@@ -93,17 +106,21 @@ func (ctxt *Context) matchFile(
 
 var slashslash = []byte("//")
 
+// shouldBuild 从文件内容中读取'// +build'语句, 不符合 -tag 选项的, 不参与构建
+//
+// 	@param content: .go, .c 等源码文件开头部分的内容, 一般是"[注释] <package> [注释] [import]"
+//
 // caller:
 // 	1. Context.matchFile() 只有这一处
 //
 // shouldBuild reports whether it is okay to use this file,
-// The rule is that in the file's leading run of // comments
-// and blank lines, which must be followed by a blank line
+// The rule is that in the file's leading run of // comments and blank lines,
+// which must be followed by a blank line
 // (to avoid including a Go package clause doc comment),
 // lines beginning with '// +build' are taken as build directives.
 //
-// The file is accepted only if each such line lists something
-// matching the file.  For example:
+// The file is accepted only if each such line lists something matching the file.
+// For example:
 //
 //	// +build windows linux
 //

@@ -27,7 +27,12 @@ type Package struct {
 	// Source files
 	GoFiles        []string // .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
 	CgoFiles       []string // .go source files that import "C"
-	IgnoredGoFiles []string // .go source files ignored for this build
+	// 当前 package 所在目录下的 .go 文件, 不参与构建的(只是文件名, 不包含路径).
+	// 比如文件名以下划线/点号开头, 或是包含不兼容的"CPU架构/OS系统",
+	// 或是文件内容中的'// +build'语句与 -tag 不符合.
+	//
+	// .go source files ignored for this build
+	IgnoredGoFiles []string
 	CFiles         []string // .c source files
 	CXXFiles       []string // .cc, .cpp and .cxx source files
 	HFiles         []string // .h, .hh, .hpp and .hxx source files

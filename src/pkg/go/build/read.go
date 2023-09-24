@@ -56,6 +56,8 @@ func (r *importReader) readByte() byte {
 	return c
 }
 
+// 	@param skipSpace: 如果为 true, 则接下来读取时, 会跳过空字符以及注释, 返回下一个有效字符.
+//
 // peekByte returns the next byte from the input reader but does not advance beyond it.
 // If skipSpace is set, peekByte skips leading spaces and comments.
 func (r *importReader) peekByte(skipSpace bool) byte {
@@ -187,22 +189,22 @@ func (r *importReader) readImport() {
 	r.readString()
 }
 
-// readComments is like ioutil.ReadAll, except that it only reads the leading
-// block of comments in the file.
-func readComments(f io.Reader) ([]byte, error) {
-	r := &importReader{b: bufio.NewReader(f)}
-	r.peekByte(true)
-	if r.err == nil && !r.eof {
-		// Didn't reach EOF, so must have found a non-space byte. Remove it.
-		r.buf = r.buf[:len(r.buf)-1]
-	}
-	return r.buf, r.err
-}
-
+// readImports 读取 .go 文件开头的部分并返回.
+//
+// 内容一般是: [注释] <package> [注释] [import]
+// 因为 '// +build' 语句只能出现在这部分, 且必须跟随一个空行.
+//
+// 	@param file: 某个文件对象, 必须是 .go 文件.
+//
+// 	@return: 文件开头部分的内容, 一般是"[注释] <package> [注释] [import]"
+//
+// caller:
+// 	1. src/pkg/go/build/build_or_not.go -> Context.matchFile() 只有这一处
+//
 // readImports is like ioutil.ReadAll, except that it expects a Go file as input
 // and stops reading the input once the imports have completed.
-func readImports(f io.Reader, reportSyntaxError bool) ([]byte, error) {
-	r := &importReader{b: bufio.NewReader(f)}
+func readImports(file io.Reader, reportSyntaxError bool) ([]byte, error) {
+	r := &importReader{b: bufio.NewReader(file)}
 
 	r.readKeyword("package")
 	r.readIdent()
@@ -234,5 +236,19 @@ func readImports(f io.Reader, reportSyntaxError bool) ([]byte, error) {
 		}
 	}
 
+	return r.buf, r.err
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// readComments is like ioutil.ReadAll, except that it only reads the leading
+// block of comments in the file.
+func readComments(f io.Reader) ([]byte, error) {
+	r := &importReader{b: bufio.NewReader(f)}
+	r.peekByte(true)
+	if r.err == nil && !r.eof {
+		// Didn't reach EOF, so must have found a non-space byte. Remove it.
+		r.buf = r.buf[:len(r.buf)-1]
+	}
 	return r.buf, r.err
 }

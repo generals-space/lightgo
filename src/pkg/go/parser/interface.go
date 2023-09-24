@@ -69,8 +69,13 @@ const (
 	AllErrors         = SpuriousErrors             // report all errors (not just the first 10 on different lines)
 )
 
+// 	@param filename: 参与构建的.go, .c 等源码文件的绝对路径.
+// 	@param src: filename 所表示的源码文件开头部分的内容,
+// 	一般是"[注释] <package> [注释] [import]"
+//
 // caller:
-// 	1. src/pkg/sort/genzfunc_compatible.go -> main()
+// 	1. src/pkg/go/build/build.go -> Context.Import()
+// 	2. src/pkg/sort/genzfunc_compatible.go -> main()
 //
 // ParseFile parses the source code of a single Go source file and returns
 // the corresponding ast.File node. The source code may be provided via

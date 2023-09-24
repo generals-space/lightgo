@@ -495,7 +495,9 @@ Found:
 			continue
 		}
 
-		pf, err := parser.ParseFile(fset, filename, data, parser.ImportsOnly|parser.ParseComments)
+		pf, err := parser.ParseFile(
+			fset, filename, data, parser.ImportsOnly|parser.ParseComments,
+		)
 		if err != nil {
 			return p, err
 		}
@@ -517,7 +519,11 @@ Found:
 			p.Name = pkg
 			firstFile = name
 		} else if pkg != p.Name {
-			return p, fmt.Errorf("found packages %s (%s) and %s (%s) in %s", p.Name, firstFile, pkg, name, p.Dir)
+			// 如果一个 package 目录下存在2个(甚至多个)不同的 package 名称, 则报错.
+			return p, fmt.Errorf(
+				"found packages %s (%s) and %s (%s) in %s", 
+				p.Name, firstFile, pkg, name, p.Dir,
+			)
 		}
 		if pf.Doc != nil && p.Doc == "" {
 			p.Doc = doc.Synopsis(pf.Doc.Text())
