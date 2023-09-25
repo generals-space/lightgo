@@ -1,35 +1,10 @@
-package strings
+// package strings
+package main
 
 import "io"
 
 // 	@alg: Trie(读'try')树，前缀树, 又称字典树, 单词查找树，是一种树形结构，哈希树的变种。
 // 典型应用是用于统计，排序和保存大量的字符串（但不仅限于字符串），所以经常被搜索引擎系统用于文本词频统计。
-//
-// 在 makeGenericReplacer() 初始化完成前缀树后, 所有 old 字符串都存储在了`Trie`前缀树中,
-// 每个节点保存一个 old 字符, 那么拥有相同前缀的 old 字符串就会共享同一条查找路径,
-// 而要被替换的 new 字符串则存放在叶子节点中.
-//
-// 以如下 oldnew 为例
-//
-// flag => pkg/flag
-// fmt  => pkg/fmt
-// go   => pkg/go
-//
-// 对应的 trie 树如下
-//               root
-//            /        \
-//         f              g
-//     /       \          |
-//    l         m         |
-//    |         |         |
-//    ag        t         o
-//    |         |         |
-// pkg/flag  pkg/fmt    pkg/go
-//
-// 执行替换时, 会遍历目标`str`, 从 trie 树中查找出现的第一个 old 字符串并替换.
-// 由于 oldnew 可能不只一对, 那么 old 也不只一对, 所以谁也不知道会从 str 中先找到哪个 old 串.
-// 如果按照常规的做法, 查找的流程可能涉及"回溯", 而 trie 树通过公共前缀简化了回溯流程,
-// 这就是前缀树存在的意义.
 //
 // trieNode is a node in a lookup trie for prioritized key/value pairs.
 // Keys and values may be empty.
@@ -153,9 +128,7 @@ func (t *trieNode) add(key, val string, priority int, r *genericReplacer) {
 	}
 }
 
-// lookup 从目标 str 起始位置, 开始查找其中出现的 trie 前缀树中存储的某个字符串
-// (即 old 字符串)并返回.
-//
+// lookup 查找目标 str 中是否出现过 trie 前缀树中存储的某个字符串(就是 old 字符串)并返回.
 // 由于 oldnew 可能不只一对, 那么 old 也不只一对, 所以谁也不知道会从 str 中找到哪个 old 串.
 //
 // 	@param val: 匹配到的 old 字符串
@@ -313,15 +286,6 @@ func (r *genericReplacer) WriteString(w io.Writer, str string) (n int, err error
 	var last, wn int
 	var prevMatchEmpty bool
 	for i := 0; i <= len(str); {
-		// 遍历 str, 从str[i:]起始位置, 开始查找其中出现的 trie 前缀树中存储的某个字符串
-		// (即 old 字符串)并返回.
-		//
-		// 由于 oldnew 可能不只一对, 那么 old 也不只一对, 所以谁也不知道会从 str 中找到
-		// 哪个 old 串.
-		//
-		// 如果没找到, 则从下一个字符再次开始;
-		// 如果找到了, 则把要替换的 new 字符串写到 sw 中;
-		//
 		// Ignore the empty match iff the previous loop found the empty match.
 		val, keylen, match := r.lookup(str[i:], prevMatchEmpty)
 		prevMatchEmpty = match && keylen == 0
@@ -340,7 +304,6 @@ func (r *genericReplacer) WriteString(w io.Writer, str string) (n int, err error
 			last = i
 			continue
 		}
-		// 如果没有在 trie 前缀树中找到任何一个 old 字符串, 则依次遍历
 		i++
 	}
 	if last != len(str) {

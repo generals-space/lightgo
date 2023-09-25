@@ -136,6 +136,14 @@ func Marshal(v interface{}) ([]byte, error) {
 	return e.Bytes(), nil
 }
 
+// MarshalIndent 默认 Marshal() 是没有缩进的, 格式化得到 json 字符串是单行的,
+// 可以使用本函数设置缩进.
+//
+// 	@param v: 待序列化的结构体或map对象.
+// 	@param prefix: 实现缩进后, 每行行首位置可以指定前缀(如 git 对比时行首的加减号"+","-")
+// 	不想用可以设置为空字符串"".
+// 	@param indent: 缩进符号, 一般可以设置为4个空格"    "或tab键"\n"
+//
 // MarshalIndent is like Marshal but applies Indent to format the output.
 func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 	b, err := Marshal(v)
