@@ -9,6 +9,9 @@
 
 uint32 runtime·Hchansize = sizeof(Hchan);
 
+// 	@param t: channel类型(如 string, int, struct 等)
+// 	@param hint: channel 容量(如果为0表示是同步类型).
+//
 // caller:
 // 	1. runtime·makechan()
 Hchan* runtime·makechan_c(ChanType *t, int64 hint)
@@ -58,8 +61,8 @@ void reflect·makechan(ChanType *t, uint64 size, Hchan *c)
 //
 // 调用 malloc 创建一个 channel 对象, 并分配内存.
 //
-// param t: channel类型(如 string, int, struct 等)
-// param hint: channel 容量.
+// 	@param t: channel类型(如 string, int, struct 等)
+// 	@param hint: channel 容量(如果为0表示是同步类型).
 //
 // makechan(t *ChanType, hint int64) (hchan *chan any);
 void runtime·makechan(ChanType *t, int64 hint, Hchan *ret)
@@ -227,10 +230,11 @@ asynch:
 		runtime·racerelease(chanbuf(c, c->sendx));
 	} 
 
+	// 运行到这里, 说明队列未满, 则将消息拷贝到当前 channel 的缓冲区中.
 	c->elemalg->copy(c->elemsize, chanbuf(c, c->sendx), ep);
 	if(++c->sendx == c->dataqsiz) {
 		c->sendx = 0;
-	} 
+	}
 	c->qcount++;
 
 	sg = dequeue(&c->recvq);

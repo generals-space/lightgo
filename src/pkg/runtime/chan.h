@@ -15,6 +15,9 @@ typedef	struct	Scase	Scase;
 
 // chanbuf 应该是 chan 中实际存储数据的地方
 //
+// 	@param c: 目标 channel 的地址
+// 	@param i: 目标 channel 中缓冲区的索引(即数据要写入哪个位置, 或是从哪个位置读出)
+//
 // Buffer follows Hchan immediately in memory.
 // chanbuf(c, i) is pointer to the i'th slot in the buffer.
 #define chanbuf(c, i) ((byte*)((c)+1)+(uintptr)(c)->elemsize*(i))
@@ -61,6 +64,12 @@ struct	Hchan
 	//
 	// size of the circular q
 	uintgo	dataqsiz;
+
+	// 注意: channel 对象中没有保存实际存储数据的地方(即缓冲区), 
+	// 缓冲区其实就在 channel 对象的后面, 在 make() 的时候为其就申请了空间.
+	// 见 chanbuf() 函数.
+
+	// 队列中的元素类型占用的字节数(即单个元素的大小)
 	uint16	elemsize;
 	// ensures proper alignment of the buffer that follows Hchan in memory
 	uint16	pad;
@@ -71,7 +80,9 @@ struct	Hchan
 	uintgo	recvx;			// receive index
 	// recvq/sendq 表示向该 channel 中等待接收/发送的 goroutine 队列.
 	// 每有一处 <- chan, 或是 chan <-, 都会将该 goroutine 加到这两个队列中.
-	WaitQ	recvq;			// list of recv waiters
-	WaitQ	sendq;			// list of send waiters
+	// list of recv waiters
+	WaitQ	recvq;
+	// list of send waiters
+	WaitQ	sendq;
 	Lock;
 };
