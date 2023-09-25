@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"reflect"
 	"strings"
 	"unicode"
@@ -552,7 +551,7 @@ func JSEscaper(args ...interface{}) string {
 // URLQueryEscaper returns the escaped value of the textual representation of
 // its arguments in a form suitable for embedding in a URL query.
 func URLQueryEscaper(args ...interface{}) string {
-	return url.QueryEscape(evalArgs(args))
+	return QueryEscape(evalArgs(args))
 }
 
 // evalArgs formats the list of arguments into a string. It is therefore equivalent to

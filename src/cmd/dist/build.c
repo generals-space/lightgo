@@ -388,7 +388,6 @@ static char *buildorder[] = {
 	"pkg/go/parser",
 	"pkg/os/exec",
 	"pkg/os/signal",
-	"pkg/net/url",
 	"pkg/text/template/parse",
 	"pkg/text/template",
 	"pkg/go/doc",
