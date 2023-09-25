@@ -4,12 +4,6 @@ import (
 	"reflect"
 )
 
-/*
-
-// 示例
-
-*/
-
 // 	@compatible: 该结构在 v1.8 版本初次出现.
 // 
 // lessSwap is a pair of Less and Swap function for use with the
