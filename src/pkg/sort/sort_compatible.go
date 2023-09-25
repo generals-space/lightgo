@@ -34,8 +34,6 @@ func maxDepth(n int) int {
 // 	@param less: 用于判断两个数组成员排序先后的方法, 需要根据不同的 slice 类型编写不同的方法,
 // 	也可以按自身要求, 编写逆序排序的方法.
 //
-// [anchor] 使用示例, 请见 016.sort 中的 main() 函数.
-//
 // Slice sorts the provided slice given the provided less function.
 //
 // The sort is not guaranteed to be stable. For a stable sort, use SliceStable.
