@@ -163,36 +163,6 @@ func (deadlineExceededError) Error() string { return "context deadline exceeded"
 
 func (deadlineExceededError) Timeout() bool { return true }
 
-// An emptyCtx is never canceled, has no values, and has no deadline. It is not
-// struct{}, since vars of this type must have distinct addresses.
-type emptyCtx int
-
-func (*emptyCtx) Deadline() (deadline time.Time, ok bool) {
-	return
-}
-
-func (*emptyCtx) Done() <-chan struct{} {
-	return nil
-}
-
-func (*emptyCtx) Err() error {
-	return nil
-}
-
-func (*emptyCtx) Value(key interface{}) interface{} {
-	return nil
-}
-
-func (e *emptyCtx) String() string {
-	switch e {
-	case background:
-		return "context.Background"
-	case todo:
-		return "context.TODO"
-	}
-	return "unknown empty Context"
-}
-
 var (
 	background = new(emptyCtx)
 	todo       = new(emptyCtx)
@@ -240,17 +210,31 @@ func newCancelCtx(parent Context) cancelCtx {
 	}
 }
 
+// propagateCancel 将子级ctx添加到父级ctx的children成员map中, 以便之后执行 cancel()
+// 时可以实现传导效果.
+//
+// propagate(传播, 繁衍)
+//
+// caller:
+// 	1. WithCancel()
+// 	2. WithDeadline()
+//
 // propagateCancel arranges for child to be canceled when parent is.
 func propagateCancel(parent Context, child canceler) {
 	if parent.Done() == nil {
-		return // parent is never canceled
+		// parent is never canceled
+		return
 	}
 	if p, ok := parentCancelCtx(parent); ok {
+		// 一般情况下会运行到这里
 		p.mu.Lock()
 		if p.err != nil {
+			// 如果父级ctx已经被取消
+			//
 			// parent has already been canceled
 			child.cancel(false, p.err)
 		} else {
+			// 将子级ctx添加到父级ctx的children成员map中
 			if p.children == nil {
 				p.children = make(map[canceler]bool)
 			}
@@ -258,6 +242,7 @@ func propagateCancel(parent Context, child canceler) {
 		}
 		p.mu.Unlock()
 	} else {
+		// 如果p是emptyCtx, 即Background()返回的结果, 则会运行到这里.
 		go func() {
 			select {
 			case <-parent.Done():
@@ -268,6 +253,10 @@ func propagateCancel(parent Context, child canceler) {
 	}
 }
 
+// parentCancelCtx 返回父级context的`*cancelCtx`类型成员.
+//
+// 最初调用时, parent应该是Background()得到的空ctx.
+//
 // parentCancelCtx follows a chain of parent references until it finds a
 // *cancelCtx. This function understands how each of the concrete types in this
 // package represents its parent.
@@ -281,6 +270,7 @@ func parentCancelCtx(parent Context) (*cancelCtx, bool) {
 		case *valueCtx:
 			parent = c.Context
 		default:
+			// 运行到这里, 说明parent为emptyCtx, 即Background()的返回值.
 			return nil, false
 		}
 	}
@@ -299,6 +289,8 @@ func removeChild(parent Context, child canceler) {
 	p.mu.Unlock()
 }
 
+// *cancelCtx 和 *timerCtx 都实现了canceler接口, 实现该接口的类型都可以被直接cancel
+//
 // A canceler is a context type that can be canceled directly. The
 // implementations are *cancelCtx and *timerCtx.
 type canceler interface {
@@ -332,6 +324,11 @@ func (c *cancelCtx) String() string {
 	return fmt.Sprintf("%v.WithCancel", c.Context)
 }
 
+// cancel 关闭 c.done 通道, 做了如下几件事
+// 1. 设置c.err = err, c.children = nil
+// 2. 依次遍历c.children，每个child分别cancel
+// 3. 如果设置了`removeFromParent`，则将c从其parent的children中删除.
+//
 // cancel closes c.done, cancels each of c's children, and, if
 // removeFromParent is true, removes c from its parent's children.
 func (c *cancelCtx) cancel(removeFromParent bool, err error) {
@@ -357,6 +354,10 @@ func (c *cancelCtx) cancel(removeFromParent bool, err error) {
 	}
 }
 
+// WithDeadline ...
+//
+// 	@param parent: 可能是Background()空context
+//
 // WithDeadline returns a copy of the parent context with the deadline adjusted
 // to be no later than d. If the parent's deadline is already earlier than d,
 // WithDeadline(parent, d) is semantically equivalent to parent. The returned
@@ -368,6 +369,9 @@ func (c *cancelCtx) cancel(removeFromParent bool, err error) {
 // call cancel as soon as the operations running in this Context complete.
 func WithDeadline(parent Context, deadline time.Time) (Context, CancelFunc) {
 	if cur, ok := parent.Deadline(); ok && cur.Before(deadline) {
+		// 如果父级ctx的deadline早于参考d指定的时间, 可以直接返回*cancelCtx对象了.
+		// 因为同样可以被取消, 而且父级ctx一定比子ctx早结束.
+		//
 		// The current deadline is already sooner than the new one.
 		return WithCancel(parent)
 	}
@@ -376,14 +380,20 @@ func WithDeadline(parent Context, deadline time.Time) (Context, CancelFunc) {
 		deadline:  deadline,
 	}
 	propagateCancel(parent, c)
+
+	// 下面与WithCancel()相比, 多出来的步骤: 设置定时器.
 	d := deadline.Sub(time.Now())
 	if d <= 0 {
-		c.cancel(true, DeadlineExceeded) // deadline has already passed
+		// deadline时间已经过了, 直接取消然后返回
+		//
+		// deadline has already passed
+		c.cancel(true, DeadlineExceeded)
 		return c, func() { c.cancel(true, Canceled) }
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.err == nil {
+		// 启动定时器
 		c.timer = time.AfterFunc(d, func() {
 			c.cancel(true, DeadlineExceeded)
 		})
@@ -409,13 +419,17 @@ func (c *timerCtx) String() string {
 	return fmt.Sprintf("%v.WithDeadline(%s [%s])", c.cancelCtx.Context, c.deadline, c.deadline.Sub(time.Now()))
 }
 
+// cancel 先调用父级cancelCtx.cancel()方法, 多出来的操作是, 销毁定时器成员, 释放资源.
 func (c *timerCtx) cancel(removeFromParent bool, err error) {
+	// 这里调用父级cancelCtx的cancel方法
 	c.cancelCtx.cancel(false, err)
 	if removeFromParent {
 		// Remove this timerCtx from its parent cancelCtx's children.
 		removeChild(c.cancelCtx.Context, c)
 	}
+	// 与cancelCtx相比, 多出来的操作就是销毁定时器成员, 释放资源.
 	c.mu.Lock()
+	// 停止并销毁计时器成员对象
 	if c.timer != nil {
 		c.timer.Stop()
 		c.timer = nil
@@ -437,6 +451,8 @@ func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 	return WithDeadline(parent, time.Now().Add(timeout))
 }
 
+// 注意: WithValue需要与其他WithXXX配合使用
+//
 // WithValue returns a copy of parent in which the value associated with key is
 // val.
 //
@@ -454,6 +470,8 @@ func WithValue(parent Context, key, val interface{}) Context {
 	return &valueCtx{parent, key, val}
 }
 
+// valueCtx 只是多了一对key/val, 和一个`Value()`方法.
+//
 // A valueCtx carries a key-value pair. It implements Value for that key and
 // delegates all other calls to the embedded Context.
 type valueCtx struct {

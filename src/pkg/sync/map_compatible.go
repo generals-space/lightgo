@@ -9,7 +9,7 @@ import (
 	"unsafe"
 )
 
-// 	@compatible: 该函数在 v1.9 版本初次出现.
+// 	@compatible: 该对象在 v1.9 版本初次出现.
 //
 // Map is a concurrent map with amortized-constant-time loads, stores, and deletes.
 // It is safe for multiple goroutines to call a Map's methods concurrently.
