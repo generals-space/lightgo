@@ -20,6 +20,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -516,10 +517,7 @@ type Certificate struct {
 	PolicyIdentifiers []asn1.ObjectIdentifier
 
 	// 	@compatible: 此字段在 v1.10 版本添加
-	// URIs []*url.URL
-	// 	@compatibleNote: 为了解除对 net/url 包的依赖(将后者移除核心标准库),
-	// 更改为如下
-	URIs []interface{}
+	URIs []*url.URL
 }
 
 // ErrUnsupportedAlgorithm results from attempting to perform an operation that

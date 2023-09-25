@@ -126,6 +126,7 @@ static char *cleantab[] = {
 	"pkg/io/ioutil",
 	"pkg/log",
 	"pkg/math",
+	"pkg/net/url",
 	"pkg/os",
 	"pkg/os/exec",
 	"pkg/path",
