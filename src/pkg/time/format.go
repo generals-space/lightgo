@@ -400,6 +400,13 @@ func (t Time) String() string {
 	return t.Format("2006-01-02 15:04:05.999999999 -0700 MST")
 }
 
+// Format 将当前日期对象按照指定的格式输出.
+//
+// 注意: Format() 和 Parse() 不一定是以期望的时区处理的, Format()输出前需要手动转换,
+// 在读入时间字符串时, 应将 ParseInLocation() 作为首选项.
+//
+// 	@param layout: 可以自定义, 也可以用 time 包提供的预设格式(见本文件开头)
+//
 // Format returns a textual representation of the time value formatted
 // according to layout, which defines the format by showing how the reference
 // time,
@@ -674,6 +681,10 @@ func skip(value, prefix string) (string, error) {
 	return value, nil
 }
 
+// Parse 读取字符串格式的日期, 转换成 Time 对象并返回.
+//
+// 注意: Parse() 默认是以 UTC 的时区读取的, 应将 ParseInLocation() 作为首选项.
+//
 // Parse parses a formatted string and returns the time value it represents.
 // The layout  defines the format by showing how the reference time,
 //	Mon Jan 2 15:04:05 -0700 MST 2006
@@ -712,6 +723,8 @@ func Parse(layout, value string) (Time, error) {
 	return parse(layout, value, UTC, Local)
 }
 
+// 	@param layout: 见 LoadLocation() 的同名参数, 如 Local, UTC, Asia/Shanghai 等
+//
 // ParseInLocation is like Parse but differs in two important ways.
 // First, in the absence of time zone information, Parse interprets a time as UTC;
 // ParseInLocation interprets the time as in the given location.

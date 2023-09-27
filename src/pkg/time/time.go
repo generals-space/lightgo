@@ -300,6 +300,9 @@ func (t Time) Year() int {
 	return year
 }
 
+// 	@return: 结果为`Month`类型, 其实为`int`类型, 不过它有一个`String()`方法,
+// 可以转换为英文单词的形式(如`January`).
+//
 // Month returns the month of the year specified by t.
 func (t Time) Month() Month {
 	_, month, _, _ := t.date(true)
@@ -626,6 +629,8 @@ func (t Time) In(loc *Location) Time {
 	return t
 }
 
+// 	@return: 当前日期类型所在的时区对象, 如UTC, CST等.
+//
 // Location returns the time zone information associated with t.
 func (t Time) Location() *Location {
 	l := t.loc
@@ -642,6 +647,8 @@ func (t Time) Zone() (name string, offset int) {
 	return
 }
 
+// Unix 获取当前日期的时间戳(int64类型)
+//
 // Unix returns t as a Unix time, the number of seconds elapsed
 // since January 1, 1970 UTC.
 func (t Time) Unix() int64 {
@@ -781,6 +788,14 @@ func (t *Time) UnmarshalText(data []byte) (err error) {
 	return
 }
 
+// Unix 根据时间戳生成 Time 日期对象.
+//
+// 一般来说秒级时间戳只有10位, 像js的则是毫秒级13位.
+// 从时间戳生成日期对象也可以根据精度来调整, 一般来说只要秒级数值就可以了.
+//
+// 	@param sec: 秒级数值
+// 	@param nsec: 纳秒数值, 一般来说只要秒级数值就可以, 此参数为空.
+//
 // Unix returns the local Time corresponding to the given Unix time,
 // sec seconds and nsec nanoseconds since January 1, 1970 UTC.
 // It is valid to pass nsec outside the range [0, 999999999].
