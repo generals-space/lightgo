@@ -2,7 +2,7 @@ package strings
 
 import "io"
 
-// 	@alg: Trie树，单词查找树，是一种树形结构，是一种哈希树的变种。
+// 	@alg: Trie(读'try')树，前缀树, 又称字典树, 单词查找树，是一种树形结构，哈希树的变种。
 // 典型应用是用于统计，排序和保存大量的字符串（但不仅限于字符串），所以经常被搜索引擎系统用于文本词频统计。
 //
 // trieNode is a node in a lookup trie for prioritized key/value pairs.
@@ -58,6 +58,12 @@ type trieNode struct {
 	table []*trieNode
 }
 
+// 	@param key: replace 时的 old 字符串
+// 	@param val: 与 key 相对应的 new 字符串
+// 	@param priority:
+//
+// caller:
+// 	1. makeGenericReplacer()
 func (t *trieNode) add(key, val string, priority int, r *genericReplacer) {
 	if key == "" {
 		if t.priority == 0 {
@@ -121,7 +127,11 @@ func (t *trieNode) add(key, val string, priority int, r *genericReplacer) {
 	}
 }
 
-func (r *genericReplacer) lookup(s string, ignoreRoot bool) (val string, keylen int, found bool) {
+// caller:
+// 	1. genericReplacer.WriteString() 在 Replace() 执行替换时被调用
+func (r *genericReplacer) lookup(
+	str string, ignoreRoot bool,
+) (val string, keylen int, found bool) {
 	// Iterate down the trie to the end, and grab the value and keylen with
 	// the highest priority.
 	bestPriority := 0
@@ -135,20 +145,20 @@ func (r *genericReplacer) lookup(s string, ignoreRoot bool) (val string, keylen 
 			found = true
 		}
 
-		if s == "" {
+		if str == "" {
 			break
 		}
 		if node.table != nil {
-			index := r.mapping[s[0]]
+			index := r.mapping[str[0]]
 			if int(index) == r.tableSize {
 				break
 			}
 			node = node.table[index]
-			s = s[1:]
+			str = str[1:]
 			n++
-		} else if node.prefix != "" && HasPrefix(s, node.prefix) {
+		} else if node.prefix != "" && HasPrefix(str, node.prefix) {
 			n += len(node.prefix)
-			s = s[len(node.prefix):]
+			str = str[len(node.prefix):]
 			node = node.next
 		} else {
 			break
@@ -160,14 +170,21 @@ func (r *genericReplacer) lookup(s string, ignoreRoot bool) (val string, keylen 
 // genericReplacer is the fully generic algorithm.
 // It's used as a fallback when nothing faster can be used.
 type genericReplacer struct {
-	root trieNode
+	// 由于单个可见字符可以确定为 ASCII 码(ASCII 表的数量为256),
+	// 所以直接用索引来表示 old 字符串中的字符,
+	// 如 mapping['a'] = 1, 则表示 mapping[97] = 1.
+	// 其实是当作了 map[byte]byte 来用了.
+	//
+	// mapping maps from key bytes to a dense index for trieNode.table.
+	mapping [256]byte
+
 	// tableSize 表示 mapping 表key的数量
 	//
 	// tableSize is the size of a trie node's lookup table.
 	// It is the number of unique key bytes.
 	tableSize int
-	// mapping maps from key bytes to a dense index for trieNode.table.
-	mapping [256]byte
+
+	root trieNode
 }
 
 // 	@param oldnew: 为 Replacer{} 对象预设的规则, 成对存在, 如: old1,new1,old2,new2...
@@ -177,7 +194,7 @@ type genericReplacer struct {
 func makeGenericReplacer(oldnew []string) *genericReplacer {
 	r := new(genericReplacer)
 
-	// 遍历 oldnew 列表, 选取 old 成员, 将 old 成员中所有字符都添加到 mapping 表中.
+	// 遍历 oldnew 列表, 将 old 成员中所有字符都添加到 mapping 表中.
 	//
 	// Find each byte used, then assign them each an index.
 	for i := 0; i < len(oldnew); i += 2 {
@@ -187,10 +204,13 @@ func makeGenericReplacer(oldnew []string) *genericReplacer {
 		}
 	}
 
+	// 遍历 mapping 表, 统计所有出现过的字符数量, 赋值给 tableSize
 	for _, b := range r.mapping {
+		// 虽然 b 是 byte 类型, 不过当 var b byte = 1 时, int(b) 也还是1.
 		r.tableSize += int(b)
 	}
 
+	// ...下面这一段有什么意义???
 	var index byte
 	for i, b := range r.mapping {
 		if b == 0 {
@@ -200,9 +220,9 @@ func makeGenericReplacer(oldnew []string) *genericReplacer {
 			index++
 		}
 	}
+
 	// Ensure root node uses a lookup table (for performance).
 	r.root.table = make([]*trieNode, r.tableSize)
-
 	for i := 0; i < len(oldnew); i += 2 {
 		r.root.add(oldnew[i], oldnew[i+1], len(oldnew)-i, r)
 	}
@@ -218,9 +238,9 @@ func (w *appendSliceWriter) Write(p []byte) (int, error) {
 }
 
 // WriteString writes to the buffer without string->[]byte->string allocations.
-func (w *appendSliceWriter) WriteString(s string) (int, error) {
-	*w = append(*w, s...)
-	return len(s), nil
+func (w *appendSliceWriter) WriteString(str string) (int, error) {
+	*w = append(*w, str...)
+	return len(str), nil
 }
 
 type stringWriterIface interface {
@@ -231,8 +251,8 @@ type stringWriter struct {
 	w io.Writer
 }
 
-func (w stringWriter) WriteString(s string) (int, error) {
-	return w.w.Write([]byte(s))
+func (w stringWriter) WriteString(str string) (int, error) {
+	return w.w.Write([]byte(str))
 }
 
 func getStringWriter(w io.Writer) stringWriterIface {
@@ -243,22 +263,22 @@ func getStringWriter(w io.Writer) stringWriterIface {
 	return sw
 }
 
-func (r *genericReplacer) Replace(s string) string {
-	buf := make(appendSliceWriter, 0, len(s))
-	r.WriteString(&buf, s)
+func (r *genericReplacer) Replace(str string) string {
+	buf := make(appendSliceWriter, 0, len(str))
+	r.WriteString(&buf, str)
 	return string(buf)
 }
 
-func (r *genericReplacer) WriteString(w io.Writer, s string) (n int, err error) {
+func (r *genericReplacer) WriteString(w io.Writer, str string) (n int, err error) {
 	sw := getStringWriter(w)
 	var last, wn int
 	var prevMatchEmpty bool
-	for i := 0; i <= len(s); {
+	for i := 0; i <= len(str); {
 		// Ignore the empty match iff the previous loop found the empty match.
-		val, keylen, match := r.lookup(s[i:], prevMatchEmpty)
+		val, keylen, match := r.lookup(str[i:], prevMatchEmpty)
 		prevMatchEmpty = match && keylen == 0
 		if match {
-			wn, err = sw.WriteString(s[last:i])
+			wn, err = sw.WriteString(str[last:i])
 			n += wn
 			if err != nil {
 				return
@@ -274,8 +294,8 @@ func (r *genericReplacer) WriteString(w io.Writer, s string) (n int, err error) 
 		}
 		i++
 	}
-	if last != len(s) {
-		wn, err = sw.WriteString(s[last:])
+	if last != len(str) {
+		wn, err = sw.WriteString(str[last:])
 		n += wn
 	}
 	return

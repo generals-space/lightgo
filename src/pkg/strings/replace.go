@@ -170,8 +170,10 @@ type byteReplacer struct {
 	// old has a bit set for each old byte that should be replaced.
 	old byteBitmap
 
-	// 待替换的新字符表, 由于单个可见字符可以确定为 ASCII 码, 所以直接用索引来表示 old 字符,
-	// 值为 new 字符. 比如 new['a'] = 'b', 那就是将 new 的第97位设置为 'b'.
+	// 待替换的新字符表, 由于单个可见字符可以确定为 ASCII 码(ASCII 表的数量为256),
+	// 所以直接用索引来表示 old 字符, 值为 new 字符. 
+	// 比如 new['a'] = 'b', 那就是将 new 的第97位设置为 'b'.
+	// 其实是当作了 map[byte]byte 来用了.
 	//
 	// replacement byte, indexed by old byte.
 	// only valid if corresponding old bit is set.
