@@ -26,6 +26,8 @@ func findExecutable(file string) error {
 	return os.ErrPermission
 }
 
+// LookPath 从 PATH 环境变量的各个路径下, 寻找名称为 file 的可执行文件, 并返回其绝对路径.
+//
 // LookPath searches for an executable binary named file
 // in the directories named by the PATH environment variable.
 // If file contains a slash, it is tried directly and the PATH is not consulted.

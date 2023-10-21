@@ -96,12 +96,11 @@ type Cmd struct {
 // Command returns the Cmd struct to execute the named program with
 // the given arguments.
 //
-// It sets Path and Args in the returned structure and zeroes the
-// other fields.
+// It sets Path and Args in the returned structure and zeroes the other fields.
 //
 // If name contains no path separators, Command uses LookPath to
-// resolve the path to a complete name if possible. Otherwise it uses
-// name directly.
+// resolve the path to a complete name if possible.
+// Otherwise it uses name directly.
 //
 // The returned Cmd's Args field is constructed from the command name
 // followed by the elements of arg, so arg should not include the
