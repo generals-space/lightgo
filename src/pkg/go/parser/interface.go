@@ -74,7 +74,9 @@ const (
 // 	一般是"[注释] <package> [注释] [import]"
 //
 // caller:
-// 	1. src/pkg/go/build/build.go -> Context.Import()
+// 	1. src/pkg/go/build/build.go -> Context.Import() 
+// 	go build 时, 每构建一个 package, 就遍历该 package 下的所有文件,
+// 	调用该函数对每个文件组织成语法树并返回, 以进行语法校验.
 // 	2. src/pkg/sort/genzfunc_compatible.go -> main()
 //
 // ParseFile parses the source code of a single Go source file and returns

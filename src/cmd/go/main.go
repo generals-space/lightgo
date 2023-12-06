@@ -596,9 +596,8 @@ func allPackagesInFS(pattern string) []string {
 
 func matchPackagesInFS(pattern string) []string {
 	// Find directory to begin the scan.
-	// Could be smarter but this one optimization
-	// is enough for now, since ... is usually at the
-	// end of a path.
+	// Could be smarter but this one optimization is enough for now,
+	// since ... is usually at the end of a path.
 	i := strings.Index(pattern, "...")
 	dir, _ := path.Split(pattern[:i])
 

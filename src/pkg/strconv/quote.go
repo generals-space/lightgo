@@ -292,11 +292,13 @@ func UnquoteChar(s string, quote byte) (value rune, multibyte bool, tail string,
 	return
 }
 
+// Unquote 移除字符串 s 最外层的引号, 可以是单双以及反引号.
+// 注意: 如果 s 被多层引号包裹, 只能移除最外层一层.
+//
 // Unquote interprets s as a single-quoted, double-quoted,
-// or backquoted Go string literal, returning the string value
-// that s quotes.  (If s is single-quoted, it would be a Go
-// character literal; Unquote returns the corresponding
-// one-character string.)
+// or backquoted Go string literal, returning the string value that s quotes. 
+// (If s is single-quoted, it would be a Go character literal;
+// Unquote returns the corresponding one-character string.)
 func Unquote(s string) (t string, err error) {
 	n := len(s)
 	if n < 2 {

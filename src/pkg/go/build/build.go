@@ -24,11 +24,13 @@ import (
 
 // A Context specifies the supporting context for a build.
 type Context struct {
-	GOARCH      string // target architecture
-	GOOS        string // target operating system
-	GOROOT      string // Go root
-	GOPATH      string // Go path
-	CgoEnabled  bool   // whether cgo can be used
+	GOARCH string // target architecture
+	GOOS   string // target operating system
+	GOROOT string // Go root
+	GOPATH string // Go path
+	// 由 CGO_ENABLED 环境变量控制, 在 defaultContext() 中赋值.
+	// whether cgo can be used
+	CgoEnabled  bool
 	UseAllFiles bool   // use files regardless of +build lines, file names
 	Compiler    string // compiler to assume when computing target paths
 
@@ -229,8 +231,8 @@ func (ctxt *Context) ImportDir(dir string, mode ImportMode) (*Package, error) {
 }
 
 // NoGoError is the error used by Import to describe a directory
-// containing no buildable Go source files. (It may still contain
-// test files, files hidden by build tags, and so on.)
+// containing no buildable Go source files.
+// (It may still contain test files, files hidden by build tags, and so on.)
 type NoGoError struct {
 	Dir string
 }
@@ -247,13 +249,17 @@ func nameExt(name string) string {
 	return name[i:]
 }
 
+// Import 在标准库以及 GOPATH 目录下寻找 path 所表示的 packge, 如不存在则报错.
+// 然后为该 package 下所有文件进行语法解析, 并记录ta们的 import(),
+// 以便获取该 package 下依赖的子 package 信息.
+//
 // 	@param path: import 的目录路径, 如"fmt", "math", 也可能是相对路径, 如"."
 // 	@param srcDir: path 参数对应的绝对路径?
 //
 // caller:
 // 	1. src/cmd/go/pkg.go -> loadImport()
 // 	2. Context.ImportDir()
-// 	3. Import() 通过 default context 对象调用
+// 	3. Import() 通过 Default Context 对象调用, 则实际上没有地方调用, 可忽略这一处.
 //
 // Import returns details about the Go package named by the import path,
 // interpreting local import paths relative to the srcDir directory.
@@ -298,6 +304,8 @@ func (ctxt *Context) Import(path string, srcDir string, mode ImportMode) (*Packa
 		pkgerr = fmt.Errorf("import %q: unknown compiler %q", path, ctxt.Compiler)
 	}
 
+	// 在标准库目录, 以及其余 GOPATH 目录等寻找 path 所表示的 package.
+	// 如果没找到则报错, 找到了则跳转到 Found 块.
 	binaryOnly := false
 	if IsLocalImport(path) {
 		pkga = "" // local imports have no installed path
@@ -495,6 +503,7 @@ Found:
 			continue
 		}
 
+		// 解析当前文件, 得到语法树对象
 		pf, err := parser.ParseFile(
 			fset, filename, data, parser.ImportsOnly|parser.ParseComments,
 		)
@@ -521,7 +530,7 @@ Found:
 		} else if pkg != p.Name {
 			// 如果一个 package 目录下存在2个(甚至多个)不同的 package 名称, 则报错.
 			return p, fmt.Errorf(
-				"found packages %s (%s) and %s (%s) in %s", 
+				"found packages %s (%s) and %s (%s) in %s",
 				p.Name, firstFile, pkg, name, p.Dir,
 			)
 		}
@@ -531,12 +540,14 @@ Found:
 
 		// Record imports and information about cgo.
 		isCgo := false
+		// Decls 是当前 .go 文件中的全局声明内容, 一般为 import(), var(), const(), type A = B 块等
 		for _, decl := range pf.Decls {
 			d, ok := decl.(*ast.GenDecl)
 			if !ok {
 				continue
 			}
 			for _, dspec := range d.Specs {
+				// 只处理 import() 部分
 				spec, ok := dspec.(*ast.ImportSpec)
 				if !ok {
 					continue
@@ -618,11 +629,16 @@ func cleanImports(m map[string][]token.Position) ([]string, map[string][]token.P
 	return all, m
 }
 
+// caller: 无处调用
+//
 // Import is shorthand for Default.Import.
 func Import(path, srcDir string, mode ImportMode) (*Package, error) {
 	return Default.Import(path, srcDir, mode)
 }
 
+// caller:
+// 	1. src/cmd/go/main.go -> matchPackagesInFS() 只有这一处
+//
 // ImportDir is shorthand for Default.ImportDir.
 func ImportDir(dir string, mode ImportMode) (*Package, error) {
 	return Default.ImportDir(dir, mode)

@@ -36,7 +36,9 @@ type Package struct {
 	CFiles         []string // .c source files
 	CXXFiles       []string // .cc, .cpp and .cxx source files
 	HFiles         []string // .h, .hh, .hpp and .hxx source files
-	SFiles         []string // .s source files
+	// 当前 package 目录下的 .s 汇编源码文件
+	// .s source files
+	SFiles         []string
 	SwigFiles      []string // .swig files
 	SwigCXXFiles   []string // .swigcxx files
 	SysoFiles      []string // .syso system object files to add to archive

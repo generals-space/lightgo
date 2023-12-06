@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package ast declares the types used to represent syntax trees for Go
-// packages.
+// Package ast declares the types used to represent syntax trees for Go packages.
 //
 package ast
 
@@ -721,6 +720,8 @@ func (*RangeStmt) stmtNode()      {}
 // ----------------------------------------------------------------------------
 // Declarations
 
+// 如下声明一般指全局声明, 如 import(), var(), const(), type() 块等.
+
 // A Spec node represents a single (non-parenthesized) import,
 // constant, type, or variable declaration.
 //
@@ -740,6 +741,8 @@ type (
 		EndPos  token.Pos     // end of spec (overrides Path.Pos if nonzero)
 	}
 
+	// ValueSpec 同时包含 var(), const() 两种情况
+	//
 	// A ValueSpec node represents a constant or variable declaration
 	// (ConstSpec or VarSpec production).
 	//
@@ -807,6 +810,8 @@ type (
 		From, To token.Pos // position range of bad declaration
 	}
 
+	// 常用声明语句, 如 import(), var(), const(), type () 等块
+	//
 	// A GenDecl node (generic declaration node) represents an import,
 	// constant, type or variable declaration. A valid Lparen position
 	// (Lparen.Line > 0) indicates a parenthesized declaration.
@@ -821,8 +826,9 @@ type (
 	GenDecl struct {
 		Doc    *CommentGroup // associated documentation; or nil
 		TokPos token.Pos     // position of Tok
-		Tok    token.Token   // IMPORT, CONST, TYPE, VAR
-		Lparen token.Pos     // position of '(', if any
+		// 声明语句类型, 如 import, var, const, type 等.
+		Tok    token.Token // IMPORT, CONST, TYPE, VAR
+		Lparen token.Pos   // position of '(', if any
 		Specs  []Spec
 		Rparen token.Pos // position of ')', if any
 	}
