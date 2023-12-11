@@ -689,6 +689,7 @@ void* runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
 	return p;
 }
 
+// persistent 是一个"匿名结构体"对象, 该结构体只有这一个对象, 无法再创建同类型的其他实例.
 static struct
 {
 	Lock;
@@ -708,7 +709,8 @@ enum
 
 // 为 function, type 等内置类型分配指定大小的空间, 并返回该块空间的地址.
 //
-// param size: 待分配的空间大小. 
+// 	@param size: 待分配的空间大小. 
+// 	@param stat: 一般是 mstat 对象中的某个成员, 一个数值字段. 
 //
 // caller:
 // 	1. src/pkg/runtime/mfixalloc.c -> runtime·FixAlloc_Alloc() 
@@ -718,8 +720,7 @@ enum
 // There is no associated free operation.
 // Intended for things like function/type/debug-related persistent data.
 // If align is 0, uses default align (currently 8).
-void*
-runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
+void* runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 {
 	byte *p;
 

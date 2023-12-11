@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 
 // Malloc profiling.
+//
+// patterned after: 源自
 // Patterned after tcmalloc's algorithms; shorter code.
 
 package runtime
@@ -520,8 +522,7 @@ func GoroutineProfile(b Slice) (n int, ok bool) {
 	}
 }
 
-void
-runtime·mprofinit(void)
+void runtime·mprofinit(void)
 {
 	addrhash = runtime·persistentalloc((1<<AddrHashBits)*sizeof *addrhash, 0, &mstats.buckhash_sys);
 }
