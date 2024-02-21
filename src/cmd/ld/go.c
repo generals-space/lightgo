@@ -70,29 +70,37 @@ static void loadcgo(char*, char*, char*, int);
 static int parsemethod(char**, char*, char**);
 static int parsepkgdata(char*, char*, char**, char*, char**, char**, char**);
 
-void
-ldpkg(Biobuf *f, char *pkg, int64 len, char *filename, int whence)
+// caller:
+// 	1. src/cmd/ld/lib.c -> objfile()
+// 	2. src/cmd/ld/lib.c -> ldobj()
+void ldpkg(Biobuf *f, char *pkg, int64 len, char *filename, int whence)
 {
 	char *data, *p0, *p1, *name;
 
-	if(debug['g'])
+	if(debug['g']) {
 		return;
+	}
 
+	// 溢出
 	if((int)len != len) {
 		fprint(2, "%s: too much pkg data in %s\n", argv0, filename);
-		if(debug['u'])
+		if(debug['u']) {
 			errorexit();
+		}
 		return;
 	}
 	data = mal(len+1);
 	if(Bread(f, data, len) != len) {
 		fprint(2, "%s: short pkg read %s\n", argv0, filename);
-		if(debug['u'])
+		if(debug['u']) {
 			errorexit();
+		}
 		return;
 	}
 	data[len] = '\0';
 
+	// strstr() 判断 p0 中是否包含"\n$$"字符串, 并返回后者第1次出现的位置.
+	//
 	// first \n$$ marks beginning of exports - skip rest of line
 	p0 = strstr(data, "\n$$");
 	if(p0 == nil) {
@@ -103,32 +111,39 @@ ldpkg(Biobuf *f, char *pkg, int64 len, char *filename, int whence)
 		return;
 	}
 	p0 += 3;
-	while(*p0 != '\n' && *p0 != '\0')
+	while(*p0 != '\n' && *p0 != '\0') {
 		p0++;
+	}
 
 	// second marks end of exports / beginning of local data
 	p1 = strstr(p0, "\n$$");
 	if(p1 == nil) {
 		fprint(2, "%s: cannot find end of exports in %s\n", argv0, filename);
-		if(debug['u'])
+		if(debug['u']) {
 			errorexit();
+		}
 		return;
 	}
-	while(p0 < p1 && (*p0 == ' ' || *p0 == '\t' || *p0 == '\n'))
+	// 跳过空白字符
+	while(p0 < p1 && (*p0 == ' ' || *p0 == '\t' || *p0 == '\n')) {
 		p0++;
+	}
 	if(p0 < p1) {
 		if(strncmp(p0, "package ", 8) != 0) {
 			fprint(2, "%s: bad package section in %s - %s\n", argv0, filename, p0);
-			if(debug['u'])
+			if(debug['u']) {
 				errorexit();
+			}
 			return;
 		}
 		p0 += 8;
-		while(p0 < p1 && (*p0 == ' ' || *p0 == '\t' || *p0 == '\n'))
+		while(p0 < p1 && (*p0 == ' ' || *p0 == '\t' || *p0 == '\n')) {
 			p0++;
+		}
 		name = p0;
-		while(p0 < p1 && *p0 != ' ' && *p0 != '\t' && *p0 != '\n')
+		while(p0 < p1 && *p0 != ' ' && *p0 != '\t' && *p0 != '\n') {
 			p0++;
+		}
 		if(debug['u'] && whence != ArchiveObj &&
 		   (p0+6 > p1 || memcmp(p0, " safe\n", 6) != 0)) {
 			fprint(2, "%s: load of unsafe package %s\n", argv0, filename);
@@ -136,12 +151,14 @@ ldpkg(Biobuf *f, char *pkg, int64 len, char *filename, int whence)
 			errorexit();
 		}
 		if(p0 < p1) {
-			if(*p0 == '\n')
+			if(*p0 == '\n') {
 				*p0++ = '\0';
+			}
 			else {
 				*p0++ = '\0';
-				while(p0 < p1 && *p0++ != '\n')
+				while(p0 < p1 && *p0++ != '\n') {
 					;
+				}
 			}
 		}
 		if(strcmp(pkg, "main") == 0 && strcmp(name, "main") != 0) {
@@ -153,21 +170,24 @@ ldpkg(Biobuf *f, char *pkg, int64 len, char *filename, int whence)
 	}
 
 	// The __.PKGDEF archive summary has no local types.
-	if(whence == Pkgdef)
+	if(whence == Pkgdef) {
 		return;
+	}
 
 	// local types begin where exports end.
 	// skip rest of line after $$ we found above
 	p0 = p1 + 3;
-	while(*p0 != '\n' && *p0 != '\0')
+	while(*p0 != '\n' && *p0 != '\0') {
 		p0++;
+	}
 
 	// local types end at next \n$$.
 	p1 = strstr(p0, "\n$$");
 	if(p1 == nil) {
 		fprint(2, "%s: cannot find end of local types in %s\n", argv0, filename);
-		if(debug['u'])
+		if(debug['u']) {
 			errorexit();
+		}
 		return;
 	}
 
@@ -179,25 +199,27 @@ ldpkg(Biobuf *f, char *pkg, int64 len, char *filename, int whence)
 		p0 = strchr(p0+1, '\n');
 		if(p0 == nil) {
 			fprint(2, "%s: found $$ // cgo but no newline in %s\n", argv0, filename);
-			if(debug['u'])
+			if(debug['u']) {
 				errorexit();
+			}
 			return;
 		}
 		p1 = strstr(p0, "\n$$");
-		if(p1 == nil)
+		if(p1 == nil) {
 			p1 = strstr(p0, "\n!\n");
+		}
 		if(p1 == nil) {
 			fprint(2, "%s: cannot find end of // cgo section in %s\n", argv0, filename);
-			if(debug['u'])
+			if(debug['u']) {
 				errorexit();
+			}
 			return;
 		}
 		loadcgo(filename, pkg, p0 + 1, p1 - (p0+1));
 	}
 }
 
-static void
-loadpkgdata(char *file, char *pkg, char *data, int len)
+static void loadpkgdata(char *file, char *pkg, char *data, int len)
 {
 	char *p, *ep, *prefix, *name, *def;
 	Import *x;
@@ -229,19 +251,20 @@ loadpkgdata(char *file, char *pkg, char *data, int len)
 }
 
 // replace all "". with pkg.
-char*
-expandpkg(char *t0, char *pkg)
+char* expandpkg(char *t0, char *pkg)
 {
 	int n;
 	char *p;
 	char *w, *w0, *t;
 
 	n = 0;
-	for(p=t0; (p=strstr(p, "\"\".")) != nil; p+=3)
+	for(p=t0; (p=strstr(p, "\"\".")) != nil; p+=3) {
 		n++;
+	}
 
-	if(n == 0)
+	if(n == 0) {
 		return estrdup(t0);
+	}
 
 	// use malloc, not mal, so that caller can free
 	w0 = malloc(strlen(t0) + strlen(pkg)*n);
@@ -261,8 +284,10 @@ expandpkg(char *t0, char *pkg)
 	return w0;
 }
 
-static int
-parsepkgdata(char *file, char *pkg, char **pp, char *ep, char **prefixp, char **namep, char **defp)
+static int parsepkgdata(
+	char *file, char *pkg, 
+	char **pp, char *ep, char **prefixp, char **namep, char **defp
+)
 {
 	char *p, *prefix, *name, *def, *edef, *meth;
 	int n, inquote;
@@ -270,31 +295,40 @@ parsepkgdata(char *file, char *pkg, char **pp, char *ep, char **prefixp, char **
 	// skip white space
 	p = *pp;
 loop:
-	while(p < ep && (*p == ' ' || *p == '\t' || *p == '\n'))
+	while(p < ep && (*p == ' ' || *p == '\t' || *p == '\n')) {
 		p++;
-	if(p == ep || strncmp(p, "$$\n", 3) == 0)
+	}
+	if(p == ep || strncmp(p, "$$\n", 3) == 0) {
 		return 0;
+	}
 
 	// prefix: (var|type|func|const)
 	prefix = p;
-	if(p + 7 > ep)
+	if(p + 7 > ep) {
 		return -1;
-	if(strncmp(p, "var ", 4) == 0)
+	}
+	if(strncmp(p, "var ", 4) == 0) {
 		p += 4;
-	else if(strncmp(p, "type ", 5) == 0)
+	}
+	else if(strncmp(p, "type ", 5) == 0) {
 		p += 5;
-	else if(strncmp(p, "func ", 5) == 0)
+	}
+	else if(strncmp(p, "func ", 5) == 0) {
 		p += 5;
-	else if(strncmp(p, "const ", 6) == 0)
+	}
+	else if(strncmp(p, "const ", 6) == 0) {
 		p += 6;
+	}
 	else if(strncmp(p, "import ", 7) == 0) {
 		p += 7;
-		while(p < ep && *p != ' ')
+		while(p < ep && *p != ' ') {
 			p++;
+		}
 		p++;
 		name = p;
-		while(p < ep && *p != '\n')
+		while(p < ep && *p != '\n') {
 			p++;
+		}
 		if(p >= ep) {
 			fprint(2, "%s: %s: confused in import line\n", argv0, file);
 			nerrors++;
@@ -315,27 +349,33 @@ loop:
 	name = p;
 	inquote = 0;
 	while(p < ep) {
-		if (*p == ' ' && !inquote)
+		if (*p == ' ' && !inquote) {
 			break;
+		}
 
-		if(*p == '\\')
+		if(*p == '\\') {
 			p++;
-		else if(*p == '"')
+		}
+		else if(*p == '"') {
 			inquote = !inquote;
+		}
 
 		p++;
 	}
 
-	if(p >= ep)
+	if(p >= ep) {
 		return -1;
+	}
 	*p++ = '\0';
 
 	// def: free form to new line
 	def = p;
-	while(p < ep && *p != '\n')
+	while(p < ep && *p != '\n') {
 		p++;
-	if(p >= ep)
+	}
+	if(p >= ep) {
 		return -1;
+	}
 	edef = p;
 	*p++ = '\0';
 
@@ -349,8 +389,10 @@ loop:
 			// indented we could do something more complicated,
 			// but for now just diagnose the problem and assume
 			// 6g will keep indenting for us.
-			fprint(2, "%s: %s: expected methods to be indented %p %p %.10s\n", argv0,
-				file, edef, meth, meth);
+			fprint(
+				2, "%s: %s: expected methods to be indented %p %p %.10s\n", 
+				argv0, file, edef, meth, meth
+			);
 			nerrors++;
 			return -1;
 		}
@@ -371,32 +413,36 @@ loop:
 	return 1;
 }
 
-static int
-parsemethod(char **pp, char *ep, char **methp)
+static int parsemethod(char **pp, char *ep, char **methp)
 {
 	char *p;
 
 	// skip white space
 	p = *pp;
-	while(p < ep && (*p == ' ' || *p == '\t'))
+	while(p < ep && (*p == ' ' || *p == '\t')) {
 		p++;
-	if(p == ep)
+	}
+	if(p == ep) {
 		return 0;
+	}
 
 	// might be a comment about the method
-	if(p + 2 < ep && strncmp(p, "//", 2) == 0)
+	if(p + 2 < ep && strncmp(p, "//", 2) == 0) {
 		goto useline;
+	}
 	
 	// if it says "func (", it's a method
-	if(p + 6 < ep && strncmp(p, "func (", 6) == 0)
+	if(p + 6 < ep && strncmp(p, "func (", 6) == 0) {
 		goto useline;
+	}
 	return 0;
 
 useline:
 	// definition to end of line
 	*methp = p;
-	while(p < ep && *p != '\n')
+	while(p < ep && *p != '\n') {
 		p++;
+	}
 	if(p >= ep) {
 		fprint(2, "%s: lost end of line in method definition\n", argv0);
 		*pp = ep;
@@ -407,8 +453,7 @@ useline:
 	return 1;
 }
 
-static void
-loadcgo(char *file, char *pkg, char *p, int n)
+static void loadcgo(char *file, char *pkg, char *p, int n)
 {
 	char *pend, *next, *p0, *q;
 	char *f[10], *local, *remote, *lib;
@@ -565,8 +610,7 @@ err:
 static Sym *markq;
 static Sym *emarkq;
 
-static void
-mark1(Sym *s, Sym *parent)
+static void mark1(Sym *s, Sym *parent)
 {
 	if(s == S || s->reachable)
 		return;
@@ -581,14 +625,12 @@ mark1(Sym *s, Sym *parent)
 	emarkq = s;
 }
 
-void
-mark(Sym *s)
+void mark(Sym *s)
 {
 	mark1(s, nil);
 }
 
-static void
-markflood(void)
+static void markflood(void)
 {
 	Auto *a;
 	Prog *p;
@@ -614,8 +656,7 @@ markflood(void)
 	}
 }
 
-static char*
-markextra[] =
+static char* markextra[] =
 {
 	"runtime.morestack",
 	"runtime.morestackx",
@@ -639,8 +680,7 @@ markextra[] =
 	"_modu",
 };
 
-static int
-isz(Auto *a)
+static int isz(Auto *a)
 {
 	for(; a; a=a->link)
 		if(a->type == D_FILE || a->type == D_FILE1)
@@ -648,8 +688,7 @@ isz(Auto *a)
 	return 0;
 }
 
-static void
-addz(Sym *s, Auto *z)
+static void addz(Sym *s, Auto *z)
 {
 	Auto *a, *last;
 
@@ -657,10 +696,12 @@ addz(Sym *s, Auto *z)
 	last = nil;
 	for(a = z; a != nil; a = a->link) {
 		if(a->type == D_FILE || a->type == D_FILE1) {
-			if(last == nil)
+			if(last == nil) {
 				z = a;
-			else
+			}
+			else {
 				last->link = a;
+			}
 			last = a;
 		}
 	}
@@ -670,30 +711,33 @@ addz(Sym *s, Auto *z)
 	}
 }
 
-void
-deadcode(void)
+void deadcode(void)
 {
 	int i;
 	Sym *s, *last, *p;
 	Auto *z;
 	Fmt fmt;
 
-	if(debug['v'])
+	if(debug['v']) {
 		Bprint(&bso, "%5.2f deadcode\n", cputime());
+	}
 
 	mark(lookup(INITENTRY, 0));
-	for(i=0; i<nelem(markextra); i++)
+	for(i=0; i<nelem(markextra); i++) {
 		mark(lookup(markextra[i], 0));
+	}
 
-	for(i=0; i<ndynexp; i++)
+	for(i=0; i<ndynexp; i++) {
 		mark(dynexp[i]);
+	}
 
 	markflood();
 	
 	// keep each beginning with 'typelink.' if the symbol it points at is being kept.
 	for(s = allsym; s != S; s = s->allsym) {
-		if(strncmp(s->name, "go.typelink.", 12) == 0)
+		if(strncmp(s->name, "go.typelink.", 12) == 0) {
 			s->reachable = s->nr==1 && s->r[0].sym->reachable;
+		}
 	}
 
 	// remove dead text but keep file information (z symbols).
@@ -701,25 +745,31 @@ deadcode(void)
 	z = nil;
 	for(s = textp; s != nil; s = s->next) {
 		if(!s->reachable) {
-			if(isz(s->autom))
+			if(isz(s->autom)) {
 				z = s->autom;
+			}
 			continue;
 		}
-		if(last == nil)
+		if(last == nil) {
 			textp = s;
-		else
+		}
+		else {
 			last->next = s;
+		}
 		last = s;
 		if(z != nil) {
-			if(!isz(s->autom))
+			if(!isz(s->autom)) {
 				addz(s, z);
+			}
 			z = nil;
 		}
 	}
-	if(last == nil)
+	if(last == nil) {
 		textp = nil;
-	else
+	}
+	else {
 		last->next = nil;
+	}
 	
 	for(s = allsym; s != S; s = s->allsym)
 		if(strncmp(s->name, "go.weak.", 8) == 0) {
@@ -736,24 +786,26 @@ deadcode(void)
 			s->hide = 1;
 			if(s->reachable) {
 				fmtprint(&fmt, "%s", s->name+9);
-				for(p=s->reachparent; p; p=p->reachparent)
+				for(p=s->reachparent; p; p=p->reachparent) {
 					fmtprint(&fmt, "\t%s", p->name);
+				}
 				fmtprint(&fmt, "\n");
 			}
 			s->type = SCONST;
 			s->value = 0;
 		}
 	}
-	if(tracksym == nil)
+	if(tracksym == nil) {
 		return;
+	}
 	s = lookup(tracksym, 0);
-	if(!s->reachable)
+	if(!s->reachable) {
 		return;
+	}
 	addstrdata(tracksym, fmtstrflush(&fmt));
 }
 
-void
-doweak(void)
+void doweak(void)
 {
 	Sym *s, *t;
 
@@ -775,29 +827,30 @@ doweak(void)
 	}
 }
 
-void
-addexport(void)
+void addexport(void)
 {
 	int i;
-	
-	if(HEADTYPE == Hdarwin)
-		return;
 
-	for(i=0; i<ndynexp; i++)
+	if(HEADTYPE == Hdarwin) {
+		return;
+	}
+
+	for(i=0; i<ndynexp; i++) {
 		adddynsym(dynexp[i]);
+	}
 }
 
 /* %Z from gc, for quoting import paths */
-int
-Zconv(Fmt *fp)
+int Zconv(Fmt *fp)
 {
 	Rune r;
 	char *s, *se;
 	int n;
 
 	s = va_arg(fp->args, char*);
-	if(s == nil)
+	if(s == nil) {
 		return fmtstrcpy(fp, "<nil>");
+	}
 
 	se = s + strlen(s);
 
@@ -838,7 +891,6 @@ Zconv(Fmt *fp)
 	return 0;
 }
 
-
 typedef struct Pkg Pkg;
 struct Pkg
 {
@@ -846,6 +898,7 @@ struct Pkg
 	uchar checked;
 	Pkg *next;
 	char *path;
+	// impby: imported by 的缩写
 	Pkg **impby;
 	int nimpby;
 	int mimpby;
@@ -855,16 +908,17 @@ struct Pkg
 static Pkg *phash[1024];
 static Pkg *pkgall;
 
-static Pkg*
-getpkg(char *path)
+static Pkg* getpkg(char *path)
 {
 	Pkg *p;
 	int h;
 	
 	h = hashstr(path) % nelem(phash);
-	for(p=phash[h]; p; p=p->next)
-		if(strcmp(p->path, path) == 0)
+	for(p=phash[h]; p; p=p->next) {
+		if(strcmp(p->path, path) == 0) {
 			return p;
+		}
+	}
 	p = mal(sizeof *p);
 	p->path = estrdup(path);
 	p->next = phash[h];
@@ -874,14 +928,14 @@ getpkg(char *path)
 	return p;
 }
 
-static void
-imported(char *pkg, char *import)
+static void imported(char *pkg, char *import)
 {
 	Pkg *p, *i;
 	
 	// everyone imports runtime, even runtime.
-	if(strcmp(import, "\"runtime\"") == 0)
+	if(strcmp(import, "\"runtime\"") == 0) {
 		return;
+	}
 
 	pkg = smprint("\"%Z\"", pkg);  // turn pkg path into quoted form, freed below
 	p = getpkg(pkg);
@@ -896,14 +950,15 @@ imported(char *pkg, char *import)
 	free(pkg);
 }
 
-static Pkg*
-cycle(Pkg *p)
+// 判断并返回目标 pkg 中是否存在循环引用.
+static Pkg* cycle(Pkg *p)
 {
 	int i;
 	Pkg *bad;
 
-	if(p->checked)
+	if(p->checked) {
 		return 0;
+	}
 
 	if(p->mark) {
 		nerrors++;
@@ -917,8 +972,9 @@ cycle(Pkg *p)
 			p->mark = 0;
 			p->checked = 1;
 			print("\timports %s\n", p->path);
-			if(bad == p)
+			if(bad == p) {
 				return nil;
+			}
 			return bad;
 		}
 	}
@@ -927,17 +983,18 @@ cycle(Pkg *p)
 	return 0;
 }
 
-void
-importcycles(void)
+// caller:
+// 	1. src/cmd/ld/lib.c -> loadlib()
+void importcycles(void)
 {
 	Pkg *p;
 	
-	for(p=pkgall; p; p=p->all)
+	for(p=pkgall; p; p=p->all) {
 		cycle(p);
+	}
 }
 
-void
-setlinkmode(char *arg)
+void setlinkmode(char *arg)
 {
 	if(strcmp(arg, "internal") == 0)
 		linkmode = LinkInternal;

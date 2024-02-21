@@ -64,17 +64,19 @@ static Bucket *bbuckets;  // blocking profile buckets
 static uintptr bucketmem;
 
 // Return the bucket for stk[0:nstk], allocating new bucket if needed.
-static Bucket*
-stkbucket(int32 typ, uintptr *stk, int32 nstk, bool alloc)
+static Bucket* stkbucket(int32 typ, uintptr *stk, int32 nstk, bool alloc)
 {
 	int32 i;
 	uintptr h;
 	Bucket *b;
 
 	if(buckhash == nil) {
-		buckhash = runtime·SysAlloc(BuckHashSize*sizeof buckhash[0], &mstats.buckhash_sys);
-		if(buckhash == nil)
+		buckhash = runtime·SysAlloc(
+			BuckHashSize*sizeof buckhash[0], &mstats.buckhash_sys
+		);
+		if(buckhash == nil) {
 			runtime·throw("runtime: cannot allocate memory");
+		}
 	}
 
 	// Hash stack.
@@ -88,12 +90,16 @@ stkbucket(int32 typ, uintptr *stk, int32 nstk, bool alloc)
 	h ^= h>>11;
 
 	i = h%BuckHashSize;
-	for(b = buckhash[i]; b; b=b->next)
+	for(b = buckhash[i]; b; b=b->next) {
 		if(b->typ == typ && b->hash == h && b->nstk == nstk &&
-		   runtime·mcmp((byte*)b->stk, (byte*)stk, nstk*sizeof stk[0]) == 0)
+		   runtime·mcmp((byte*)b->stk, (byte*)stk, nstk*sizeof stk[0]) == 0) {
 			return b;
+		}
+	}
 
-	if(!alloc) return nil;
+	if(!alloc) {
+		return nil;
+	}
 
 	b = runtime·persistentalloc(sizeof *b + nstk*sizeof stk[0], 0, &mstats.buckhash_sys);
 	bucketmem += sizeof *b + nstk*sizeof stk[0];
@@ -113,8 +119,7 @@ stkbucket(int32 typ, uintptr *stk, int32 nstk, bool alloc)
 	return b;
 }
 
-static void
-MProf_GC(void)
+static void MProf_GC(void)
 {
 	Bucket *b;
 
@@ -133,8 +138,7 @@ MProf_GC(void)
 // 记录GC相关的 prof 数据信息
 //
 // Record that a gc just happened: all the 'recent' statistics are now real.
-void
-runtime·MProf_GC(void)
+void runtime·MProf_GC(void)
 {
 	runtime·lock(&proflock);
 	MProf_GC();
@@ -186,8 +190,7 @@ enum {
 };
 
 // Set the bucket associated with addr to b.
-static void
-setaddrbucket(uintptr addr, Bucket *b)
+static void setaddrbucket(uintptr addr, Bucket *b)
 {
 	int32 i;
 	uint32 h;
@@ -195,9 +198,11 @@ setaddrbucket(uintptr addr, Bucket *b)
 	AddrEntry *e;
 
 	h = (uint32)((addr>>AddrHashShift)*HashMultiplier) >> (32-AddrHashBits);
-	for(ah=addrhash[h]; ah; ah=ah->next)
-		if(ah->addr == (addr>>AddrHashShift))
+	for(ah=addrhash[h]; ah; ah=ah->next) {
+		if(ah->addr == (addr>>AddrHashShift)) {
 			goto found;
+		}
+	}
 
 	ah = runtime·persistentalloc(sizeof *ah, 0, &mstats.buckhash_sys);
 	addrmem += sizeof *ah;
@@ -209,8 +214,9 @@ found:
 	if((e = addrfree) == nil) {
 		e = runtime·persistentalloc(64*sizeof *e, 0, &mstats.buckhash_sys);
 		addrmem += 64*sizeof *e;
-		for(i=0; i+1<64; i++)
+		for(i=0; i+1<64; i++) {
 			e[i].next = &e[i+1];
+		}
 		e[63].next = nil;
 	}
 	addrfree = e->next;
@@ -222,8 +228,7 @@ found:
 }
 
 // Get the bucket associated with addr and clear the association.
-static Bucket*
-getaddrbucket(uintptr addr)
+static Bucket* getaddrbucket(uintptr addr)
 {
 	uint32 h;
 	AddrHash *ah;
@@ -231,9 +236,11 @@ getaddrbucket(uintptr addr)
 	Bucket *b;
 
 	h = (uint32)((addr>>AddrHashShift)*HashMultiplier) >> (32-AddrHashBits);
-	for(ah=addrhash[h]; ah; ah=ah->next)
-		if(ah->addr == (addr>>AddrHashShift))
+	for(ah=addrhash[h]; ah; ah=ah->next) {
+		if(ah->addr == (addr>>AddrHashShift)) {
 			goto found;
+		}
+	}
 	return nil;
 
 found:
@@ -251,8 +258,7 @@ found:
 }
 
 // Called by malloc to record a profiled block.
-void
-runtime·MProf_Malloc(void *p, uintptr size)
+void runtime·MProf_Malloc(void *p, uintptr size)
 {
 	int32 nstk;
 	uintptr stk[32];
@@ -268,8 +274,7 @@ runtime·MProf_Malloc(void *p, uintptr size)
 }
 
 // Called when freeing a profiled block.
-void
-runtime·MProf_Free(void *p, uintptr size)
+void runtime·MProf_Free(void *p, uintptr size)
 {
 	Bucket *b;
 
@@ -284,18 +289,19 @@ runtime·MProf_Free(void *p, uintptr size)
 
 int64 runtime·blockprofilerate;  // in CPU ticks
 
-void
-runtime·SetBlockProfileRate(intgo rate)
+void runtime·SetBlockProfileRate(intgo rate)
 {
 	int64 r;
 
-	if(rate <= 0)
+	if(rate <= 0) {
 		r = 0;  // disable profiling
+	}
 	else {
 		// convert ns to cycles, use float64 to prevent overflow during multiplication
 		r = (float64)rate*runtime·tickspersecond()/(1000*1000*1000);
-		if(r == 0)
+		if(r == 0) {
 			r = 1;
+		}
 	}
 	runtime·atomicstore64((uint64*)&runtime·blockprofilerate, r);
 }
@@ -303,8 +309,7 @@ runtime·SetBlockProfileRate(intgo rate)
 // caller: 
 // 	1. sema.goc -> runtime·semacquire()
 // 	2. sema.goc -> runtime_Syncsemacquire()
-void
-runtime·blockevent(int64 cycles, int32 skip)
+void runtime·blockevent(int64 cycles, int32 skip)
 {
 	int32 nstk;
 	int64 rate;
@@ -338,8 +343,7 @@ struct Record {
 };
 
 // Write b's data to r.
-static void
-record(Record *r, Bucket *b)
+static void record(Record *r, Bucket *b)
 {
 	int32 i;
 
@@ -347,10 +351,12 @@ record(Record *r, Bucket *b)
 	r->free_bytes = b->free_bytes;
 	r->alloc_objects = b->allocs;
 	r->free_objects = b->frees;
-	for(i=0; i<b->nstk && i<nelem(r->stk); i++)
+	for(i=0; i<b->nstk && i<nelem(r->stk); i++) {
 		r->stk[i] = b->stk[i];
-	for(; i<nelem(r->stk); i++)
+	}
+	for(; i<nelem(r->stk); i++) {
 		r->stk[i] = 0;
+	}
 }
 
 func MemProfile(p Slice, include_inuse_zero bool) (n int, ok bool) {
@@ -362,10 +368,12 @@ func MemProfile(p Slice, include_inuse_zero bool) (n int, ok bool) {
 	n = 0;
 	clear = true;
 	for(b=mbuckets; b; b=b->allnext) {
-		if(include_inuse_zero || b->alloc_bytes != b->free_bytes)
+		if(include_inuse_zero || b->alloc_bytes != b->free_bytes) {
 			n++;
-		if(b->allocs != 0 || b->frees != 0)
+		}
+		if(b->allocs != 0 || b->frees != 0) {
 			clear = false;
+		}
 	}
 	if(clear) {
 		// Absolutely no data, suggesting that a garbage collection
@@ -374,17 +382,21 @@ func MemProfile(p Slice, include_inuse_zero bool) (n int, ok bool) {
 		// accumulate stats as if a GC just happened, and recount buckets.
 		MProf_GC();
 		n = 0;
-		for(b=mbuckets; b; b=b->allnext)
-			if(include_inuse_zero || b->alloc_bytes != b->free_bytes)
+		for(b=mbuckets; b; b=b->allnext) {
+			if(include_inuse_zero || b->alloc_bytes != b->free_bytes) {
 				n++;
+			}
+		}
 	}
 	ok = false;
 	if(n <= p.len) {
 		ok = true;
 		r = (Record*)p.array;
-		for(b=mbuckets; b; b=b->allnext)
-			if(include_inuse_zero || b->alloc_bytes != b->free_bytes)
+		for(b=mbuckets; b; b=b->allnext) {
+			if(include_inuse_zero || b->alloc_bytes != b->free_bytes) {
 				record(r++, b);
+			}
+		}
 	}
 	runtime·unlock(&proflock);
 }
@@ -404,8 +416,9 @@ func BlockProfile(p Slice) (n int, ok bool) {
 
 	runtime·lock(&proflock);
 	n = 0;
-	for(b=bbuckets; b; b=b->allnext)
+	for(b=bbuckets; b; b=b->allnext) {
 		n++;
+	}
 	ok = false;
 	if(n <= p.len) {
 		ok = true;
@@ -413,10 +426,12 @@ func BlockProfile(p Slice) (n int, ok bool) {
 		for(b=bbuckets; b; b=b->allnext, r++) {
 			r->count = b->count;
 			r->cycles = b->cycles;
-			for(i=0; i<b->nstk && i<nelem(r->stk); i++)
+			for(i=0; i<b->nstk && i<nelem(r->stk); i++) {
 				r->stk[i] = b->stk[i];
-			for(; i<nelem(r->stk); i++)
-				r->stk[i] = 0;			
+			}
+			for(; i<nelem(r->stk); i++) {
+				r->stk[i] = 0;
+			}
 		}
 	}
 	runtime·unlock(&proflock);
@@ -434,8 +449,9 @@ func ThreadCreateProfile(p Slice) (n int, ok bool) {
 	
 	first = runtime·atomicloadp(&runtime·allm);
 	n = 0;
-	for(mp=first; mp; mp=mp->alllink)
+	for(mp=first; mp; mp=mp->alllink) {
 		n++;
+	}
 	ok = false;
 	if(n <= p.len) {
 		ok = true;
@@ -459,15 +475,18 @@ func Stack(b Slice, all bool) (n int) {
 		runtime·stoptheworld();
 	}
 
-	if(b.len == 0)
+	if(b.len == 0) {
 		n = 0;
-	else{
+	}
+	else
+	{
 		g->writebuf = (byte*)b.array;
 		g->writenbuf = b.len;
 		runtime·goroutineheader(g);
 		runtime·traceback(pc, sp, 0, g);
-		if(all)
+		if(all) {
 			runtime·tracebackothers(g);
+		}
 		n = b.len - g->writenbuf;
 		g->writebuf = nil;
 		g->writenbuf = 0;
@@ -480,14 +499,19 @@ func Stack(b Slice, all bool) (n int) {
 	}
 }
 
-static void
-saveg(uintptr pc, uintptr sp, G *gp, TRecord *r)
+// caller:
+// 	1. GoroutineProfile() 只有这一处
+static void saveg(uintptr pc, uintptr sp, G *gp, TRecord *r)
 {
 	int32 n;
-	
-	n = runtime·gentraceback((uintptr)pc, (uintptr)sp, 0, gp, 0, r->stk, nelem(r->stk), nil, nil, false);
 
-	if(n < nelem(r->stk)) r->stk[n] = 0;
+	n = runtime·gentraceback(
+		(uintptr)pc, (uintptr)sp, 0, gp, 0, r->stk, nelem(r->stk), nil, nil, false
+	);
+
+	if(n < nelem(r->stk)) {
+		r->stk[n] = 0;
+	}
 }
 
 func GoroutineProfile(b Slice) (n int, ok bool) {
@@ -497,7 +521,7 @@ func GoroutineProfile(b Slice) (n int, ok bool) {
 
 	sp = runtime·getcallersp(&b);
 	pc = (uintptr)runtime·getcallerpc(&b);
-	
+
 	ok = false;
 	n = runtime·gcount();
 	if(n <= b.len) {
@@ -511,11 +535,13 @@ func GoroutineProfile(b Slice) (n int, ok bool) {
 			r = (TRecord*)b.array;
 			saveg(pc, sp, g, r++);
 			for(gp = runtime·allg; gp != nil; gp = gp->alllink) {
-				if(gp == g || gp->status == Gdead) continue;
+				if(gp == g || gp->status == Gdead) {
+					continue;
+				}
 				saveg(gp->sched.pc, gp->sched.sp, gp, r++);
 			}
 		}
-	
+
 		m->gcing = 0;
 		runtime·semrelease(&runtime·worldsema);
 		runtime·starttheworld();
@@ -524,5 +550,7 @@ func GoroutineProfile(b Slice) (n int, ok bool) {
 
 void runtime·mprofinit(void)
 {
-	addrhash = runtime·persistentalloc((1<<AddrHashBits)*sizeof *addrhash, 0, &mstats.buckhash_sys);
+	addrhash = runtime·persistentalloc(
+		(1<<AddrHashBits)*sizeof *addrhash, 0, &mstats.buckhash_sys
+	);
 }

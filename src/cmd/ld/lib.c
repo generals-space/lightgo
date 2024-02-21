@@ -61,6 +61,9 @@ enum
 };
 int	version = HistVersion;
 
+// 如果 golang 程序只引用了如下几个库, 则可以直接使用内部链接模式(externalobj 置为 0),
+// 否则需要使用外部链接模式(externalobj 置为 1).
+//
 // Set if we see an object compiled by the host compiler that is not
 // from a package that is known to support internal linking mode.
 static int	externalobj = 0;
@@ -72,24 +75,24 @@ char*	goarch;
 char*	goos;
 char*	theline;
 
-void
-Lflag(char *arg)
+void Lflag(char *arg)
 {
 	char **p;
 
 	if(nlibdir >= maxlibdir) {
-		if (maxlibdir == 0)
+		if (maxlibdir == 0) {
 			maxlibdir = 8;
-		else
+		}
+		else {
 			maxlibdir *= 2;
+		}
 		p = erealloc(libdir, maxlibdir * sizeof(*p));
 		libdir = p;
 	}
 	libdir[nlibdir++] = arg;
 }
 
-void
-libinit(void)
+void libinit(void)
 {
 	char *suffix, *suffixsep;
 
@@ -97,8 +100,9 @@ libinit(void)
 	fmtinstall('Y', Yconv);
 	fmtinstall('Z', Zconv);
 	mywhatsys();	// get goroot, goarch, goos
-	if(strcmp(goarch, thestring) != 0)
+	if(strcmp(goarch, thestring) != 0) {
 		print("goarch is not known: %s\n", goarch);
+	}
 
 	// add goroot to the end of the libdir list.
 	suffix = "";
@@ -135,57 +139,63 @@ libinit(void)
 	lookup(INITENTRY, 0)->type = SXREF;
 }
 
-void
-errorexit(void)
+void errorexit(void)
 {
 	if(nerrors) {
-		if(cout >= 0)
+		if(cout >= 0) {
 			remove(outfile);
+		}
 		exits("error");
 	}
 	exits(0);
 }
 
-void
-addlib(char *src, char *obj)
+// caller:
+// 	1. src/cmd/6l/obj.c -> ldobj1()
+void addlib(char *src, char *obj)
 {
 	char name[1024], pname[1024], comp[256], *p;
 	int i, search;
 
-	if(histfrogp <= 0)
+	if(histfrogp <= 0) {
 		return;
+	}
 
 	search = 0;
 	if(histfrog[0]->name[1] == '/') {
 		sprint(name, "");
 		i = 1;
-	} else
-	if(isalpha((uchar)histfrog[0]->name[1]) && histfrog[0]->name[2] == ':') {
-		strcpy(name, histfrog[0]->name+1);
-		i = 1;
-	} else
-	if(histfrog[0]->name[1] == '.') {
-		sprint(name, ".");
-		i = 0;
 	} else {
-		sprint(name, "");
-		i = 0;
-		search = 1;
+		if(isalpha((uchar)histfrog[0]->name[1]) && histfrog[0]->name[2] == ':') {
+			strcpy(name, histfrog[0]->name+1);
+			i = 1;
+		} else {
+			if(histfrog[0]->name[1] == '.') {
+				sprint(name, ".");
+				i = 0;
+			} else {
+				sprint(name, "");
+				i = 0;
+				search = 1;
+			}
+		}
 	}
 
 	for(; i<histfrogp; i++) {
 		snprint(comp, sizeof comp, "%s", histfrog[i]->name+1);
 		for(;;) {
 			p = strstr(comp, "$O");
-			if(p == 0)
+			if(p == 0) {
 				break;
+			}
 			memmove(p+1, p+2, strlen(p+2)+1);
 			p[0] = thechar;
 		}
 		for(;;) {
 			p = strstr(comp, "$M");
-			if(p == 0)
+			if(p == 0) {
 				break;
+			}
 			if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
 				diag("library component too long");
 				return;
@@ -197,8 +207,9 @@ addlib(char *src, char *obj)
 			diag("library component too long");
 			return;
 		}
-		if(i > 0 || !search)
+		if(i > 0 || !search) {
 			strcat(name, "/");
+		}
 		strcat(name, comp);
 	}
 	cleanname(name);
@@ -209,59 +220,82 @@ addlib(char *src, char *obj)
 		p = name+strlen(name)-2;
 		*p = '\0';
 	}
-	
+
 	// already loaded?
-	for(i=0; i<libraryp; i++)
-		if(strcmp(library[i].pkg, name) == 0)
+	for(i=0; i<libraryp; i++) {
+		if(strcmp(library[i].pkg, name) == 0) {
 			return;
+		}
+	}
 	
 	// runtime -> runtime.a for search
-	if(p != nil)
+	if(p != nil) {
 		*p = '.';
+	}
 
 	if(search) {
 		// try dot, -L "libdir", and then goroot.
 		for(i=0; i<nlibdir; i++) {
 			snprint(pname, sizeof pname, "%s/%s", libdir[i], name);
-			if(access(pname, AEXIST) >= 0)
+			if(access(pname, AEXIST) >= 0) {
 				break;
+			}
 		}
-	}else
+	}else {
 		strcpy(pname, name);
+	}
 	cleanname(pname);
 
 	/* runtime.a -> runtime */
-	if(p != nil)
+	if(p != nil) {
 		*p = '\0';
+	}
 
-	if(debug['v'] > 1)
+	if(debug['v'] > 1) {
 		Bprint(&bso, "%5.2f addlib: %s %s pulls in %s\n", cputime(), obj, src, pname);
+	}
 
 	addlibpath(src, obj, pname, name);
 }
 
-/*
- * add library to library list.
- *	srcref: src file referring to package
- *	objref: object file referring to package
- *	file: object file, e.g., /home/rsc/go/pkg/container/vector.a
- *	pkg: package import path, e.g. container/vector
- */
-void
-addlibpath(char *srcref, char *objref, char *file, char *pkg)
+// 将 pkg 参数所表示的链接库(需要提前编译成 .a 文件)添加到 library 库数组中.
+// 添加过程中, 可能会遇到数组已满的情况, 会在该函数中自动进行扩容.
+//
+// 	@param file: 格式如"pkg/linux_amd64/runtime.a"这种, 为 pkg 参数所表示的链接库的路径.
+// 	@param pkg: 如"runtime"等标准库名称.
+//
+// caller:
+// 	1. addlib()
+// 	2. loadinternal() 加载 runtime, math 等4个内部标准库时才会被调用到.
+//
+// add library to library list.
+//	srcref: src file referring to package
+//	objref: object file referring to package
+//	file: object file, e.g., /home/rsc/go/pkg/container/vector.a
+//	pkg: package import path, e.g. container/vector
+//
+void addlibpath(char *srcref, char *objref, char *file, char *pkg)
 {
 	int i;
 	Library *l;
 	char *p;
 
-	for(i=0; i<libraryp; i++)
-		if(strcmp(file, library[i].file) == 0)
+	// 如果目标标准库已经加载过了, 就直接返回, 不需要重复引入.
+	for(i=0; i<libraryp; i++) {
+		if(strcmp(file, library[i].file) == 0) {
 			return;
+		}
+	}
 
-	if(debug['v'] > 1)
-		Bprint(&bso, "%5.2f addlibpath: srcref: %s objref: %s file: %s pkg: %s\n",
-			cputime(), srcref, objref, file, pkg);
+	if(debug['v'] > 1) {
+		Bprint(
+			&bso, "%5.2f addlibpath: srcref: %s objref: %s file: %s pkg: %s\n",
+			cputime(), srcref, objref, file, pkg
+		);
+	}
 
+	// 如果 library 数组已经满了, 则为其扩容.
+	// 扩容规则类似于 append() 函数, 容量直接翻倍, 再额外加50...bytes?
 	if(libraryp == nlibrary){
 		nlibrary = 50 + 2*libraryp;
 		library = erealloc(library, sizeof library[0] * nlibrary);
@@ -286,29 +320,39 @@ addlibpath(char *srcref, char *objref, char *file, char *pkg)
 	l->pkg = p;
 }
 
-void
-loadinternal(char *name)
+// 寻找 name 参数所表示的标准库, 找到后将其添加到库列表中.
+//
+// 	@param name: 内部标准库的名称, 不过也只有4个会调用到该函数, 如"runtime", "math"等.
+//
+// caller:
+// 	1. loadlib()
+void loadinternal(char *name)
 {
 	char pname[1024];
 	int i, found;
 
 	found = 0;
+	// libdir 是一个列表, 存放着可用于查找链接库的所有路径.
+	// 这里遍历所有链接库路径, 寻找 name 参数所表示的标准库.
 	for(i=0; i<nlibdir; i++) {
 		snprint(pname, sizeof pname, "%s/%s.a", libdir[i], name);
-		if(debug['v'])
+		if(debug['v']) {
 			Bprint(&bso, "searching for %s.a in %s\n", name, pname);
+		}
 		if(access(pname, AEXIST) >= 0) {
 			addlibpath("internal", "internal", pname, name);
 			found = 1;
 			break;
 		}
 	}
-	if(!found)
+	if(!found) {
 		Bprint(&bso, "warning: unable to find %s.a\n", name);
+	}
 }
 
-void
-loadlib(void)
+// caller:
+// 	1. src/cmd/6l/obj.c -> main() 只有这一处
+void loadlib(void)
 {
 	int i, w, x;
 	Sym *s, *gmsym;
@@ -320,15 +364,17 @@ loadlib(void)
 	}
 
 	loadinternal("runtime");
-	if(thechar == '5')
+	if(thechar == '5') {
 		loadinternal("math");
-	if(flag_race)
+	}
+	if(flag_race) {
 		loadinternal("runtime/race");
+	}
 	if(linkmode == LinkExternal) {
 		// This indicates a user requested -linkmode=external.
 		// The startup code uses an import of runtime/cgo to decide
-		// whether to initialize the TLS.  So give it one.  This could
-		// be handled differently but it's an unusual case.
+		// whether to initialize the TLS. So give it one. 
+		// This could be handled differently but it's an unusual case.
 		loadinternal("runtime/cgo");
 		// Pretend that we really imported the package.
 		// This will do no harm if we did in fact import it.
@@ -339,17 +385,24 @@ loadlib(void)
 	}
 
 	for(i=0; i<libraryp; i++) {
-		if(debug['v'] > 1)
-			Bprint(&bso, "%5.2f autolib: %s (from %s)\n", cputime(), library[i].file, library[i].objref);
+		if(debug['v'] > 1) {
+			Bprint(
+				&bso, "%5.2f autolib: %s (from %s)\n", 
+				cputime(), library[i].file, library[i].objref
+			);
+		}
+		// 如果 golang 程序有引入过"runtime/go", 则表示需要开启 cgo.
 		iscgo |= strcmp(library[i].pkg, "runtime/cgo") == 0;
 		objfile(library[i].file, library[i].pkg);
 	}
-	
+
 	if(linkmode == LinkAuto) {
-		if(iscgo && externalobj)
+		if(iscgo && externalobj) {
 			linkmode = LinkExternal;
-		else
+		}
+		else {
 			linkmode = LinkInternal;
+		}
 	}
 
 	if(linkmode == LinkInternal) {
@@ -363,8 +416,9 @@ loadlib(void)
 				// now.
 				if(s->extname != nil && s->dynimplib != nil && s->cgoexport == 0) {
 					s->type = SDYNIMPORT;
-				} else
+				} else {
 					s->type = 0;
+				}
 			}
 	}
 	
@@ -372,26 +426,33 @@ loadlib(void)
 	gmsym->type = STLSBSS;
 	gmsym->size = 2*PtrSize;
 	gmsym->hide = 1;
-	if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd)
+	if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd) {
 		gmsym->reachable = 1;
-	else
+	}
+	else {
 		gmsym->reachable = 0;
+	}
 
 	// Now that we know the link mode, trim the dynexp list.
 	x = CgoExportDynamic;
-	if(linkmode == LinkExternal)
+	if(linkmode == LinkExternal) {
 		x = CgoExportStatic;
+	}
 	w = 0;
-	for(i=0; i<ndynexp; i++)
-		if(dynexp[i]->cgoexport & x)
+	for(i=0; i<ndynexp; i++) {
+		if(dynexp[i]->cgoexport & x) {
 			dynexp[w++] = dynexp[i];
+		}
+	}
 	ndynexp = w;
 	
 	// In internal link mode, read the host object files.
-	if(linkmode == LinkInternal)
+	if(linkmode == LinkInternal) {
 		hostobjs();
-	else
+	}
+	else {
 		hostlinksetup();
+	}
 
 	// We've loaded all the code now.
 	// If there are no dynamic libraries needed, gcc disables dynamic linking.
@@ -402,8 +463,9 @@ loadlib(void)
 	//
 	// Exception: on OS X, programs such as Shark only work with dynamic
 	// binaries, so leave it enabled on OS X (Mach-O) binaries.
-	if(!flag_shared && !havedynamic && HEADTYPE != Hdarwin)
+	if(!flag_shared && !havedynamic && HEADTYPE != Hdarwin) {
 		debug['d'] = 1;
+	}
 	
 	importcycles();
 }
@@ -440,8 +502,14 @@ nextar(Biobuf *bp, int off, struct ar_hdr *a)
 	return arsize + r;
 }
 
-void
-objfile(char *file, char *pkg)
+// 读取 file 参数所表示的库文件, 并将其加载到 library 库数组中.
+//
+// 	@param file: 格式如"pkg/linux_amd64/runtime.a"这种, 为 pkg 参数所表示的链接库的路径.
+// 	@param pkg: 如"runtime"等标准库名称.
+//
+// caller:
+// 	1. loadlib()
+void objfile(char *file, char *pkg)
 {
 	int32 off, l;
 	Biobuf *f;
@@ -451,8 +519,9 @@ objfile(char *file, char *pkg)
 
 	pkg = smprint("%i", pkg);
 
-	if(debug['v'] > 1)
+	if(debug['v'] > 1) {
 		Bprint(&bso, "%5.2f ldobj: %s (%s)\n", cputime(), file, pkg);
+	}
 	Bflush(&bso);
 	f = Bopen(file, 0);
 	if(f == nil) {
@@ -469,7 +538,7 @@ objfile(char *file, char *pkg)
 		free(pkg);
 		return;
 	}
-	
+
 	/* skip over __.GOSYMDEF */
 	off = Boffset(f);
 	if((l = nextar(f, off, &arhdr)) <= 0) {
@@ -481,7 +550,7 @@ objfile(char *file, char *pkg)
 		goto out;
 	}
 	off += l;
-	
+
 	/* skip over (or process) __.PKGDEF */
 	if((l = nextar(f, off, &arhdr)) <= 0) {
 		diag("%s: short read on archive file symbol header", file);
@@ -493,8 +562,9 @@ objfile(char *file, char *pkg)
 	}
 	off += l;
 
-	if(debug['u'])
+	if(debug['u']) {
 		ldpkg(f, pkg, atolwhex(arhdr.size), file, Pkgdef);
+	}
 
 	/*
 	 * load all the object files from the archive now.
@@ -510,8 +580,9 @@ objfile(char *file, char *pkg)
 	 */
 	for(;;) {
 		l = nextar(f, off, &arhdr);
-		if(l == 0)
+		if(l == 0) {
 			break;
+		}
 		if(l < 0) {
 			diag("%s: malformed archive", file);
 			goto out;
@@ -519,9 +590,13 @@ objfile(char *file, char *pkg)
 		off += l;
 
 		l = SARNAME;
-		while(l > 0 && arhdr.name[l-1] == ' ')
+		while(l > 0 && arhdr.name[l-1] == ' ') {
 			l--;
-		snprint(pname, sizeof pname, "%s(%.*s)", file, utfnlen(arhdr.name, l), arhdr.name);
+		}
+		snprint(
+			pname, sizeof pname, "%s(%.*s)", 
+			file, utfnlen(arhdr.name, l), arhdr.name
+		);
 		l = atolwhex(arhdr.size);
 		ldobj(f, pkg, l, pname, file, ArchiveObj);
 	}
@@ -531,8 +606,7 @@ out:
 	free(pkg);
 }
 
-static void
-dowrite(int fd, char *p, int n)
+static void dowrite(int fd, char *p, int n)
 {
 	int m;
 	
@@ -564,6 +638,9 @@ Hostobj *hostobj;
 int nhostobj;
 int mhostobj;
 
+// 如果 golang 程序只引用了如下几个库, 则可以直接使用内部链接模式(externalobj 置为 0),
+// 否则需要使用外部链接模式(externalobj 置为 1).
+//
 // These packages can use internal linking mode.
 // Others trigger external mode.
 const char *internalpkg[] = {
@@ -574,8 +651,12 @@ const char *internalpkg[] = {
 	"runtime/race"
 };
 
-void
-ldhostobj(void (*ld)(Biobuf*, char*, int64, char*), Biobuf *f, char *pkg, int64 len, char *pn, char *file)
+// caller:
+// 	1. ldobj() 只有这一处
+void ldhostobj(
+	void (*ld)(Biobuf*, char*, int64, char*), 
+	Biobuf *f, char *pkg, int64 len, char *pn, char *file
+)
 {
 	int i, isinternal;
 	Hostobj *h;
@@ -589,23 +670,30 @@ ldhostobj(void (*ld)(Biobuf*, char*, int64, char*), Biobuf *f, char *pkg, int64 
 	}
 
 	// DragonFly declares errno with __thread, which results in a symbol
-	// type of R_386_TLS_GD or R_X86_64_TLSGD. The Go linker does not
-	// currently know how to handle TLS relocations, hence we have to
-	// force external linking for any libraries that link in code that
-	// uses errno. This can be removed if the Go linker ever supports
-	// these relocation types.
-	if(HEADTYPE == Hdragonfly)
-	if(strcmp(pkg, "net") == 0 || strcmp(pkg, "os/user") == 0)
-		isinternal = 0;
+	// type of R_386_TLS_GD or R_X86_64_TLSGD.
+	// The Go linker does not currently know how to handle TLS relocations,
+	// hence we have to force external linking for any libraries that
+	// link in code that uses errno.
+	// This can be removed if the Go linker ever supports these relocation types.
+	if(HEADTYPE == Hdragonfly) {
+		if(strcmp(pkg, "net") == 0 || strcmp(pkg, "os/user") == 0) {
+			isinternal = 0;
+		}
+	}
 
-	if(!isinternal)
+	if(!isinternal) {
 		externalobj = 1;
-
+	}
+	// 类比 golang 中的切片对象, nhostobj 为 len(即实际成员数量), mhostobj 为 cap(容量),
+	// 当 nhostobj >= mhostobj 成立时, 表示 hostobj 数组已满, 对其进行扩容.
+	// 扩容规则也与 append() 函数相似, 容量直接翻倍.
 	if(nhostobj >= mhostobj) {
-		if(mhostobj == 0)
+		if(mhostobj == 0) {
 			mhostobj = 16;
-		else
+		}
+		else {
 			mhostobj *= 2;
+		}
 		hostobj = erealloc(hostobj, mhostobj*sizeof hostobj[0]);
 	}
 	h = &hostobj[nhostobj++];
@@ -617,8 +705,7 @@ ldhostobj(void (*ld)(Biobuf*, char*, int64, char*), Biobuf *f, char *pkg, int64 
 	h->len = len;
 }
 
-void
-hostobjs(void)
+void hostobjs(void)
 {
 	int i;
 	Biobuf *f;
@@ -643,19 +730,18 @@ int runcmd(char**);
 char* mktempdir(void);
 void removeall(char*);
 
-static void
-rmtemp(void)
+static void rmtemp(void)
 {
 	removeall(tmpdir);
 }
 
-static void
-hostlinksetup(void)
+static void hostlinksetup(void)
 {
 	char *p;
 
-	if(linkmode != LinkExternal)
+	if(linkmode != LinkExternal) {
 		return;
+	}
 
 	// create temporary directory and arrange cleanup
 	if(tmpdir == nil) {
@@ -674,8 +760,7 @@ hostlinksetup(void)
 	free(p);
 }
 
-void
-hostlink(void)
+void hostlink(void)
 {
 	char *p, **argv;
 	int c, i, w, n, argc, len;
@@ -683,24 +768,28 @@ hostlink(void)
 	Biobuf *f;
 	static char buf[64<<10];
 
-	if(linkmode != LinkExternal || nerrors > 0)
+	if(linkmode != LinkExternal || nerrors > 0) {
 		return;
+	}
 
 	c = 0;
 	p = extldflags;
 	while(p != nil) {
-		while(*p == ' ')
+		while(*p == ' ') {
 			p++;
-		if(*p == '\0')
+		}
+		if(*p == '\0') {
 			break;
+		}
 		c++;
 		p = strchr(p + 1, ' ');
 	}
 
 	argv = malloc((13+nhostobj+nldflag+c)*sizeof argv[0]);
 	argc = 0;
-	if(extld == nil)
+	if(extld == nil) {
 		extld = "gcc";
+	}
 	argv[argc++] = extld;
 	switch(thechar){
 	case '8':
@@ -728,12 +817,14 @@ hostlink(void)
 	argv[argc++] = "-o";
 	argv[argc++] = outfile;
 	
-	if(rpath)
+	if(rpath) {
 		argv[argc++] = smprint("-Wl,-rpath,%s", rpath);
+	}
 
 	// Force global symbols to be exported for dlopen, etc.
-	if(iself)
+	if(iself) {
 		argv[argc++] = "-rdynamic";
+	}
 
 	// already wrote main object file
 	// copy host objects to temporary directory
@@ -756,8 +847,9 @@ hostlink(void)
 		}
 		len = h->len;
 		while(len > 0 && (n = Bread(f, buf, sizeof buf)) > 0){
-			if(n > len)
+			if(n > len) {
 				n = len;
+			}
 			dowrite(w, buf, n);
 			len -= n;
 		}
@@ -770,15 +862,18 @@ hostlink(void)
 	}
 	
 	argv[argc++] = smprint("%s/go.o", tmpdir);
-	for(i=0; i<nldflag; i++)
+	for(i=0; i<nldflag; i++) {
 		argv[argc++] = ldflag[i];
+	}
 
 	p = extldflags;
 	while(p != nil) {
-		while(*p == ' ')
+		while(*p == ' ') {
 			*p++ = '\0';
-		if(*p == '\0')
+		}
+		if(*p == '\0') {
 			break;
+		}
 		argv[argc++] = p;
 		p = strchr(p + 1, ' ');
 	}
@@ -788,8 +883,9 @@ hostlink(void)
 	quotefmtinstall();
 	if(debug['v']) {
 		Bprint(&bso, "host link:");
-		for(i=0; i<argc; i++)
+		for(i=0; i<argc; i++) {
 			Bprint(&bso, " %q", argv[i]);
+		}
 		Bprint(&bso, "\n");
 		Bflush(&bso);
 	}
@@ -801,8 +897,9 @@ hostlink(void)
 	}
 }
 
-void
-ldobj(Biobuf *f, char *pkg, int64 len, char *pn, char *file, int whence)
+// caller:
+// 	1. objfile() 只有这一个函数, 但有2处调用.
+void ldobj(Biobuf *f, char *pkg, int64 len, char *pn, char *file, int whence)
 {
 	char *line;
 	int n, c1, c2, c3, c4;
@@ -842,7 +939,10 @@ ldobj(Biobuf *f, char *pkg, int64 len, char *pn, char *file, int whence)
 	line[n] = '\0';
 	if(strncmp(line, "go object ", 10) != 0) {
 		if(strlen(pn) > 3 && strcmp(pn+strlen(pn)-3, ".go") == 0) {
-			print("%cl: input %s is not .%c file (use %cg to compile .go files)\n", thechar, pn, thechar, thechar);
+			print(
+				"%cl: input %s is not .%c file (use %cg to compile .go files)\n", 
+				thechar, pn, thechar, thechar
+			);
 			errorexit();
 		}
 		if(strcmp(line, thestring) == 0) {
@@ -911,16 +1011,16 @@ eof:
 	free(pn);
 }
 
-Sym*
-newsym(char *symb, int v)
+Sym* newsym(char *symb, int v)
 {
 	Sym *s;
 	int l;
 
 	l = strlen(symb) + 1;
 	s = mal(sizeof(*s));
-	if(debug['v'] > 1)
+	if(debug['v'] > 1) {
 		Bprint(&bso, "newsym %s\n", symb);
+	}
 
 	s->dynid = -1;
 	s->plt = -1;
@@ -941,8 +1041,7 @@ newsym(char *symb, int v)
 	return s;
 }
 
-static Sym*
-_lookup(char *symb, int v, int creat)
+static Sym* _lookup(char *symb, int v, int creat)
 {
 	Sym *s;
 	char *p;
@@ -2076,8 +2175,12 @@ estrdup(char *p)
 	return p;
 }
 
-void*
-erealloc(void *p, long n)
+// 本函数是对 realloc() 的封装, 同样是对已分配内存的块 p 进行扩缩容的操作.
+//
+// 	@param n: 表示新区块的大小.
+//
+// 看样子 realloc() 是在分配新区块后把原区块的内容拷贝过去了, 并不是在原区块上进行扩缩容的.
+void* erealloc(void *p, long n)
 {
 	p = realloc(p, n);
 	if(p == nil) {
@@ -2089,8 +2192,7 @@ erealloc(void *p, long n)
 }
 
 // Saved history stacks encountered while reading archives.
-// Keeping them allows us to answer virtual lineno -> file:line
-// queries.
+// Keeping them allows us to answer virtual lineno -> file:line queries.
 //
 // The history stack is a complex data structure, described best at the
 // bottom of http://plan9.bell-labs.com/magic/man2html/6/a.out.
@@ -2356,10 +2458,12 @@ ftabaddstring(Sym *ftab, char *s)
 	return start;
 }
 
-// pclntab initializes the pclntab symbol with
-// runtime function and file name information.
-void
-pclntab(void)
+// pclntab initializes the pclntab symbol with runtime function
+// and file name information.
+//
+// caller:
+// 	1. src/cmd/6l/obj.c -> main() 链接过程中调用
+void pclntab(void)
 {
 	Prog *p;
 	int32 i, n, nfunc, start, funcstart;
@@ -2367,7 +2471,7 @@ pclntab(void)
 	Sym *ftab, *s;
 	int32 npcdata, nfuncdata, off, end;
 	int64 funcdata_bytes;
-	
+
 	funcdata_bytes = 0;
 	ftab = lookup("pclntab", 0);
 	ftab->type = SPCLNTAB;
@@ -2380,8 +2484,9 @@ pclntab(void)
 	//	end PC [PtrSize bytes]
 	//	offset to file table [4 bytes]
 	nfunc = 0;
-	for(cursym = textp; cursym != nil; cursym = cursym->next)
+	for(cursym = textp; cursym != nil; cursym = cursym->next) {
 		nfunc++;
+	}
 	symgrow(ftab, 8+PtrSize+nfunc*2*PtrSize+PtrSize+4);
 	setuint32(ftab, 0, 0xfffffffb);
 	setuint8(ftab, 6, MINLC);
@@ -2399,17 +2504,20 @@ pclntab(void)
 		npcdata = 0;
 		nfuncdata = 0;
 		for(p = cursym->text; p != P; p = p->link) {
-			if(p->as == APCDATA && p->from.offset >= npcdata)
+			if(p->as == APCDATA && p->from.offset >= npcdata) {
 				npcdata = p->from.offset+1;
-			if(p->as == AFUNCDATA && p->from.offset >= nfuncdata)
+			}
+			if(p->as == AFUNCDATA && p->from.offset >= nfuncdata) {
 				nfuncdata = p->from.offset+1;
+			}
 		}
 
 		// fixed size of struct, checked below
 		off = funcstart;
 		end = funcstart + PtrSize + 3*4 + 5*4 + npcdata*4 + nfuncdata*PtrSize;
-		if(nfuncdata > 0 && (end&(PtrSize-1)))
+		if(nfuncdata > 0 && (end&(PtrSize-1))) {
 			end += 4;
+		}
 		symgrow(ftab, end);
 
 		// entry uintptr
@@ -2420,21 +2528,25 @@ pclntab(void)
 		
 		// args int32
 		// TODO: Move into funcinfo.
-		if(cursym->text == nil)
+		if(cursym->text == nil) {
 			off = setuint32(ftab, off, ArgsSizeUnknown);
-		else
+		}
+		else {
 			off = setuint32(ftab, off, cursym->args);
-	
+		}
+
 		// frame int32
 		// TODO: Remove entirely. The pcsp table is more precise.
 		// This is only used by a fallback case during stack walking
 		// when a called function doesn't have argument information.
 		// We need to make sure everything has argument information
 		// and then remove this.
-		if(cursym->text == nil)
+		if(cursym->text == nil) {
 			off = setuint32(ftab, off, 0);
-		else
+		}
+		else {
 			off = setuint32(ftab, off, (uint32)cursym->text->to.offset+PtrSize);
+		}
 
 		// pcsp table (offset int32)
 		off = addpctab(ftab, off, cursym, "pctospadj", pctospadj, 0);
@@ -2457,12 +2569,14 @@ pclntab(void)
 		havefunc = havepc + (npcdata+31)/32;
 		for(p = cursym->text; p != P; p = p->link) {
 			if(p->as == AFUNCDATA) {
-				if((havefunc[p->from.offset/32]>>(p->from.offset%32))&1)
+				if((havefunc[p->from.offset/32]>>(p->from.offset%32))&1) {
 					diag("multiple definitions for FUNCDATA $%d", p->from.offset);
+				}
 				havefunc[p->from.offset/32] |= 1<<(p->from.offset%32);
 			}
-			if(p->as == APCDATA)
+			if(p->as == APCDATA) {
 				havepc[p->from.offset/32] |= 1<<(p->from.offset%32);
+			}
 		}
 
 		// pcdata.
@@ -2480,13 +2594,15 @@ pclntab(void)
 		// Unlike pcdata, can gather in a single pass.
 		// Missing funcdata will be 0 (nil pointer).
 		if(nfuncdata > 0) {
-			if(off&(PtrSize-1))
+			if(off&(PtrSize-1)) {
 				off += 4;
+			}
 			for(p = cursym->text; p != P; p = p->link) {
 				if(p->as == AFUNCDATA) {
 					i = p->from.offset;
-					if(p->to.type == D_CONST)
+					if(p->to.type == D_CONST) {
 						setuintxx(ftab, off+PtrSize*i, p->to.offset, PtrSize);
+					}
 					else {
 						// TODO: Dedup.
 						funcdata_bytes += p->to.sym->size;
@@ -2498,13 +2614,17 @@ pclntab(void)
 		}
 
 		if(off != end) {
-			diag("bad math in functab: funcstart=%d off=%d but end=%d (npcdata=%d nfuncdata=%d)", funcstart, off, end, npcdata, nfuncdata);
+			diag(
+				"bad math in functab: funcstart=%d off=%d but end=%d (npcdata=%d nfuncdata=%d)", 
+				funcstart, off, end, npcdata, nfuncdata
+			);
 			errorexit();
 		}
 	
 		// Final entry of table is just end pc.
-		if(cursym->next == nil)
+		if(cursym->next == nil) {
 			setaddrplus(ftab, 8+PtrSize+(nfunc+1)*2*PtrSize, cursym, cursym->size);
+		}
 	}
 	
 	// Start file table.
@@ -2514,11 +2634,16 @@ pclntab(void)
 
 	symgrow(ftab, start+(nhistfile+1)*4);
 	setuint32(ftab, start, nhistfile);
-	for(s = filesyms; s != S; s = s->next)
+	for(s = filesyms; s != S; s = s->next) {
 		setuint32(ftab, start + s->value*4, ftabaddstring(ftab, s->name));
+	}
 
 	ftab->size = ftab->np;
 	
-	if(debug['v'])
-		Bprint(&bso, "%5.2f pclntab=%lld bytes, funcdata total %lld bytes\n", cputime(), (vlong)ftab->size, (vlong)funcdata_bytes);
+	if(debug['v']) {
+		Bprint(
+			&bso, "%5.2f pclntab=%lld bytes, funcdata total %lld bytes\n", 
+			cputime(), (vlong)ftab->size, (vlong)funcdata_bytes
+		);
+	}
 }	

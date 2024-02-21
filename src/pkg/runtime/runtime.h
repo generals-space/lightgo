@@ -331,7 +331,7 @@ struct	G
 	// 每次在调用 runtime·newstack() 时, 都会将新申请的栈空间大小, 加到这个成员变量中.
 	uintptr	stacksize;
 
-	// 指向了 runtime·allg 全局变量(是一个链表)
+	// 指向G链表队列中的下一个G对象
 	//
 	// on allg
 	G*	alllink;
@@ -462,7 +462,7 @@ struct	M
 	// m 休眠|等待的地址.
 	// 在 stoplockedm(), stopm() 两处被调用 notesleep().
 	Note	park;
-	// 指向全局调度器的 m 列表
+	// 指向M链表队列中的下一个M对象
 	//
 	// on allm
 	M*	alllink;
@@ -962,7 +962,8 @@ bool	runtime·topofstack(Func*);
 extern	String	runtime·emptystring;
 extern	uintptr runtime·zerobase;
 // 各p的本地队列中, 加上全局队列中所有G对象的链表
-extern	G*	runtime·allg; 
+extern	G*	runtime·allg;
+// 全局队列中末尾的G对象
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
 

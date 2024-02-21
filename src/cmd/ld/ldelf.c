@@ -321,8 +321,9 @@ valuecmp(Sym *a, Sym *b)
 	return 0;
 }
 
-void
-ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
+// caller:
+// 	1. src/cmd/ld/lib.c -> ldobj(), 作为 ldhostobj() 的参数被传入
+void ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 {
 	int32 base;
 	uint64 add, info;
@@ -575,28 +576,39 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 				s->type = SBSS;
 			continue;
 		}
-		if(sym.shndx >= obj->nsect || sym.shndx == 0)
+		if(sym.shndx >= obj->nsect || sym.shndx == 0) {
 			continue;
+		}
 		// even when we pass needSym == 1 to readsym, it might still return nil to skip some unwanted symbols
-		if(sym.sym == S)
+		if(sym.sym == S) {
 			continue;
+		}
 		sect = obj->sect+sym.shndx;
 		if(sect->sym == nil) {
-			diag("%s: sym#%d: ignoring %s in section %d (type %d)", pn, i, sym.name, sym.shndx, sym.type);
+			diag(
+				"%s: sym#%d: ignoring %s in section %d (type %d)", 
+				pn, i, sym.name, sym.shndx, sym.type
+			);
 			continue;
 		}
 		s = sym.sym;
 		if(s->outer != S) {
-			if(s->dupok)
+			if(s->dupok) {
 				continue;
-			diag("%s: duplicate symbol reference: %s in both %s and %s", pn, s->name, s->outer->name, sect->sym->name);
+			}
+			diag(
+				"%s: duplicate symbol reference: %s in both %s and %s", 
+				pn, s->name, s->outer->name, sect->sym->name
+			);
 			errorexit();
 		}
 		s->sub = sect->sym->sub;
 		sect->sym->sub = s;
 		s->type = sect->sym->type | (s->type&~SMASK) | SSUB;
-		if(!(s->cgoexport & CgoExportDynamic))
-			s->dynimplib = nil;  // satisfy dynimport
+		if(!(s->cgoexport & CgoExportDynamic)) {
+			// satisfy dynimport
+			s->dynimplib = nil;
+		}
 		s->value = sym.value;
 		s->size = sym.size;
 		s->outer = sect->sym;
@@ -626,15 +638,19 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 	// This keeps textp in increasing address order.
 	for(i=0; i<obj->nsect; i++) {
 		s = obj->sect[i].sym;
-		if(s == S)
+		if(s == S) {
 			continue;
-		if(s->sub)
+		}
+		if(s->sub) {
 			s->sub = listsort(s->sub, valuecmp, offsetof(Sym, sub));
+		}
 		if(s->type == STEXT) {
-			if(etextp)
+			if(etextp) {
 				etextp->next = s;
-			else
+			}
+			else {
 				textp = s;
+			}
 			etextp = s;
 			for(s = s->sub; s != S; s = s->sub) {
 				etextp->next = s;
@@ -675,27 +691,33 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 				rp->off = e->e32(p);
 				p += 4;
 				info = e->e32(p);
-				info = info>>8<<32 | (info&0xff);	// convert to 64-bit info
+				// convert to 64-bit info
+				info = info>>8<<32 | (info&0xff);
 				p += 4;
 				if(rela) {
 					add = e->e32(p);
 					p += 4;
 				}
 			}
-			if((info & 0xffffffff) == 0) { // skip R_*_NONE relocation
+			if((info & 0xffffffff) == 0) { 
+				// skip R_*_NONE relocation
 				j--;
 				n--;
 				continue;
 			}
-			if((info >> 32) == 0) { // absolute relocation, don't bother reading the null symbol
+			if((info >> 32) == 0) { 
+				// absolute relocation, don't bother reading the null symbol
 				rp->sym = S;
 			} else {
-				if(readsym(obj, info>>32, &sym, 0) < 0)
+				if(readsym(obj, info>>32, &sym, 0) < 0) {
 					goto bad;
+				}
 				sym.sym = symbols[info>>32];
 				if(sym.sym == nil) {
-					werrstr("%s#%d: reloc of invalid sym #%d %s shndx=%d type=%d",
-						sect->sym->name, j, (int)(info>>32), sym.name, sym.shndx, sym.type);
+					werrstr(
+						"%s#%d: reloc of invalid sym #%d %s shndx=%d type=%d",
+						sect->sym->name, j, (int)(info>>32), sym.name, sym.shndx, sym.type
+					);
 					goto bad;
 				}
 				rp->sym = sym.sym;
@@ -713,7 +735,8 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 					diag("invalid rela size %d", rp->siz);
 			}
 		}
-		qsort(r, n, sizeof r[0], rbyoff);	// just in case
+		// just in case
+		qsort(r, n, sizeof r[0], rbyoff);
 		
 		s = sect->sym;
 		s->r = r;
@@ -728,22 +751,23 @@ bad:
 	free(symbols);
 }
 
-static ElfSect*
-section(ElfObj *obj, char *name)
+static ElfSect* section(ElfObj *obj, char *name)
 {
 	int i;
 	
-	for(i=0; i<obj->nsect; i++)
-		if(obj->sect[i].name && name && strcmp(obj->sect[i].name, name) == 0)
+	for(i=0; i<obj->nsect; i++) {
+		if(obj->sect[i].name && name && strcmp(obj->sect[i].name, name) == 0) {
 			return &obj->sect[i];
+		}
+	}
 	return nil;
 }
 
-static int
-map(ElfObj *obj, ElfSect *sect)
+static int map(ElfObj *obj, ElfSect *sect)
 {
-	if(sect->base != nil)
+	if(sect->base != nil) {
 		return 0;
+	}
 
 	if(sect->off+sect->size > obj->len) {
 		werrstr("elf section past end of file");
@@ -752,8 +776,9 @@ map(ElfObj *obj, ElfSect *sect)
 
 	sect->base = mal(sect->size);
 	werrstr("short read");
-	if(Bseek(obj->f, obj->base+sect->off, 0) < 0 || Bread(obj->f, sect->base, sect->size) != sect->size)
+	if(Bseek(obj->f, obj->base+sect->off, 0) < 0 || Bread(obj->f, sect->base, sect->size) != sect->size) {
 		return -1;
+	}
 	
 	return 0;
 }

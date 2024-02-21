@@ -60,8 +60,7 @@ Header headers[] = {
  *	-Hwindows -Tx -Rx		is MS Windows PE32+
  */
 
-void
-main(int argc, char *argv[])
+void main(int argc, char *argv[])
 {
 	Binit(&bso, 1, OWRITE);
 	listinit();
@@ -355,8 +354,9 @@ nopout(Prog *p)
 	p->to.type = D_NONE;
 }
 
-void
-ldobj1(Biobuf *f, char *pkg, int64 len, char *pn)
+// caller:
+// 	1. src/cmd/ld/lib.c -> ldobj()
+void ldobj1(Biobuf *f, char *pkg, int64 len, char *pn)
 {
 	vlong ipc;
 	Prog *p;
@@ -472,8 +472,9 @@ loop:
 		break;
 	}
 
-	if(debug['W'])
+	if(debug['W']) {
 		print("%P\n", p);
+	}
 
 	switch(p->as) {
 	case AHISTORY:

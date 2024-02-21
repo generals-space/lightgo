@@ -368,31 +368,35 @@ dynreloc(void)
 		elfdynhash();
 }
 
-void
-symgrow(Sym *s, int32 siz)
+void symgrow(Sym *s, int32 siz)
 {
-	if(s->np >= siz)
+	if(s->np >= siz) {
 		return;
+	}
 
 	if(s->np > s->maxp) {
 		cursym = s;
-		diag("corrupt symbol data: np=%lld > maxp=%lld", (vlong)s->np, (vlong)s->maxp);
+		diag(
+			"corrupt symbol data: np=%lld > maxp=%lld", 
+			(vlong)s->np, (vlong)s->maxp
+		);
 		errorexit();
 	}
 
 	if(s->maxp < siz) {
-		if(s->maxp == 0)
+		if(s->maxp == 0) {
 			s->maxp = 8;
-		while(s->maxp < siz)
+		}
+		while(s->maxp < siz) {
 			s->maxp <<= 1;
+		}
 		s->p = erealloc(s->p, s->maxp);
 		memset(s->p+s->np, 0, s->maxp-s->np);
 	}
 	s->np = siz;
 }
 
-void
-savedata(Sym *s, Prog *p, char *pn)
+void savedata(Sym *s, Prog *p, char *pn)
 {
 	int32 off, siz, i, fl;
 	uchar *cast;
@@ -401,8 +405,9 @@ savedata(Sym *s, Prog *p, char *pn)
 
 	off = p->from.offset;
 	siz = p->datasize;
-	if(off < 0 || siz < 0 || off >= 1<<30 || siz >= 100)
+	if(off < 0 || siz < 0 || off >= 1<<30 || siz >= 100) {
 		mangle(pn);
+	}
 	symgrow(s, off+siz);
 
 	switch(p->to.type) {

@@ -49,17 +49,20 @@ static String end = { (uint8*)"end", 3 };
  */
 
 // 初始化函数符号表
-// ...但好像只是一个检测的过程, 符号表在这之前应该就已经填好了.
+//
+// 但这里只是一个检测/校验的过程, 符号表在"链接"时就已经填好了.
+// 见 src/cmd/ld/lib.c -> pclntab() 中, 从 symgrow() 处开始的部分.
+//
 //
 // caller: 
-// 	1. runtime·schedinit() 只有这一处调用
+// 	1. src/pkg/runtime/proc.c -> runtime·schedinit() 只有这一处
 void runtime·symtabinit(void)
 {
 	int32 i, j;
 	Func *f1, *f2;
 
-	// See golang.org/s/go12symtab for header: 0xfffffffb,
-	// two zero bytes, a byte giving the PC quantum,
+	// See golang.org/s/go12symtab for header:
+	// 0xfffffffb, two zero bytes, a byte giving the PC quantum,
 	// and a byte giving the pointer width in bytes.
 	if(*(uint32*)pclntab != 0xfffffffb || 
 		pclntab[4] != 0 || 
@@ -78,7 +81,8 @@ void runtime·symtabinit(void)
 	for(i=0; i<nftab; i++) {
 		// NOTE: ftab[nftab].entry is legal; 
 		// it is the address beyond the final function.
-		// ftab[nftab]是一个有效地址, 指向ftab中最后一个函数
+		//
+		// 注意: ftab[nftab]是一个有效地址, 指向ftab中最后一个函数
 		if(ftab[i].entry > ftab[i+1].entry) {
 			// 函数符号表中的成员未按照地址排序, 是不应该出现的.
 			f1 = (Func*)(pclntab + ftab[i].funcoff);
@@ -112,7 +116,9 @@ static uint32 readvarint(byte **pp)
 	p = *pp;
 	for(shift = 0;; shift += 7) {
 		v |= (*p & 0x7F) << shift;
-		if(!(*p++ & 0x80)) break;
+		if(!(*p++ & 0x80)) {
+			break;
+		}
 	}
 	*pp = p;
 	return v;
@@ -129,11 +135,15 @@ void* runtime·funcdata(Func *f, int32 i)
 {
 	byte *p;
 
-	if(i < 0 || i >= f->nfuncdata) return nil;
+	if(i < 0 || i >= f->nfuncdata) {
+		return nil;
+	}
 
 	p = (byte*)&f->nfuncdata + 4 + f->npcdata*4;
 
-	if(sizeof(void*) == 8 && ((uintptr)p & 4)) p += 4;
+	if(sizeof(void*) == 8 && ((uintptr)p & 4)) {
+		p += 4;
+	}
 	// 此处p数组的成员(参数列表/局部变量)都可以被转换成 BitVector 类型
 	return ((void**)p)[i];
 }
@@ -144,12 +154,15 @@ static bool step(byte **pp, uintptr *pc, int32 *value, bool first)
 	int32 vdelta;
 
 	uvdelta = readvarint(pp);
-	if(uvdelta == 0 && !first)
+	if(uvdelta == 0 && !first) {
 		return 0;
-	if(uvdelta&1)
+	}
+	if(uvdelta&1) {
 		uvdelta = ~(uvdelta>>1);
-	else
+	}
+	else {
 		uvdelta >>= 1;
+	}
 	vdelta = (int32)uvdelta;
 	pcdelta = readvarint(pp) * PCQuantum;
 	*value += vdelta;
@@ -176,7 +189,9 @@ static int32 pcvalue(Func *f, int32 off, uintptr targetpc, bool strict)
 	// The pc deltas are unsigned.
 	// The starting value is -1, the starting pc is the function entry.
 	// The table ends at a value delta of 0 except in the first pair.
-	if(off == 0) return -1;
+	if(off == 0) {
+		return -1;
+	}
 
 	p = pclntab + off;
 	pc = f->entry;
