@@ -65,7 +65,7 @@ docker run -d --name golang-src --privileged -p 2222:22 -v /usr/local/go1.2:/usr
 然后进入容器, 克隆当前仓库到`/usr/local/go`目录
 
 ```
-git clone https://gitee.com/skeyes/gods.git /usr/local/go
+git clone https://gitee.com/TracingSource/go.git /usr/local/go
 ```
 
 上述容器中内置了`sshd`服务, 可使用 vscode 通过 remote ssh 插件连接进入.
