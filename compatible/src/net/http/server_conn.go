@@ -5,13 +5,48 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// eofReader is a non-nil io.ReadCloser that always returns EOF.
+// It embeds a *strings.Reader so it still has a WriteTo method
+// and io.Copy won't need a buffer.
+var eofReader = &struct {
+	*strings.Reader
+	io.Closer
+}{
+	strings.NewReader(""),
+	ioutil.NopCloser(nil),
+}
+
+// initNPNRequest is an HTTP handler that initializes certain
+// uninitialized fields in its *Request. Such partially-initialized
+// Requests come from NPN protocol handlers.
+type initNPNRequest struct {
+	c *tls.Conn
+	h serverHandler
+}
+
+func (h initNPNRequest) ServeHTTP(rw ResponseWriter, req *Request) {
+	if req.TLS == nil {
+		req.TLS = &tls.ConnectionState{}
+		*req.TLS = h.c.ConnectionState()
+	}
+	if req.Body == nil {
+		req.Body = eofReader
+	}
+	if req.RemoteAddr == "" {
+		req.RemoteAddr = h.c.RemoteAddr().String()
+	}
+	h.h.ServeHTTP(rw, req)
+}
 
 // A conn represents the server side of an HTTP connection.
 type conn struct {
