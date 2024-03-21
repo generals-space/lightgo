@@ -175,6 +175,28 @@ func (h extraHeader) Write(w *bufio.Writer) {
 	}
 }
 
+// appendTime is a non-allocating version of []byte(t.UTC().Format(TimeFormat))
+func appendTime(b []byte, t time.Time) []byte {
+	const days = "SunMonTueWedThuFriSat"
+	const months = "JanFebMarAprMayJunJulAugSepOctNovDec"
+
+	t = t.UTC()
+	yy, mm, dd := t.Date()
+	hh, mn, ss := t.Clock()
+	day := days[3*t.Weekday():]
+	mon := months[3*(mm-1):]
+
+	return append(b,
+		day[0], day[1], day[2], ',', ' ',
+		byte('0'+dd/10), byte('0'+dd%10), ' ',
+		mon[0], mon[1], mon[2], ' ',
+		byte('0'+yy/1000), byte('0'+(yy/100)%10), byte('0'+(yy/10)%10), byte('0'+yy%10), ' ',
+		byte('0'+hh/10), byte('0'+hh%10), ':',
+		byte('0'+mn/10), byte('0'+mn%10), ':',
+		byte('0'+ss/10), byte('0'+ss%10), ' ',
+		'G', 'M', 'T')
+}
+
 // writeHeader finalizes the header sent to the client and writes it
 // to cw.res.conn.buf.
 //

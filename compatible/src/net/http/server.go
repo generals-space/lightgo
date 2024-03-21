@@ -10,14 +10,9 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/url"
-	"path"
-	"strings"
 	"sync"
 	"time"
 )
@@ -30,6 +25,12 @@ var (
 	ErrContentLength   = errors.New("Conn.Write wrote more than the declared Content-Length")
 )
 
+// 	@implementBy: HandlerFunc (函数对象)
+// 	@implementBy: redirectHandler{}
+// 	@implementBy: serverHandler{}
+// 	@implementBy: timeoutHandler{}
+// 	@implementBy: globalOptionsHandler{}
+//
 // Objects implementing the Handler interface can be
 // registered to serve a particular path or subtree
 // in the HTTP server.
@@ -41,36 +42,6 @@ var (
 type Handler interface {
 	ServeHTTP(ResponseWriter, *Request)
 }
-
-// A switchReader can have its Reader changed at runtime.
-// It's not safe for concurrent Reads and switches.
-type switchReader struct {
-	io.Reader
-}
-
-// A switchWriter can have its Writer changed at runtime.
-// It's not safe for concurrent Writes and switches.
-type switchWriter struct {
-	io.Writer
-}
-
-// A liveSwitchReader is a switchReader that's safe for concurrent
-// reads and switches, if its mutex is held.
-type liveSwitchReader struct {
-	sync.Mutex
-	r io.Reader
-}
-
-func (sr *liveSwitchReader) Read(p []byte) (n int, err error) {
-	sr.Lock()
-	r := sr.r
-	sr.Unlock()
-	return r.Read(p)
-}
-
-// This should be >= 512 bytes for DetectContentType,
-// but otherwise it's somewhat arbitrary.
-const bufferBeforeChunkingSize = 2048
 
 ////////////////////////////////////////////////////////////////////////////////
 // 拆分 chunkWriter 到独立文件 server_chunkwriter.go
@@ -169,30 +140,6 @@ func (srv *Server) maxHeaderBytes() int {
 // 拆分 expectContinueReader 到独立的 server_chunkwriter.go 文件
 ////////////////////////////////////////////////////////////////////////////////
 
-// appendTime is a non-allocating version of []byte(t.UTC().Format(TimeFormat))
-func appendTime(b []byte, t time.Time) []byte {
-	const days = "SunMonTueWedThuFriSat"
-	const months = "JanFebMarAprMayJunJulAugSepOctNovDec"
-
-	t = t.UTC()
-	yy, mm, dd := t.Date()
-	hh, mn, ss := t.Clock()
-	day := days[3*t.Weekday():]
-	mon := months[3*(mm-1):]
-
-	return append(b,
-		day[0], day[1], day[2], ',', ' ',
-		byte('0'+dd/10), byte('0'+dd%10), ' ',
-		mon[0], mon[1], mon[2], ' ',
-		byte('0'+yy/1000), byte('0'+(yy/100)%10), byte('0'+(yy/10)%10), byte('0'+yy%10), ' ',
-		byte('0'+hh/10), byte('0'+hh%10), ':',
-		byte('0'+mn/10), byte('0'+mn%10), ':',
-		byte('0'+ss/10), byte('0'+ss%10), ' ',
-		'G', 'M', 'T')
-}
-
-var errTooLarge = errors.New("http: request too large")
-
 ////////////////////////////////////////////////////////////////////////////////
 // 拆分 chunkWriter 到独立文件 server_chunkwriter.go
 ////////////////////////////////////////////////////////////////////////////////
@@ -210,130 +157,6 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 
 // Helper handlers
 
-// Error replies to the request with the specified error message and HTTP code.
-// The error message should be plain text.
-func Error(w ResponseWriter, error string, code int) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(code)
-	fmt.Fprintln(w, error)
-}
-
-// NotFound replies to the request with an HTTP 404 not found error.
-func NotFound(w ResponseWriter, r *Request) { Error(w, "404 page not found", StatusNotFound) }
-
-// NotFoundHandler returns a simple request handler
-// that replies to each request with a ``404 page not found'' reply.
-func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
-
-// StripPrefix returns a handler that serves HTTP requests
-// by removing the given prefix from the request URL's Path
-// and invoking the handler h. StripPrefix handles a
-// request for a path that doesn't begin with prefix by
-// replying with an HTTP 404 not found error.
-func StripPrefix(prefix string, h Handler) Handler {
-	if prefix == "" {
-		return h
-	}
-	return HandlerFunc(func(w ResponseWriter, r *Request) {
-		if p := strings.TrimPrefix(r.URL.Path, prefix); len(p) < len(r.URL.Path) {
-			r.URL.Path = p
-			h.ServeHTTP(w, r)
-		} else {
-			NotFound(w, r)
-		}
-	})
-}
-
-// Redirect replies to the request with a redirect to url,
-// which may be a path relative to the request path.
-func Redirect(w ResponseWriter, r *Request, urlStr string, code int) {
-	if u, err := url.Parse(urlStr); err == nil {
-		// If url was relative, make absolute by
-		// combining with request path.
-		// The browser would probably do this for us,
-		// but doing it ourselves is more reliable.
-
-		// NOTE(rsc): RFC 2616 says that the Location
-		// line must be an absolute URI, like
-		// "http://www.google.com/redirect/",
-		// not a path like "/redirect/".
-		// Unfortunately, we don't know what to
-		// put in the host name section to get the
-		// client to connect to us again, so we can't
-		// know the right absolute URI to send back.
-		// Because of this problem, no one pays attention
-		// to the RFC; they all send back just a new path.
-		// So do we.
-		oldpath := r.URL.Path
-		if oldpath == "" { // should not happen, but avoid a crash if it does
-			oldpath = "/"
-		}
-		if u.Scheme == "" {
-			// no leading http://server
-			if urlStr == "" || urlStr[0] != '/' {
-				// make relative path absolute
-				olddir, _ := path.Split(oldpath)
-				urlStr = olddir + urlStr
-			}
-
-			var query string
-			if i := strings.Index(urlStr, "?"); i != -1 {
-				urlStr, query = urlStr[:i], urlStr[i:]
-			}
-
-			// clean up but preserve trailing slash
-			trailing := strings.HasSuffix(urlStr, "/")
-			urlStr = path.Clean(urlStr)
-			if trailing && !strings.HasSuffix(urlStr, "/") {
-				urlStr += "/"
-			}
-			urlStr += query
-		}
-	}
-
-	w.Header().Set("Location", urlStr)
-	w.WriteHeader(code)
-
-	// RFC2616 recommends that a short note "SHOULD" be included in the
-	// response because older user agents may not understand 301/307.
-	// Shouldn't send the response for POST or HEAD; that leaves GET.
-	if r.Method == "GET" {
-		note := "<a href=\"" + htmlEscape(urlStr) + "\">" + statusText[code] + "</a>.\n"
-		fmt.Fprintln(w, note)
-	}
-}
-
-var htmlReplacer = strings.NewReplacer(
-	"&", "&amp;",
-	"<", "&lt;",
-	">", "&gt;",
-	// "&#34;" is shorter than "&quot;".
-	`"`, "&#34;",
-	// "&#39;" is shorter than "&apos;" and apos was not in HTML until HTML5.
-	"'", "&#39;",
-)
-
-func htmlEscape(s string) string {
-	return htmlReplacer.Replace(s)
-}
-
-// Redirect to a fixed URL
-type redirectHandler struct {
-	url  string
-	code int
-}
-
-func (rh *redirectHandler) ServeHTTP(w ResponseWriter, r *Request) {
-	Redirect(w, r, rh.url, rh.code)
-}
-
-// RedirectHandler returns a request handler that redirects
-// each request it receives to the given url using the given
-// status code.
-func RedirectHandler(url string, code int) Handler {
-	return &redirectHandler{url, code}
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // 拆分 ServeMux 到独立文件 server_mux.go
 ////////////////////////////////////////////////////////////////////////////////
@@ -341,7 +164,9 @@ func RedirectHandler(url string, code int) Handler {
 // Handle registers the handler for the given pattern
 // in the DefaultServeMux.
 // The documentation for ServeMux explains how patterns are matched.
-func Handle(pattern string, handler Handler) { DefaultServeMux.Handle(pattern, handler) }
+func Handle(pattern string, handler Handler) { 
+	DefaultServeMux.Handle(pattern, handler) 
+}
 
 // HandleFunc registers the handler function for the given pattern
 // in the DefaultServeMux.
@@ -431,23 +256,6 @@ type Server struct {
 	// 	@compatible: addAt v1.9
 	//
 	activeConn map[*conn]struct{}
-}
-
-// serverHandler delegates to either the server's Handler or
-// DefaultServeMux and also handles "OPTIONS *" requests.
-type serverHandler struct {
-	srv *Server
-}
-
-func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
-	handler := sh.srv.Handler
-	if handler == nil {
-		handler = DefaultServeMux
-	}
-	if req.RequestURI == "*" && req.Method == "OPTIONS" {
-		handler = globalOptionsHandler{}
-	}
-	handler.ServeHTTP(rw, req)
 }
 
 // ListenAndServe listens on the TCP network address srv.Addr and then
@@ -599,106 +407,4 @@ func (srv *Server) ListenAndServeTLS(certFile, keyFile string) error {
 
 	tlsListener := tls.NewListener(conn, config)
 	return srv.Serve(tlsListener)
-}
-
-// TimeoutHandler returns a Handler that runs h with the given time limit.
-//
-// The new Handler calls h.ServeHTTP to handle each request, but if a
-// call runs for longer than its time limit, the handler responds with
-// a 503 Service Unavailable error and the given message in its body.
-// (If msg is empty, a suitable default message will be sent.)
-// After such a timeout, writes by h to its ResponseWriter will return
-// ErrHandlerTimeout.
-func TimeoutHandler(h Handler, dt time.Duration, msg string) Handler {
-	f := func() <-chan time.Time {
-		return time.After(dt)
-	}
-	return &timeoutHandler{h, f, msg}
-}
-
-// ErrHandlerTimeout is returned on ResponseWriter Write calls
-// in handlers which have timed out.
-var ErrHandlerTimeout = errors.New("http: Handler timeout")
-
-type timeoutHandler struct {
-	handler Handler
-	timeout func() <-chan time.Time // returns channel producing a timeout
-	body    string
-}
-
-func (h *timeoutHandler) errorBody() string {
-	if h.body != "" {
-		return h.body
-	}
-	return "<html><head><title>Timeout</title></head><body><h1>Timeout</h1></body></html>"
-}
-
-func (h *timeoutHandler) ServeHTTP(w ResponseWriter, r *Request) {
-	done := make(chan bool, 1)
-	tw := &timeoutWriter{w: w}
-	go func() {
-		h.handler.ServeHTTP(tw, r)
-		done <- true
-	}()
-	select {
-	case <-done:
-		return
-	case <-h.timeout():
-		tw.mu.Lock()
-		defer tw.mu.Unlock()
-		if !tw.wroteHeader {
-			tw.w.WriteHeader(StatusServiceUnavailable)
-			tw.w.Write([]byte(h.errorBody()))
-		}
-		tw.timedOut = true
-	}
-}
-
-type timeoutWriter struct {
-	w ResponseWriter
-
-	mu          sync.Mutex
-	timedOut    bool
-	wroteHeader bool
-}
-
-func (tw *timeoutWriter) Header() Header {
-	return tw.w.Header()
-}
-
-func (tw *timeoutWriter) Write(p []byte) (int, error) {
-	tw.mu.Lock()
-	timedOut := tw.timedOut
-	tw.mu.Unlock()
-	if timedOut {
-		return 0, ErrHandlerTimeout
-	}
-	return tw.w.Write(p)
-}
-
-func (tw *timeoutWriter) WriteHeader(code int) {
-	tw.mu.Lock()
-	if tw.timedOut || tw.wroteHeader {
-		tw.mu.Unlock()
-		return
-	}
-	tw.wroteHeader = true
-	tw.mu.Unlock()
-	tw.w.WriteHeader(code)
-}
-
-// globalOptionsHandler responds to "OPTIONS *" requests.
-type globalOptionsHandler struct{}
-
-func (globalOptionsHandler) ServeHTTP(w ResponseWriter, r *Request) {
-	w.Header().Set("Content-Length", "0")
-	if r.ContentLength != 0 {
-		// Read up to 4KB of OPTIONS body (as mentioned in the
-		// spec as being reserved for future use), but anything
-		// over that is considered a waste of server resources
-		// (or an attack) and we abort and close the connection,
-		// courtesy of MaxBytesReader's EOF behavior.
-		mb := MaxBytesReader(w, r.Body, 4<<10)
-		io.Copy(ioutil.Discard, mb)
-	}
 }

@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+// This should be >= 512 bytes for DetectContentType,
+// but otherwise it's somewhat arbitrary.
+const bufferBeforeChunkingSize = 2048
+
 // eofReader is a non-nil io.ReadCloser that always returns EOF.
 // It embeds a *strings.Reader so it still has a WriteTo method
 // and io.Copy won't need a buffer.
@@ -25,6 +29,29 @@ var eofReader = &struct {
 	strings.NewReader(""),
 	ioutil.NopCloser(nil),
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// 	@implementOf: Handler
+//
+// serverHandler delegates to either the server's Handler or
+// DefaultServeMux and also handles "OPTIONS *" requests.
+type serverHandler struct {
+	srv *Server
+}
+
+func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	handler := sh.srv.Handler
+	if handler == nil {
+		handler = DefaultServeMux
+	}
+	if req.RequestURI == "*" && req.Method == "OPTIONS" {
+		handler = globalOptionsHandler{}
+	}
+	handler.ServeHTTP(rw, req)
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 // initNPNRequest is an HTTP handler that initializes certain
 // uninitialized fields in its *Request. Such partially-initialized
@@ -47,6 +74,8 @@ func (h initNPNRequest) ServeHTTP(rw ResponseWriter, req *Request) {
 	}
 	h.h.ServeHTTP(rw, req)
 }
+
+var errTooLarge = errors.New("http: request too large")
 
 // A conn represents the server side of an HTTP connection.
 type conn struct {
