@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bufio"
 	"io"
 	"strings"
 	"sync"
@@ -49,4 +50,70 @@ func StripPrefix(prefix string, h Handler) Handler {
 			NotFound(w, r)
 		}
 	})
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// TODO: use a sync.Cache instead
+var (
+	bufioReaderCache   = make(chan *bufio.Reader, 4)
+	bufioWriterCache2k = make(chan *bufio.Writer, 4)
+	bufioWriterCache4k = make(chan *bufio.Writer, 4)
+)
+
+// caller:
+// 	1. newBufioWriterSize()
+// 	2. putBufioWriter()
+func bufioWriterCache(size int) chan *bufio.Writer {
+	switch size {
+	case 2 << 10:
+		return bufioWriterCache2k
+	case 4 << 10:
+		return bufioWriterCache4k
+	}
+	return nil
+}
+
+// caller:
+// 	1. Server.newConn()
+func newBufioReader(r io.Reader) *bufio.Reader {
+	select {
+	case p := <-bufioReaderCache:
+		p.Reset(r)
+		return p
+	default:
+		return bufio.NewReader(r)
+	}
+}
+
+func putBufioReader(br *bufio.Reader) {
+	br.Reset(nil)
+	select {
+	case bufioReaderCache <- br:
+	default:
+	}
+}
+
+// caller:
+// 	1. Server.newConn()
+// 	2. conn.readRequest()
+func newBufioWriterSize(w io.Writer, size int) *bufio.Writer {
+	select {
+	case p := <-bufioWriterCache(size):
+		p.Reset(w)
+		return p
+	default:
+		return bufio.NewWriterSize(w, size)
+	}
+}
+
+// caller:
+// 	1. conn.finalFlush()
+// 	2. response.finishRequest()
+func putBufioWriter(bw *bufio.Writer) {
+	bw.Reset(nil)
+	select {
+	case bufioWriterCache(bw.Available()) <- bw:
+	default:
+	}
 }

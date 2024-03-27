@@ -263,6 +263,8 @@ func (c *conn) setState(nc net.Conn, state ConnState) {
 	}
 }
 
+// caller:
+// 	1. Server.Serve()
 // Serve a new connection.
 func (c *conn) serve() {
 	defer func() {

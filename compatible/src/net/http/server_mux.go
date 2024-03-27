@@ -8,17 +8,14 @@ import (
 
 // ServeMux is an HTTP request multiplexer.
 // It matches the URL of each incoming request against a list of registered
-// patterns and calls the handler for the pattern that
-// most closely matches the URL.
+// patterns and calls the handler for the pattern that most closely matches the URL.
 //
-// Patterns name fixed, rooted paths, like "/favicon.ico",
-// or rooted subtrees, like "/images/" (note the trailing slash).
+// Patterns name fixed, rooted paths, like "/favicon.ico", or rooted subtrees,
+// like "/images/" (note the trailing slash).
 // Longer patterns take precedence over shorter ones, so that
-// if there are handlers registered for both "/images/"
-// and "/images/thumbnails/", the latter handler will be
-// called for paths beginning "/images/thumbnails/" and the
-// former will receive requests for any other paths in the
-// "/images/" subtree.
+// if there are handlers registered for both "/images/" and "/images/thumbnails/",
+// the latter handler will be called for paths beginning "/images/thumbnails/"
+// and the former will receive requests for any other paths in the "/images/" subtree.
 //
 // Note that since a pattern ending in a slash names a rooted subtree,
 // the pattern "/" matches all paths not matched by other registered
@@ -46,7 +43,9 @@ type muxEntry struct {
 }
 
 // NewServeMux allocates and returns a new ServeMux.
-func NewServeMux() *ServeMux { return &ServeMux{m: make(map[string]muxEntry)} }
+func NewServeMux() *ServeMux {
+	return &ServeMux{m: make(map[string]muxEntry)}
+}
 
 // DefaultServeMux is the default ServeMux used by Serve.
 var DefaultServeMux = NewServeMux()
