@@ -155,7 +155,7 @@ const noLimit int64 = (1 << 63) - 1
 // with a verbose logging wrapper.
 const debugServerConnections = false
 
-// 	@param rwc: 
+// 	@param rwc: connect socket 对象
 // (我把 socket 分为 listen socket 和 connect socket, rwc 就是后者).
 // 
 // caller:

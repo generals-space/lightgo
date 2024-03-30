@@ -77,15 +77,21 @@ func (h initNPNRequest) ServeHTTP(rw ResponseWriter, req *Request) {
 
 var errTooLarge = errors.New("http: request too large")
 
+// conn 存储着 connect socket 的相关信息
+//
 // A conn represents the server side of an HTTP connection.
 type conn struct {
-	remoteAddr string               // network address of remote side
-	server     *Server              // the Server on which the connection arrived
-	rwc        net.Conn             // i/o connection
-	sr         liveSwitchReader     // where the LimitReader reads from; usually the rwc
-	lr         *io.LimitedReader    // io.LimitReader(sr)
-	buf        *bufio.ReadWriter    // buffered(lr,rwc), reading from bufio->limitReader->sr->rwc
-	tlsState   *tls.ConnectionState // or nil when not using TLS
+	// remoteAddr 格式为 IP:port, 如 127.0.0.1:46100
+	// network address of remote side
+	remoteAddr string
+	server     *Server // the Server on which the connection arrived
+	// connect socket 对象.
+	// i/o connection
+	rwc      net.Conn
+	sr       liveSwitchReader     // where the LimitReader reads from; usually the rwc
+	lr       *io.LimitedReader    // io.LimitReader(sr)
+	buf      *bufio.ReadWriter    // buffered(lr,rwc), reading from bufio->limitReader->sr->rwc
+	tlsState *tls.ConnectionState // or nil when not using TLS
 
 	mu           sync.Mutex // guards the following
 	clientGone   bool       // if client has disconnected mid-request
@@ -156,6 +162,9 @@ func (c *conn) noteClientGone() {
 	c.clientGone = true
 }
 
+// caller:
+// 	1. conn.serve()
+//
 // Read next request from connection.
 func (c *conn) readRequest() (w *response, err error) {
 	if c.hijacked() {
@@ -264,7 +273,9 @@ func (c *conn) setState(nc net.Conn, state ConnState) {
 }
 
 // caller:
-// 	1. Server.Serve()
+// 	1. Server.Serve() listen socket 每通过 accept() 接收到一个请求, 都会开一个协程
+// 	调用该方法对这个请求进行处理, conn{} 对象中包含了该连接中的所有信息.
+//
 // Serve a new connection.
 func (c *conn) serve() {
 	defer func() {
@@ -279,6 +290,7 @@ func (c *conn) serve() {
 		}
 	}()
 
+	// 如果是 https, 则进入该块, 进行额外的握手处理.
 	if tlsConn, ok := c.rwc.(*tls.Conn); ok {
 		if d := c.server.ReadTimeout; d != 0 {
 			c.rwc.SetReadDeadline(time.Now().Add(d))
@@ -304,11 +316,10 @@ func (c *conn) serve() {
 		w, err := c.readRequest()
 		if err != nil {
 			if err == errTooLarge {
-				// Their HTTP client may or may not be
-				// able to read this if we're
-				// responding to them and hanging up
-				// while they're still writing their
-				// request.  Undefined behavior.
+				// Their HTTP client may or may not be able to read this
+				// if we're responding to them and hanging up
+				// while they're still writing their request. 
+				// Undefined behavior.
 				io.WriteString(c.rwc, "HTTP/1.1 413 Request Entity Too Large\r\n\r\n")
 				c.closeWriteAndWait()
 				break

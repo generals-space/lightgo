@@ -218,6 +218,8 @@ func spuriousENOTAVAIL(err error) bool {
 	return ok && e.Err == syscall.EADDRNOTAVAIL
 }
 
+// 	@implementOf: src/pkg/net/net.go -> Listener
+//
 // TCPListener is a TCP network listener.  Clients should typically
 // use variables of type Listener instead of assuming TCP.
 type TCPListener struct {

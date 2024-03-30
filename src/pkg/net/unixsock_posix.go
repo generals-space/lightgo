@@ -248,6 +248,8 @@ func dialUnix(net string, laddr, raddr *UnixAddr, deadline time.Time) (*UnixConn
 	return newUnixConn(fd), nil
 }
 
+// 	@implementOf: src/pkg/net/net.go -> Listener
+//
 // UnixListener is a Unix domain socket listener.  Clients should
 // typically use variables of type Listener instead of assuming Unix
 // domain sockets.

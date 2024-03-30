@@ -332,6 +332,8 @@ func (w *response) write(lenData int, dataB []byte, dataS string) (n int, err er
 	}
 }
 
+// caller:
+// 	1. conn.serve()
 func (w *response) finishRequest() {
 	w.handlerDone = true
 
