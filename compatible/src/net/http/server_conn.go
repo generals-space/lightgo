@@ -32,6 +32,12 @@ var eofReader = &struct {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// 这是 net/http 的核心框架, 起到了承前启后的作用.
+//
+// 前承 socket server 通过 accept 生成 connect socket, 并从其中读取 http 协议内容, 
+// 构造 request 对象, 生成并调用 serverHandler.ServeHTTP(); 
+// 后启开发者声明的 handler, 
+//
 // 	@implementOf: Handler
 //
 // serverHandler delegates to either the server's Handler or
@@ -40,6 +46,8 @@ type serverHandler struct {
 	srv *Server
 }
 
+// caller:
+// 	1. conn.serve()
 func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
 	handler := sh.srv.Handler
 	if handler == nil {
@@ -108,6 +116,10 @@ func (c *conn) hijacked() bool {
 	return c.hijackedv
 }
 
+// hijack 劫持
+//
+// caller:
+// 	1. compatible/src/net/http/server_response.go -> response.Hijack()
 func (c *conn) hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -272,6 +284,9 @@ func (c *conn) setState(nc net.Conn, state ConnState) {
 	}
 }
 
+// serve 这里是实际处理 connect socket 的地方(tcp层面), 从 socket 中读取 http 协议内容,
+// 构造 Request() 对象, 再转交给 http server.
+//
 // caller:
 // 	1. Server.Serve() listen socket 每通过 accept() 接收到一个请求, 都会开一个协程
 // 	调用该方法对这个请求进行处理, conn{} 对象中包含了该连接中的所有信息.
@@ -313,7 +328,9 @@ func (c *conn) serve() {
 	}
 
 	for {
-		w, err := c.readRequest()
+		// 从 connect socket 中读取 http 协议信息, 构造 request 对象,
+		// 将其赋值到 response{} 中的成员字段并返回.
+		resp, err := c.readRequest()
 		if err != nil {
 			if err == errTooLarge {
 				// Their HTTP client may or may not be able to read this
@@ -333,36 +350,39 @@ func (c *conn) serve() {
 		}
 
 		// Expect 100 Continue support
-		req := w.req
+		req := resp.req
 		if req.expectsContinue() {
 			if req.ProtoAtLeast(1, 1) {
 				// Wrap the Body reader with one that replies on the connection
-				req.Body = &expectContinueReader{readCloser: req.Body, resp: w}
+				req.Body = &expectContinueReader{readCloser: req.Body, resp: resp}
 			}
 			if req.ContentLength == 0 {
-				w.Header().Set("Connection", "close")
-				w.WriteHeader(StatusBadRequest)
-				w.finishRequest()
+				resp.Header().Set("Connection", "close")
+				resp.WriteHeader(StatusBadRequest)
+				resp.finishRequest()
 				break
 			}
 			req.Header.Del("Expect")
 		} else if req.Header.get("Expect") != "" {
-			w.sendExpectationFailed()
+			resp.sendExpectationFailed()
 			break
 		}
 
+		// 进入 http server 处理流程.
+		//
 		// HTTP cannot have multiple simultaneous active requests.[*]
 		// Until the server replies to this request, it can't read another,
 		// so we might as well run the handler in this goroutine.
-		// [*] Not strictly true: HTTP pipelining.  We could let them all process
-		// in parallel even if their responses need to be serialized.
-		serverHandler{c.server}.ServeHTTP(w, w.req)
+		// [*] Not strictly true: HTTP pipelining. 
+		// We could let them all process in parallel even if their responses
+		// need to be serialized.
+		serverHandler{c.server}.ServeHTTP(resp, resp.req)
 		if c.hijacked() {
 			return
 		}
-		w.finishRequest()
-		if w.closeAfterReply {
-			if w.requestBodyLimitHit {
+		resp.finishRequest()
+		if resp.closeAfterReply {
+			if resp.requestBodyLimitHit {
 				c.closeWriteAndWait()
 			}
 			break

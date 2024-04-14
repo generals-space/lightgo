@@ -25,11 +25,13 @@ var (
 	ErrContentLength   = errors.New("Conn.Write wrote more than the declared Content-Length")
 )
 
+// Handler 开发者层面的处理逻辑.
+//
 // 	@implementBy: HandlerFunc (函数对象)
 // 	@implementBy: redirectHandler{}
-// 	@implementBy: serverHandler{}
 // 	@implementBy: timeoutHandler{}
 // 	@implementBy: globalOptionsHandler{}
+// 	~~@implementBy: serverHandler{}~~ 这个不算, ta是 Handler 接口前面的处理流程, 不属于同一级别.
 //
 // Objects implementing the Handler interface can be
 // registered to serve a particular path or subtree in the HTTP server.
@@ -51,7 +53,7 @@ type Handler interface {
 // 	@implementOf: Handler
 //
 // The HandlerFunc type is an adapter to allow the use of ordinary functions
-// as HTTP handlers. 
+// as HTTP handlers.
 // If f is a function with the appropriate signature, HandlerFunc(f) is a
 // Handler object that calls f.
 type HandlerFunc func(ResponseWriter, *Request)
@@ -78,15 +80,23 @@ func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 
 // A Server defines parameters for running an HTTP server.
 type Server struct {
-	Addr           string        // TCP address to listen on, ":http" if empty
-	Handler        Handler       // handler to invoke, http.DefaultServeMux if nil
-	ReadTimeout    time.Duration // maximum duration before timing out read of the request
-	WriteTimeout   time.Duration // maximum duration before timing out write of the response
-	MaxHeaderBytes int           // maximum size of request headers, DefaultMaxHeaderBytes if 0
-	TLSConfig      *tls.Config   // optional TLS config, used by ListenAndServeTLS
+	Addr    string  // TCP address to listen on, ":http" if empty
+	Handler Handler // handler to invoke, http.DefaultServeMux if nil
+	// 与客户端初次建立 socket 连接后, 从客户端读取 http request 信息的超时时间.
+	// 该超时时间是在底层 socket 对象上设置的.
+	// 如果该值为0, 则无限制.
+	//
+	// maximum duration before timing out read of the request
+	ReadTimeout time.Duration
+	// 与 WriteTimeout 相同, 不过ta的设置时机是在第一次从客户端读取到 http request 后.
+	//
+	// maximum duration before timing out write of the response
+	WriteTimeout   time.Duration
+	MaxHeaderBytes int         // maximum size of request headers, DefaultMaxHeaderBytes if 0
+	TLSConfig      *tls.Config // optional TLS config, used by ListenAndServeTLS
 
-	// TLSNextProto optionally specifies a function to take over ownership of 
-	//the provided TLS connection when an NPN protocol upgrade has occurred. 
+	// TLSNextProto optionally specifies a function to take over ownership of
+	//the provided TLS connection when an NPN protocol upgrade has occurred.
 	// The map key is the protocol name negotiated.
 	// The Handler argument should be used to handle HTTP requests
 	// and will initialize the Request's TLS and RemoteAddr if not already set.
@@ -157,7 +167,7 @@ const debugServerConnections = false
 
 // 	@param rwc: connect socket 对象
 // (我把 socket 分为 listen socket 和 connect socket, rwc 就是后者).
-// 
+//
 // caller:
 // 	1. Server.Serve() 每 accept() 一个请求, 就开一个协程调用该方法进行处理.
 //
@@ -241,6 +251,7 @@ func (srv *Server) Serve(listener net.Listener) error {
 		if err != nil {
 			continue
 		}
+		// 开协程, 处理当前连接的http请求
 		go c.serve()
 	}
 }
