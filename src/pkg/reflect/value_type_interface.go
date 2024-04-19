@@ -4,11 +4,18 @@ import (
 	"unsafe"
 )
 
+// Interface 以 interface{} 类型返回当前 value 对象的值.
+// 等价于 var i interface{} = v的实际值
+// 或者说 var i = interface{}(v的实际值)
+//
+// 实际的应用场景见:
+// 1. k8s.io/apimachinery@v1.17.2/pkg/util/sets/string.go -> StringKeySet()
+// 2. github.com/generals-space/gods/sets/hashset/hashset.go -> NewFromMap()
+//
 // Interface returns v's current value as an interface{}.
 // It is equivalent to:
 //	var i interface{} = (v's underlying value)
-// It panics if the Value was obtained by accessing
-// unexported struct fields.
+// It panics if the Value was obtained by accessing unexported struct fields.
 func (v Value) Interface() (i interface{}) {
 	return valueInterface(v, true)
 }
@@ -47,9 +54,8 @@ func valueInterface(v Value, safe bool) interface{} {
 
 	// Don't need to allocate if v is not addressable or fits in one word.
 	if v.flag&flagAddr != 0 && v.typ.size > ptrSize {
-		// eface.word is a pointer to the actual data,
-		// which might be changed.  We need to return
-		// a pointer to unchanging data, so make a copy.
+		// eface.word is a pointer to the actual data, which might be changed.
+		// We need to return a pointer to unchanging data, so make a copy.
 		ptr := unsafe_New(v.typ)
 		memmove(ptr, unsafe.Pointer(eface.word), v.typ.size)
 		eface.word = iword(ptr)

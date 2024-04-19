@@ -34,6 +34,12 @@ func (v Value) MapIndex(key Value) Value {
 	return Value{typ, unsafe.Pointer(word), fl}
 }
 
+// MapKeys 假定 Value 是 map 对象, 然后以列表形式返回ta的所有 key 值(无序).
+//
+// 实际的应用场景见:
+// 1. k8s.io/apimachinery@v1.17.2/pkg/util/sets/string.go -> StringKeySet()
+// 2. github.com/generals-space/gods/sets/hashset/hashset.go -> NewFromMap()
+//
 // MapKeys returns a slice containing all the keys present in the map,
 // in unspecified order.
 // It panics if v's Kind is not Map.

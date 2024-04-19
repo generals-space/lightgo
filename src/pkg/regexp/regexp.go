@@ -381,6 +381,8 @@ func (re *Regexp) MatchReader(r io.RuneReader) bool {
 	return re.doExecute(r, nil, "", 0, 0) != nil
 }
 
+// MatchString 判断目标字符串 s 是否满足当前正则表达式.
+//
 // MatchString reports whether the Regexp matches the string s.
 func (re *Regexp) MatchString(s string) bool {
 	return re.doExecute(nil, nil, s, 0, 0) != nil
