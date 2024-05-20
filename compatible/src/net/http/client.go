@@ -376,6 +376,7 @@ func (c *Client) Post(url string, bodyType string, body io.Reader) (resp *Respon
 	return c.doFollowingRedirects(req, shouldRedirectPost)
 }
 
+// 
 // PostForm issues a POST to the specified URL, with data's keys and
 // values URL-encoded as the request body.
 //

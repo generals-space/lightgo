@@ -9,8 +9,8 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -142,14 +142,22 @@ type Request struct {
 	// It may be of the form "host:port".
 	Host string
 
+	// Post application/json 数据可以从 req.Body 中获取.
+	// 但是当前端使用 form 标签元素, 通过 submit 类型的按钮点击直接提交时,
+	// Content-Type 为 application/x-www-form-urlencoded, 此时Body里是没有内容的...
+	//
+	// 此时开发者需要先调用 req.ParseForm() 将数据格式化到 Form 成员,
+	// 如 map[username:[admin] password:[123456]]
+	// 注意: 前端 form 元素中同一个 name 可能有多个值, 所以取值时需要使用如下方式
+	// req.Form["username"][0], 或者 req.Form.Get("username")
+	//
 	// Form contains the parsed form data, including both the URL
 	// field's query parameters and the POST or PUT form data.
 	// This field is only available after ParseForm is called.
 	// The HTTP client ignores Form and uses Body instead.
 	Form url.Values
 
-	// PostForm contains the parsed form data from POST or PUT
-	// body parameters.
+	// PostForm contains the parsed form data from POST or PUT body parameters.
 	// This field is only available after ParseForm is called.
 	// The HTTP client ignores PostForm and uses Body instead.
 	PostForm url.Values

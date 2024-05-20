@@ -33,10 +33,9 @@ func (sr *liveSwitchReader) Read(p []byte) (n int, err error) {
 	return r.Read(p)
 }
 
-// StripPrefix returns a handler that serves HTTP requests
-// by removing the given prefix from the request URL's Path
-// and invoking the handler h. StripPrefix handles a
-// request for a path that doesn't begin with prefix by
+// StripPrefix returns a handler that serves HTTP requests by removing
+// the given prefix from the request URL's Path and invoking the handler h.
+// StripPrefix handles a request for a path that doesn't begin with prefix by
 // replying with an HTTP 404 not found error.
 func StripPrefix(prefix string, h Handler) Handler {
 	if prefix == "" {

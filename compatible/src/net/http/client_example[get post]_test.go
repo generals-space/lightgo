@@ -6,9 +6,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 )
-
-// import "io/ioutil"
 
 func ExampleGet() {
 	res, err := http.Get("https://www.baidu.com/robots.txt")
@@ -16,11 +16,6 @@ func ExampleGet() {
 		panic(err)
 	}
 	defer res.Body.Close()
-
-	header := res.Header
-	for k, v := range header {
-		log.Printf("key: %s, value: %s", k, v)
-	}
 
 	// Body是一个类似于Buffer的类型, 有两个方法可以读取其中的内容.
 	// 1. 如果使用res.Body自己的Read方法, 就必须创建一个容器来承接
@@ -70,6 +65,28 @@ func ExamplePost() {
 	body, err := ioutil.ReadAll(res.Body)
 	log.Printf("%s\n", body)
 }
+
+func ExamplePostForm() {
+	addr := "http://localhost:8080"
+
+	// 与普通的json数据不同, form 信息不能通过 json.Marsharl()方法放入请求体,
+	// 只能用 url.Values 结构存放.
+	dataURLVal := url.Values{}
+	dataURLVal.Add("username", "admin")
+	dataURLVal.Add("password", "123456")
+	data := strings.NewReader(dataURLVal.Encode())
+
+	res, err := http.Post(addr, "application/x-www-form-urlencoded", data)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	log.Printf("%s\n", body)
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 func ExampleGetRequest() {
 	client := &http.Client{}

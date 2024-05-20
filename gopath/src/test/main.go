@@ -3,35 +3,9 @@
 
 package main
 
-import "fmt"
+import "net/http"
 
 func main() {
-	var s string
-	var result bool
-
-	s = "()"
-	result = checkValidString(s)
-	fmt.Printf("result: %t\n", result)
-}
-
-func checkValidString(s string) bool {
-	var left, right int
-
-	for _, c := range s {
-		if c == '(' {
-			left += 1
-			right += 1
-		} else if c == ')' {
-			left -= 1
-			right -= 1
-		} else if c == '*' {
-			left -= 1
-			right += 1
-		}
-
-		if right < 0 {
-			return false
-		}
-	}
-	return left <= 0 && right >= 0
+	http.Handle("/tmpfiles", http.FileServer(http.Dir("/tmp")))
+	http.ListenAndServe(":8080", nil)
 }
