@@ -4,6 +4,8 @@
 
 // HTTP file system request handler
 
+// 20240520 重命名 fs.go -> server_handler_fs.go
+
 package http
 
 import (
@@ -415,6 +417,7 @@ func ServeFile(w ResponseWriter, r *Request, name string) {
 	serveFile(w, r, Dir(dir), file, false)
 }
 
+// 	@implementOf: Handler
 type fileHandler struct {
 	root FileSystem
 }

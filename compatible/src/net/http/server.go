@@ -31,6 +31,7 @@ var (
 // 	@implementBy: redirectHandler{}
 // 	@implementBy: timeoutHandler{}
 // 	@implementBy: globalOptionsHandler{}
+// 	@implementBy: fileHandler{} 静态文件服务器实现
 // 	~~@implementBy: serverHandler{}~~ 这个不算, ta是 Handler 接口前面的处理流程, 不属于同一级别.
 //
 // Objects implementing the Handler interface can be
