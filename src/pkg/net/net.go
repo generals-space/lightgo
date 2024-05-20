@@ -53,9 +53,14 @@ import (
 // Addr represents a network end point address.
 type Addr interface {
 	Network() string // name of the network
-	String() string  // string form of address
+	// 返回值格式为 IP:port, 如 127.0.0.1:46100
+	// string form of address
+	String() string
 }
 
+// 	@implementBy: src/pkg/net/tcpsock_posix.go -> TCPConn{}
+// 	@implementBy: src/pkg/net/unixsock_posix.go -> UnixConn{}
+//
 // Conn is a generic stream-oriented network connection.
 //
 // Multiple goroutines may invoke methods on a Conn simultaneously.
@@ -76,7 +81,10 @@ type Conn interface {
 
 	// LocalAddr returns the local network address.
 	LocalAddr() Addr
-
+	// Remote 与 Local 是相对的, 因为建立连接的 socket 是成对存在的, 
+	// remote 表示对端 socket 的地址.
+	// 注意, 这里的 socket 为 connect socket, 而不是 listen socket.
+	//
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() Addr
 
@@ -260,6 +268,9 @@ type PacketConn interface {
 
 var listenerBacklog = maxListenerBacklog()
 
+// 	@implementBy: src/pkg/net/tcpsock_posix.go -> TCPListener{}
+// 	@implementBy: src/pkg/net/unixsock_posix.go -> UnixListener{}
+//
 // A Listener is a generic network listener for stream-oriented protocols.
 //
 // Multiple goroutines may invoke methods on a Listener simultaneously.

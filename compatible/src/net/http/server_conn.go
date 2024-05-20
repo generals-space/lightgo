@@ -5,23 +5,101 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+// This should be >= 512 bytes for DetectContentType,
+// but otherwise it's somewhat arbitrary.
+const bufferBeforeChunkingSize = 2048
+
+// eofReader is a non-nil io.ReadCloser that always returns EOF.
+// It embeds a *strings.Reader so it still has a WriteTo method
+// and io.Copy won't need a buffer.
+var eofReader = &struct {
+	*strings.Reader
+	io.Closer
+}{
+	strings.NewReader(""),
+	ioutil.NopCloser(nil),
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// 这是 net/http 的核心框架, 起到了承前启后的作用.
+//
+// 前承 socket server 通过 accept 生成 connect socket, 并从其中读取 http 协议内容, 
+// 构造 request 对象, 生成并调用 serverHandler.ServeHTTP(); 
+// 后启开发者声明的 handler, 
+//
+// 	@implementOf: Handler
+//
+// serverHandler delegates to either the server's Handler or
+// DefaultServeMux and also handles "OPTIONS *" requests.
+type serverHandler struct {
+	srv *Server
+}
+
+// caller:
+// 	1. conn.serve()
+func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	handler := sh.srv.Handler
+	if handler == nil {
+		handler = DefaultServeMux
+	}
+	if req.RequestURI == "*" && req.Method == "OPTIONS" {
+		handler = globalOptionsHandler{}
+	}
+	handler.ServeHTTP(rw, req)
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// initNPNRequest is an HTTP handler that initializes certain
+// uninitialized fields in its *Request. Such partially-initialized
+// Requests come from NPN protocol handlers.
+type initNPNRequest struct {
+	c *tls.Conn
+	h serverHandler
+}
+
+func (h initNPNRequest) ServeHTTP(rw ResponseWriter, req *Request) {
+	if req.TLS == nil {
+		req.TLS = &tls.ConnectionState{}
+		*req.TLS = h.c.ConnectionState()
+	}
+	if req.Body == nil {
+		req.Body = eofReader
+	}
+	if req.RemoteAddr == "" {
+		req.RemoteAddr = h.c.RemoteAddr().String()
+	}
+	h.h.ServeHTTP(rw, req)
+}
+
+var errTooLarge = errors.New("http: request too large")
+
+// conn 存储着 connect socket 的相关信息
+//
 // A conn represents the server side of an HTTP connection.
 type conn struct {
-	remoteAddr string               // network address of remote side
-	server     *Server              // the Server on which the connection arrived
-	rwc        net.Conn             // i/o connection
-	sr         liveSwitchReader     // where the LimitReader reads from; usually the rwc
-	lr         *io.LimitedReader    // io.LimitReader(sr)
-	buf        *bufio.ReadWriter    // buffered(lr,rwc), reading from bufio->limitReader->sr->rwc
-	tlsState   *tls.ConnectionState // or nil when not using TLS
+	// remoteAddr 格式为 IP:port, 如 127.0.0.1:46100
+	// network address of remote side
+	remoteAddr string
+	server     *Server // the Server on which the connection arrived
+	// connect socket 对象.
+	// i/o connection
+	rwc      net.Conn
+	sr       liveSwitchReader     // where the LimitReader reads from; usually the rwc
+	lr       *io.LimitedReader    // io.LimitReader(sr)
+	buf      *bufio.ReadWriter    // buffered(lr,rwc), reading from bufio->limitReader->sr->rwc
+	tlsState *tls.ConnectionState // or nil when not using TLS
 
 	mu           sync.Mutex // guards the following
 	clientGone   bool       // if client has disconnected mid-request
@@ -38,6 +116,10 @@ func (c *conn) hijacked() bool {
 	return c.hijackedv
 }
 
+// hijack 劫持
+//
+// caller:
+// 	1. compatible/src/net/http/server_response.go -> response.Hijack()
 func (c *conn) hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -92,6 +174,9 @@ func (c *conn) noteClientGone() {
 	c.clientGone = true
 }
 
+// caller:
+// 	1. conn.serve()
+//
 // Read next request from connection.
 func (c *conn) readRequest() (w *response, err error) {
 	if c.hijacked() {
@@ -199,6 +284,13 @@ func (c *conn) setState(nc net.Conn, state ConnState) {
 	}
 }
 
+// serve 这里是实际处理 connect socket 的地方(tcp层面), 从 socket 中读取 http 协议内容,
+// 构造 Request() 对象, 再转交给 http server.
+//
+// caller:
+// 	1. Server.Serve() listen socket 每通过 accept() 接收到一个请求, 都会开一个协程
+// 	调用该方法对这个请求进行处理, conn{} 对象中包含了该连接中的所有信息.
+//
 // Serve a new connection.
 func (c *conn) serve() {
 	defer func() {
@@ -213,6 +305,7 @@ func (c *conn) serve() {
 		}
 	}()
 
+	// 如果是 https, 则进入该块, 进行额外的握手处理.
 	if tlsConn, ok := c.rwc.(*tls.Conn); ok {
 		if d := c.server.ReadTimeout; d != 0 {
 			c.rwc.SetReadDeadline(time.Now().Add(d))
@@ -235,14 +328,15 @@ func (c *conn) serve() {
 	}
 
 	for {
-		w, err := c.readRequest()
+		// 从 connect socket 中读取 http 协议信息, 构造 request 对象,
+		// 将其赋值到 response{} 中的成员字段并返回.
+		resp, err := c.readRequest()
 		if err != nil {
 			if err == errTooLarge {
-				// Their HTTP client may or may not be
-				// able to read this if we're
-				// responding to them and hanging up
-				// while they're still writing their
-				// request.  Undefined behavior.
+				// Their HTTP client may or may not be able to read this
+				// if we're responding to them and hanging up
+				// while they're still writing their request. 
+				// Undefined behavior.
 				io.WriteString(c.rwc, "HTTP/1.1 413 Request Entity Too Large\r\n\r\n")
 				c.closeWriteAndWait()
 				break
@@ -256,36 +350,39 @@ func (c *conn) serve() {
 		}
 
 		// Expect 100 Continue support
-		req := w.req
+		req := resp.req
 		if req.expectsContinue() {
 			if req.ProtoAtLeast(1, 1) {
 				// Wrap the Body reader with one that replies on the connection
-				req.Body = &expectContinueReader{readCloser: req.Body, resp: w}
+				req.Body = &expectContinueReader{readCloser: req.Body, resp: resp}
 			}
 			if req.ContentLength == 0 {
-				w.Header().Set("Connection", "close")
-				w.WriteHeader(StatusBadRequest)
-				w.finishRequest()
+				resp.Header().Set("Connection", "close")
+				resp.WriteHeader(StatusBadRequest)
+				resp.finishRequest()
 				break
 			}
 			req.Header.Del("Expect")
 		} else if req.Header.get("Expect") != "" {
-			w.sendExpectationFailed()
+			resp.sendExpectationFailed()
 			break
 		}
 
+		// 进入 http server 处理流程.
+		//
 		// HTTP cannot have multiple simultaneous active requests.[*]
 		// Until the server replies to this request, it can't read another,
 		// so we might as well run the handler in this goroutine.
-		// [*] Not strictly true: HTTP pipelining.  We could let them all process
-		// in parallel even if their responses need to be serialized.
-		serverHandler{c.server}.ServeHTTP(w, w.req)
+		// [*] Not strictly true: HTTP pipelining. 
+		// We could let them all process in parallel even if their responses
+		// need to be serialized.
+		serverHandler{c.server}.ServeHTTP(resp, resp.req)
 		if c.hijacked() {
 			return
 		}
-		w.finishRequest()
-		if w.closeAfterReply {
-			if w.requestBodyLimitHit {
+		resp.finishRequest()
+		if resp.closeAfterReply {
+			if resp.requestBodyLimitHit {
 				c.closeWriteAndWait()
 			}
 			break

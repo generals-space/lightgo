@@ -543,6 +543,9 @@ func putTextprotoReader(r *textproto.Reader) {
 	}
 }
 
+// caller:
+// 	1. compatible/src/net/http/server_conn.go -> conn.readRequest()
+//
 // ReadRequest reads and parses a request from b.
 func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 
@@ -874,6 +877,8 @@ func (r *Request) FormFile(key string) (multipart.File, *multipart.FileHeader, e
 	return nil, nil, ErrMissingFile
 }
 
+// caller:
+// 	1. compatible/src/net/http/server_conn.go -> conn.serve()
 func (r *Request) expectsContinue() bool {
 	return hasToken(r.Header.get("Expect"), "100-continue")
 }

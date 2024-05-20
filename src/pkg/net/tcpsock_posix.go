@@ -58,6 +58,11 @@ type TCPConn struct {
 	conn
 }
 
+// 	@param fd: 底层 connect socket 对象.
+//
+// caller:
+// 	1. TCPListener.AcceptTCP() listen socket 在调用 accept 得到 connec socket 对象
+// 	2. DialTCP() -> dialTCP()
 func newTCPConn(fd *netFD) *TCPConn {
 	c := &TCPConn{conn{fd}}
 	c.SetNoDelay(true)
@@ -137,8 +142,8 @@ func (c *TCPConn) SetNoDelay(noDelay bool) error {
 }
 
 // DialTCP connects to the remote address raddr on the network net,
-// which must be "tcp", "tcp4", or "tcp6".  If laddr is not nil, it is
-// used as the local address for the connection.
+// which must be "tcp", "tcp4", or "tcp6". 
+// If laddr is not nil, it is used as the local address for the connection.
 func DialTCP(net string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 	switch net {
 	case "tcp", "tcp4", "tcp6":
@@ -218,6 +223,8 @@ func spuriousENOTAVAIL(err error) bool {
 	return ok && e.Err == syscall.EADDRNOTAVAIL
 }
 
+// 	@implementOf: src/pkg/net/net.go -> Listener
+//
 // TCPListener is a TCP network listener.  Clients should typically
 // use variables of type Listener instead of assuming TCP.
 type TCPListener struct {
