@@ -11,24 +11,17 @@ import (
 // import "io/ioutil"
 
 func ExampleGet() {
-	addr := "https://www.baidu.com"
-	// 直接发送Get请求, res为Response类型
-	res, err := http.Get(addr)
+	res, err := http.Get("https://www.baidu.com/robots.txt")
 	if err != nil {
 		panic(err)
 	}
-	// 这一句貌似是必须的
 	defer res.Body.Close()
-	/*
-	 * header是Header类型, 而Header本身的定义为
-	 * type Header map[string][]string
-	 * 所以可以用很常规的方法获取到响应头信息
-	 */
+
 	header := res.Header
 	for k, v := range header {
 		log.Printf("key: %s, value: %s", k, v)
 	}
-	log.Println("============================================")
+
 	// Body是一个类似于Buffer的类型, 有两个方法可以读取其中的内容.
 	// 1. 如果使用res.Body自己的Read方法, 就必须创建一个容器来承接
 	// 但实际上不一定读取1024个字节, 有可能存在多于或少于的情况.
@@ -72,7 +65,6 @@ func ExamplePost() {
 	if err != nil {
 		panic(err)
 	}
-	// 这一句貌似是必须的
 	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
@@ -81,17 +73,17 @@ func ExamplePost() {
 
 func ExampleGetRequest() {
 	client := &http.Client{}
-    url := "https://www.baidu.com"
-    req, err := http.NewRequest("GET", url, nil)
-    if err != nil {
-        panic(err)
-    }
+	url := "https://www.baidu.com"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(err)
+	}
 	// req.Header.Set("User-Agent", "curl/7.54.0")
 
-    res, err := client.Do(req)
+	res, err := client.Do(req)
 
-    result, err := ioutil.ReadAll(res.Body)
-    log.Printf("%s\n", result)
+	result, err := ioutil.ReadAll(res.Body)
+	log.Printf("%s\n", result)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -104,16 +96,18 @@ type LoginInfo struct {
 		Type    int    `json:"type"`
 	} `json:"params"`
 }
+
 // LoginRespPayload ...
-type LoginRespPayload struct{
-	Token string	`json:"token"`
+type LoginRespPayload struct {
+	Token string `json:"token"`
 }
+
 // LoginResp ...
 type LoginResp struct {
-	Token  string `json:"token"`
-	Code   int    `json:"code"`
-	Msg    string `json:"msg"`
-	Total  int `json:"total"`
+	Token  string           `json:"token"`
+	Code   int              `json:"code"`
+	Msg    string           `json:"msg"`
+	Total  int              `json:"total"`
 	Result LoginRespPayload `json:"result"`
 }
 
