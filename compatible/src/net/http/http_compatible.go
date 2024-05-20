@@ -18,6 +18,12 @@ func (k *contextKey) String() string { return "net/http context value " + k.name
 
 ////////////////////////////////////////////////////////////////////////////////
 
+type noBody struct{}
+
+func (noBody) Read([]byte) (int, error)         { return 0, io.EOF }
+func (noBody) Close() error                     { return nil }
+func (noBody) WriteTo(io.Writer) (int64, error) { return 0, nil }
+
 // 	@compatible: 该结构体在 v1.8 版本初次添加
 //
 // NoBody is an io.ReadCloser with no bytes. Read always returns EOF
@@ -25,12 +31,6 @@ func (k *contextKey) String() string { return "net/http context value " + k.name
 // request to explicitly signal that a request has zero bytes.
 // An alternative, however, is to simply set Request.Body to nil.
 var NoBody = noBody{}
-
-type noBody struct{}
-
-func (noBody) Read([]byte) (int, error)         { return 0, io.EOF }
-func (noBody) Close() error                     { return nil }
-func (noBody) WriteTo(io.Writer) (int64, error) { return 0, nil }
 
 var (
 	// verify that an io.Copy from NoBody won't require a buffer:

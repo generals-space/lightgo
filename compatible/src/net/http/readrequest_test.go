@@ -23,7 +23,7 @@ type reqTest struct {
 }
 
 var noError = ""
-var noBody = ""
+var noBodyStr = ""
 var noTrailer Header = nil
 
 var reqTests = []reqTest{
@@ -93,7 +93,7 @@ var reqTests = []reqTest{
 			RequestURI:    "/",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
@@ -119,7 +119,7 @@ var reqTests = []reqTest{
 			RequestURI:    "//user@host/is/actually/a/path/",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
@@ -129,7 +129,7 @@ var reqTests = []reqTest{
 		"GET ../../../../etc/passwd HTTP/1.1\r\n" +
 			"Host: test\r\n\r\n",
 		nil,
-		noBody,
+		noBodyStr,
 		noTrailer,
 		"parse ../../../../etc/passwd: invalid URI for request",
 	},
@@ -139,7 +139,7 @@ var reqTests = []reqTest{
 		"GET  HTTP/1.1\r\n" +
 			"Host: test\r\n\r\n",
 		nil,
-		noBody,
+		noBodyStr,
 		noTrailer,
 		"parse : empty url",
 	},
@@ -195,7 +195,7 @@ var reqTests = []reqTest{
 			RequestURI:    "www.google.com:443",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
@@ -219,7 +219,7 @@ var reqTests = []reqTest{
 			RequestURI:    "127.0.0.1:6060",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
@@ -243,7 +243,7 @@ var reqTests = []reqTest{
 			RequestURI:    "/_goRPC_",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
@@ -267,7 +267,7 @@ var reqTests = []reqTest{
 			RequestURI:    "*",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
@@ -291,7 +291,7 @@ var reqTests = []reqTest{
 			RequestURI:    "*",
 		},
 
-		noBody,
+		noBodyStr,
 		noTrailer,
 		noError,
 	},
