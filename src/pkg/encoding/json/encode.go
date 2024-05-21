@@ -25,6 +25,8 @@ import (
 	"unicode/utf8"
 )
 
+// Marshal 结构体的成员字段必须是大写字母开头, 否则得到其内容.
+//
 // Marshal returns the JSON encoding of v.
 //
 // Marshal traverses the value v recursively.

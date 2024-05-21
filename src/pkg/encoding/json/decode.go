@@ -21,6 +21,8 @@ import (
 	"unicode/utf8"
 )
 
+// 	@param v: 一般需要是指针类型.
+//
 // Unmarshal parses the JSON-encoded data and stores the result
 // in the value pointed to by v.
 //
