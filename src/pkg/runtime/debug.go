@@ -16,13 +16,21 @@ func LockOSThread()
 // If the calling goroutine has not called LockOSThread, UnlockOSThread is a no-op.
 func UnlockOSThread()
 
+// GOMAXPROCS 说是调整进程最大可以使用的 CPU 核心数, 其实调整的就是 P 的数量.
+//
+// 	@implementBy: src/pkg/runtime/runtime1.goc -> GOMAXPROCS()
+//
 // GOMAXPROCS sets the maximum number of CPUs that can be executing
-// simultaneously and returns the previous setting.  If n < 1, it does not
-// change the current setting.
+// simultaneously(同时) and returns the previous setting. 
+// If n < 1, it does not change the current setting.
 // The number of logical CPUs on the local machine can be queried with NumCPU.
 // This call will go away when the scheduler improves.
 func GOMAXPROCS(n int) int
 
+// NumCPU 查询当前物理机的逻辑 cpu 核数(在进程启动时自动探测).
+//
+// 	@implementBy: src/pkg/runtime/runtime1.goc -> NumCPU()
+//
 // NumCPU returns the number of logical CPUs on the local machine.
 func NumCPU() int
 

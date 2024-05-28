@@ -59,10 +59,11 @@ func MkdirAll(path string, perm FileMode) error {
 	return nil
 }
 
+// RemoveAll 删除目标目录 path 下的所有文件, 包括 path 本身, 不管 path 是目录还是文件.
+//
 // RemoveAll removes path and any children it contains.
-// It removes everything it can but returns the first error
-// it encounters.  If the path does not exist, RemoveAll
-// returns nil (no error).
+// It removes everything it can but returns the first error it encounters. 
+// If the path does not exist, RemoveAll returns nil (no error).
 func RemoveAll(path string) error {
 	// Simple case: if Remove works, we're done.
 	err := Remove(path)

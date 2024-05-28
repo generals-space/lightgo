@@ -6,17 +6,16 @@ package runtime
 
 import "unsafe"
 
-// Note: the MemStats struct should be kept in sync with
-// struct MStats in malloc.h
-
-// 	@implementOf: src/pkg/runtime/malloc.h -> MStats{}
+// 注意: MemStats{} 需要与 src/pkg/runtime/malloc.h -> struct MStats{} 保持一致.
+//
+// 	@implementBy: src/pkg/runtime/malloc.h -> MStats{}
 //
 // A MemStats records statistics about the memory allocator.
 type MemStats struct {
 	// General statistics.
 	Alloc      uint64 // bytes allocated and still in use
 	TotalAlloc uint64 // bytes allocated (even if freed)
-	Sys        uint64 // bytes obtained from system (sum of XxxSys below)
+	Sys        uint64 // bytes obtained(获得的) from system (sum of XxxSys below)
 	Lookups    uint64 // number of pointer lookups
 	Mallocs    uint64 // number of mallocs
 	Frees      uint64 // number of frees
@@ -74,7 +73,9 @@ func init() {
 	}
 }
 
-// ReadMemStats populates m with memory allocator statistics.
+// 	@implementBy: src/pkg/runtime/mgc0.c -> runtime·ReadMemStats()
+//
+// ReadMemStats populates(填充) m with memory allocator statistics.
 func ReadMemStats(m *MemStats)
 
 // GC runs a garbage collection.

@@ -651,11 +651,10 @@ func ParseIP(s string) IP {
 }
 
 // ParseCIDR parses s as a CIDR notation IP address and mask,
-// like "192.168.100.1/24" or "2001:DB8::/48", as defined in
-// RFC 4632 and RFC 4291.
+// like "192.168.100.1/24" or "2001:DB8::/48", as defined in RFC 4632 and RFC 4291.
 //
-// It returns the IP address and the network implied by the IP
-// and mask.  For example, ParseCIDR("192.168.100.1/16") returns
+// It returns the IP address and the network implied by the IP and mask. 
+// For example, ParseCIDR("192.168.100.1/16") returns
 // the IP address 192.168.100.1 and the network 192.168.0.0/16.
 func ParseCIDR(s string) (IP, *IPNet, error) {
 	i := byteIndex(s, '/')

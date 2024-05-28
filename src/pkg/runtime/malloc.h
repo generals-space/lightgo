@@ -239,7 +239,7 @@ void*	runtime·FixAlloc_Alloc(FixAlloc *f);
 void	runtime·FixAlloc_Free(FixAlloc *f, void *p);
 
 
-// 	@implementBy: src/pkg/runtime/mem.go -> MemStats{}
+// 	@implementOf: src/pkg/runtime/mem.go -> MemStats{}
 //
 // Statistics.
 // Shared with Go: if you edit this structure, also edit type MemStats in mem.go.

@@ -26,7 +26,8 @@
 //
 // 另外, 由于 golang 提供了 runtime 接口, 所以这个值也可以在程序运行过程中被动态地修改.
 int32	runtime·gomaxprocs;
-// runtime·ncpu 表示当前物理机实际的 cpu 核数.
+// runtime·ncpu 表示当前物理机的逻辑 cpu 核数.
+// 在 src/pkg/runtime/debug.go -> NumCPU() 中被用到.
 //
 // 在 src/pkg/runtime/os_linux.c -> runtime·osinit() 函数中被赋值.
 int32	runtime·ncpu;
@@ -732,12 +733,15 @@ void runtime·Gosched(void)
 	runtime·gosched();
 }
 
+// runtime·gomaxprocsfunc 调整 P 的值, 并返回调整前的值.
+//
+// 可在进程运行过程中由开发者动态调整, 调整的过程中用到了 STW 操作.
+//
 // caller:
 // 	1. src/pkg/runtime/runtime1.goc -> GOMAXPROCS()
 //
 // Implementation of runtime.GOMAXPROCS.
 // delete when scheduler is even stronger
-// 调整的过程中用到了 STW 操作.
 int32 runtime·gomaxprocsfunc(int32 n)
 {
 	int32 ret;

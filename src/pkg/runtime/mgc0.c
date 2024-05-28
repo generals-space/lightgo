@@ -2574,8 +2574,7 @@ runtime·gc(int32 force)
 //
 // caller: 
 // 	1. runtime·gc() 在进入 STW 阶段后, 调用 runtime·mcall(mgc) 在 g0 上执行该函数
-static void
-mgc(G *gp)
+static void mgc(G *gp)
 {
 	gc(gp->param);
 	gp->param = nil;
@@ -2768,13 +2767,12 @@ static void gc(struct gc_args *args)
 	runtime·MProf_GC();
 }
 
-void
-runtime·ReadMemStats(MStats *stats)
+// 	@implementOf: src/pkg/runtime/mem.go -> ReadMemStats()
+void runtime·ReadMemStats(MStats *stats)
 {
 	// Have to acquire worldsema to stop the world,
-	// because stoptheworld can only be used by
-	// one goroutine at a time, and there might be
-	// a pending garbage collection already calling it.
+	// because stoptheworld can only be used by one goroutine at a time,
+	// and there might be a pending garbage collection already calling it.
 	runtime·semacquire(&runtime·worldsema, false);
 	m->gcing = 1;
 	runtime·stoptheworld();
@@ -2787,8 +2785,8 @@ runtime·ReadMemStats(MStats *stats)
 	m->locks--;
 }
 
-void
-runtime∕debug·readGCStats(Slice *pauses)
+// 	@implementOf: src/pkg/runtime/debug/garbage.go -> readGCStats()
+void runtime∕debug·readGCStats(Slice *pauses)
 {
 	uint64 *p;
 	uint32 i, n;
@@ -2806,10 +2804,10 @@ runtime∕debug·readGCStats(Slice *pauses)
 		n = nelem(mstats.pause_ns);
 	}
 	
-	// The pause buffer is circular. The most recent pause is at
-	// pause_ns[(numgc-1)%nelem(pause_ns)], and then backward
-	// from there to go back farther in time. We deliver the times
-	// most recent first (in p[0]).
+	// The pause buffer is circular.
+	// The most recent pause is at pause_ns[(numgc-1)%nelem(pause_ns)],
+	// and then backward from there to go back farther in time.
+	// We deliver the times most recent first (in p[0]).
 	for(i=0; i<n; i++) {
 		p[i] = mstats.pause_ns[(mstats.numgc-1-i)%nelem(mstats.pause_ns)];
 	}
@@ -2821,8 +2819,8 @@ runtime∕debug·readGCStats(Slice *pauses)
 	pauses->len = n+3;
 }
 
-void
-runtime∕debug·setGCPercent(intgo in, intgo out)
+// 	@implementOf: src/pkg/runtime/debug/garbage.go -> setGCPercent()
+void runtime∕debug·setGCPercent(intgo in, intgo out)
 {
 	runtime·lock(&runtime·mheap);
 
@@ -2846,8 +2844,7 @@ runtime∕debug·setGCPercent(intgo in, intgo out)
 // caller: 
 // 	1. runtime·gchelper()
 // 	2. gc()
-static void
-gchelperstart(void)
+static void gchelperstart(void)
 {
 	if(m->helpgc < 0 || m->helpgc >= MaxGcproc) {
 		runtime·throw("gchelperstart: bad m->helpgc");
@@ -2862,8 +2859,7 @@ gchelperstart(void)
 
 // caller:
 // 	1. 这个函数的调用有点复杂
-static void
-runfinq(void)
+static void runfinq(void)
 {
 	Finalizer *f;
 	FinBlock *fb, *next;
@@ -2945,8 +2941,7 @@ runfinq(void)
 //
 // mark the block at v of size n as allocated.
 // If noscan is true, mark it as not needing scanning.
-void
-runtime·markallocated(void *v, uintptr n, bool noscan)
+void runtime·markallocated(void *v, uintptr n, bool noscan)
 {
 	uintptr *b, obits, bits, off, shift;
 
@@ -3034,8 +3029,7 @@ void runtime·markfreed(void *v, uintptr n)
 }
 
 // check that the block at v of size n is marked freed.
-void
-runtime·checkfreed(void *v, uintptr n)
+void runtime·checkfreed(void *v, uintptr n)
 {
 	uintptr *b, bits, off, shift;
 
@@ -3074,8 +3068,7 @@ runtime·checkfreed(void *v, uintptr n)
 //
 // mark the span of memory at v as having n blocks of the given size.
 // if leftover is true, there is left over space at the end of the span.
-void
-runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
+void runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 {
 	uintptr *b, off, shift;
 	byte *p;
@@ -3106,8 +3099,7 @@ runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 // 从地址v开始的n bytes的内存块在bitmap中的标识位清空为0.
 //
 // unmark the span of memory at v of length n bytes.
-void
-runtime·unmarkspan(void *v, uintptr n)
+void runtime·unmarkspan(void *v, uintptr n)
 {
 	uintptr *p, *b, off;
 
@@ -3143,8 +3135,7 @@ runtime·unmarkspan(void *v, uintptr n)
 	} 
 }
 
-bool
-runtime·blockspecial(void *v)
+bool runtime·blockspecial(void *v)
 {
 	uintptr *b, off, shift;
 
@@ -3159,8 +3150,7 @@ runtime·blockspecial(void *v)
 	return (*b & (bitSpecial<<shift)) != 0;
 }
 
-void
-runtime·setblockspecial(void *v, bool s)
+void runtime·setblockspecial(void *v, bool s)
 {
 	uintptr *b, off, shift, bits, obits;
 

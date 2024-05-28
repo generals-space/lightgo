@@ -23,6 +23,9 @@ func TestGcSys(t *testing.T) {
 	}
 }
 
+// 频繁创建空数组, 检验内存分配器是否会向OS申请过多内存.
+// 理论上不需要, 就算创建100w次, 大概1GB, 但由于是空数组, 也不会分配多余内存.
+// 不过我尝试在 workthegc() 中为数组第1028成员赋值, 也没占用多少资源, 不明白原理.
 const testGCSysSource = `
 package main
 
@@ -68,6 +71,7 @@ func workthegc() []byte {
 }
 `
 
+// 测试GC的深度嵌套
 func TestGcDeepNesting(t *testing.T) {
 	type T [2][2][2][2][2][2][2][2][2][2]*int
 	a := new(T)

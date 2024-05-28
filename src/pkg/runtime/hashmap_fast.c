@@ -14,8 +14,7 @@
 
 // golang原生: val := map["key"]
 #pragma textflag NOSPLIT
-void
-HASH_LOOKUP1(MapType *t, Hmap *h, KEYTYPE key, byte *value)
+void HASH_LOOKUP1(MapType *t, Hmap *h, KEYTYPE key, byte *value)
 {
 	uintptr bucket, i;
 	Bucket *b;
@@ -127,8 +126,7 @@ dohash:
 
 // golang原生: val, ok := map["key"]
 #pragma textflag NOSPLIT
-void
-HASH_LOOKUP2(MapType *t, Hmap *h, KEYTYPE key, byte *value, bool res)
+void HASH_LOOKUP2(MapType *t, Hmap *h, KEYTYPE key, byte *value, bool res)
 {
 	uintptr bucket, i;
 	Bucket *b;
