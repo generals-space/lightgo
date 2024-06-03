@@ -9,48 +9,12 @@
 #include "malloc.h"
 #include "stack.h"
 #include "mgc0.h"
+#include "mgc0__funcs.h"
 #include "race.h"
 #include "type.h"
 #include "typekind.h"
 #include "funcdata.h"
 #include "../../cmd/ld/textflag.h"
-
-enum {
-	Debug = 0,
-	DebugMark = 0,  // run second pass to check mark
-	CollectStats = 0,
-	ScanStackByFrames = 0,
-	IgnorePreciseGC = 0,
-
-	// wordsPerBitmapWord = 16, 表示 bitmap 中每个 word 对应 arena 中 word 的个数.
-	//
-	// word(字)是一种逻辑单位, 与指针(pointer)同级, 占用空间 4 bits.
-	// bitmap 区域中只要一个 word(4 bits)就可以描述一个 arena 中的指针(8 bits * 8).
-	// bitmap:arena == 1:16
-	//
-	// Four bits per word (see #defines below).
-	wordsPerBitmapWord = sizeof(void*)*8/4,
-	// bitShift = 16
-	bitShift = sizeof(void*)*8/4,
-
-	handoffThreshold = 4,
-	IntermediateBufferCapacity = 64,
-
-	// Bits in type information
-	PRECISE = 1,
-	LOOP = 2,
-	PC_BITS = PRECISE | LOOP,
-
-	// Pointer map
-	BitsPerPointer = 2,
-	// 每个指针的信息用 BitsPerPointer 个 bit 即可表示, 可有如下4种情况.
-	// 在 scanbitvector() 函数中有对相关变量与 3(0000 0000 0000 0011)做与操作,
-	// 得到结果后与如下4种情况做比较的操作. 
-	BitsNoPointer = 0, 	// 非指针对象
-	BitsPointer = 1,	// 指针对象
-	BitsIface = 2,		// 接口类型对象
-	BitsEface = 3,		// 接口数据对象
-};
 
 // 关于 bitmap 中, 每个 word(字)的每个"bit位"的描述.
 //
@@ -3180,26 +3144,4 @@ void runtime·setblockspecial(void *v, bool s)
 			} 
 		}
 	}
-}
-
-// caller:
-// 	1. src/pkg/runtime/malloc.goc -> runtime·MHeap_SysAlloc() 只有这一处
-void runtime·MHeap_MapBits(MHeap *h)
-{
-	// Caller has added extra mappings to the arena.
-	// Add extra mappings of bitmap words as needed.
-	// We allocate extra bitmap pieces in chunks of bitmapChunk.
-	enum {
-		bitmapChunk = 8192
-	};
-	uintptr n;
-
-	n = (h->arena_used - h->arena_start) / wordsPerBitmapWord;
-	n = ROUND(n, bitmapChunk);
-	if(h->bitmap_mapped >= n) {
-		return;
-	}
-
-	runtime·SysMap(h->arena_start - n, n - h->bitmap_mapped, &mstats.gc_sys);
-	h->bitmap_mapped = n;
 }

@@ -53,3 +53,40 @@ enum {
 	//  - at most GC_STACK_CAPACITY allocations because of GC_ARRAY_START
 	GC_STACK_CAPACITY = 8,	
 };
+
+enum {
+	Debug = 0,
+	DebugMark = 0,  // run second pass to check mark
+	CollectStats = 0,
+	ScanStackByFrames = 0,
+	IgnorePreciseGC = 0,
+
+	// wordsPerBitmapWord = 16, 表示 bitmap 中每个 word 对应 arena 中 word 的个数.
+	//
+	// word(字)是一种逻辑单位, 与指针(pointer)同级, 占用空间 4 bits.
+	// bitmap 区域中只要一个 word(4 bits)就可以描述一个 arena 中的指针(8 bits * 8).
+	// bitmap:arena == 1:16
+	//
+	// Four bits per word (see #defines below).
+	wordsPerBitmapWord = sizeof(void*)*8/4,
+	// bitShift = 16
+	bitShift = sizeof(void*)*8/4,
+
+	handoffThreshold = 4,
+	IntermediateBufferCapacity = 64,
+
+	// Bits in type information
+	PRECISE = 1,
+	LOOP = 2,
+	PC_BITS = PRECISE | LOOP,
+
+	// Pointer map
+	BitsPerPointer = 2,
+	// 每个指针的信息用 BitsPerPointer 个 bit 即可表示, 可有如下4种情况.
+	// 在 scanbitvector() 函数中有对相关变量与 3(0000 0000 0000 0011)做与操作,
+	// 得到结果后与如下4种情况做比较的操作. 
+	BitsNoPointer = 0, 	// 非指针对象
+	BitsPointer = 1,	// 指针对象
+	BitsIface = 2,		// 接口类型对象
+	BitsEface = 3,		// 接口数据对象
+};
