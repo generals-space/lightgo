@@ -6,6 +6,7 @@
 #include <libc.h>
 #include "reflect.h"
 #include "../../pkg/runtime/mgc0.h"
+#include "../../pkg/runtime/mgc0__funcs.h"
 
 /*
  * runtime interface and reflection data structures
