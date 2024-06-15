@@ -353,12 +353,16 @@ void addroots(void)
 			//    The garbage collector relies on finding the references via that cache.
 			switch(s->types.compression) {
 			case MTypes_Empty:
+				// 不执行操作
 			case MTypes_Single:
-				break; // 这里 break 的是当前的 switch 语句
+				// 这里 break 的是当前的 switch 语句
+				break; 
 			case MTypes_Words:
+				// 不执行操作
 			case MTypes_Bytes:
 				markonly((byte*)s->types.data);
-				break; // 这里 break 的是当前的 switch 语句
+				// 这里 break 的是当前的 switch 语句
+				break; 
 			}
 		}
 	}

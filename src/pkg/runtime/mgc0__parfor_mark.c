@@ -15,6 +15,8 @@ extern struct WORK work;
 extern Workbuf* getempty(Workbuf*);
 extern Workbuf* handoff(Workbuf*);
 
+// 将 obj 对象的信息存放到 wbuf 等参数中, 之后主调函数会继续调用 scanblock 扫描 wbuf 的内容.
+//
 // 	@param obj: work.roots 数组中的某个成员, 其实是 arena 区域中的某个地址.
 //
 // caller:
@@ -81,6 +83,8 @@ void work_enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj)
 
 extern void scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking);
 
+// markroot addroots() 完成后被调用, 对所有 root 节点进行扫描.
+//
 // 	@param desc: work.markfor, 实际是 markroot(), 是一个函数.
 // 	@param i: 为任务索引, work.roots 为全部任务, i 的范围在 [0, (work.nroot-1)]
 //

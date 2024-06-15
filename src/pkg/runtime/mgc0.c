@@ -178,7 +178,7 @@ void runtime·gc(int32 force)
 	// 现在 gc 已经完成, 如果有需要, 则启动 finalizer 线程.
 	// finq 等待执行的finalizer链表
 	//
-	// now that gc is done, kick off finalizer thread if needed
+	// now that gc is done, kick off(使用..开始) finalizer thread if needed
 	if(finq != nil) {
 		runtime·lock(&finlock);
 		// fing 用来执行finalizer的线程对象, 指针类型
@@ -225,7 +225,7 @@ extern void sweepspan(ParFor *desc, uint32 idx);
 extern void scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking);
 static void	gchelperstart(void);
 
-// 确定参与 gc 的协程数量, 然后调用 addroots() 添加根节点.
+// gc 实际的 gc 主流程(此时已经处于 STW 期间).
 //
 // caller:
 // 	1. mgc() 只有这一处, mgc()则是由 runtime·gc()调用的, 该函数是在 g0 上执行的.

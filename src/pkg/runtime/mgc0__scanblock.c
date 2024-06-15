@@ -22,7 +22,7 @@ extern void work_enqueue(Obj obj, Workbuf **_wbuf, Obj **_wp, uintptr *_nobj);
 // 	1. scanblock() 只有这一个函数, 但是有多次调用.
 //
 // flushptrbuf moves data from the PtrTarget buffer to the work buffer.
-// The PtrTarget buffer contains blocks irrespective of whether the blocks
+// The PtrTarget buffer contains blocks irrespective of(不管) whether the blocks
 // have been marked or scanned,
 // while the work buffer contains blocks which have been marked
 // and are prepared to be scanned by the garbage collector.
@@ -385,13 +385,13 @@ uintptr defaultProg[2] = {PtrSize, GC_DEFAULT_PTR};
 // wp:   storage for next queued pointer (write pointer)
 // nobj: number of queued objects
 //
-// scanblock scans a block of n bytes starting at pointer b 
-// for references to other objects, 
+// scanblock scans a block of n bytes starting at pointer b for references to
+// other objects, 
 // scanning any it finds recursively until there are no unscanned objects left. 
-// Instead of using an explicit recursion, it keeps a work list
-// in the Workbuf* structures and loops in the main function body. 
-// Keeping an explicit work list is easier 
-// on the stack allocator and more efficient.
+// Instead of using an explicit recursion, it keeps a work list in the Workbuf* 
+// structures and loops in the main function body. 
+// Keeping an explicit work list is easier on the stack allocator and
+// more efficient.
 // 
 void scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 {
@@ -559,303 +559,306 @@ void scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 
 		end_b = (uintptr)b + n - PtrSize;
 
-	// 状态机的思想
-	for(;;) {
-		if(CollectStats) {
-			runtime·xadd64(&gcstats.instr[pc[0]], 1);
-		}
-
-		obj = nil;
-		objti = 0;
-		// pc 是gc行为的操作命令, 其中 pc[0] 为操作码(就是下面的 case 部分),
-		// 每种操作码接收的参数数量是不同的, 具体的操作码及参数对应关系, 可见
-		// src/pkg/reflect/type.go -> appendGCProgram()
-		// 
-		// 比如 GC_PTR, 在 appendGCProgram() 中, `_GC_PTR`指令的 argcnt = 2(两个参数),
-		// 那么下面的 case 中, pc[0] 为 GC_PTR 自身, pc[1]和pc[2]就是这两个参数,
-		// 之后指针后移3位, 进行下一个指令的解析.
-		switch(pc[0]) {
-		case GC_PTR:
-			obj = *(void**)(stack_top.b + pc[1]);
-			objti = pc[2];
-			pc += 3;
-			if(Debug) {
-				checkptr(obj, objti);
+		// 状态机的思想
+		for(;;) {
+			if(CollectStats) {
+				runtime·xadd64(&gcstats.instr[pc[0]], 1);
 			}
-			break;
 
-		case GC_SLICE:
-			sliceptr = (Slice*)(stack_top.b + pc[1]);
-			if(sliceptr->cap != 0) {
-				obj = sliceptr->array;
-				// Can't use slice element type for scanning,
-				// because if it points to an array embedded
-				// in the beginning of a struct,
-				// we will scan the whole struct as the slice.
-				// So just obtain type info from heap.
-			}
-			pc += 3;
-			break;
+			obj = nil;
+			objti = 0;
+			// pc 是gc行为的操作命令, 其中 pc[0] 为操作码(就是下面的 case 部分),
+			// 每种操作码接收的参数数量是不同的, 具体的操作码及参数对应关系, 可见
+			// src/pkg/reflect/type.go -> appendGCProgram()
+			// 
+			// 比如 GC_PTR, 在 appendGCProgram() 中, `_GC_PTR`指令的 argcnt = 2(两个参数),
+			// 那么下面的 case 中, pc[0] 为 GC_PTR 自身, pc[1]和pc[2]就是这两个参数,
+			// 之后指针后移3位, 进行下一个指令的解析.
+			switch(pc[0]) {
+			case GC_PTR:
+				obj = *(void**)(stack_top.b + pc[1]);
+				objti = pc[2];
+				pc += 3;
+				if(Debug) {
+					checkptr(obj, objti);
+				}
+				break;
 
-		case GC_APTR:
-			obj = *(void**)(stack_top.b + pc[1]);
-			pc += 2;
-			break;
+			case GC_SLICE:
+				sliceptr = (Slice*)(stack_top.b + pc[1]);
+				if(sliceptr->cap != 0) {
+					obj = sliceptr->array;
+					// Can't use slice element type for scanning,
+					// because if it points to an array embedded
+					// in the beginning of a struct,
+					// we will scan the whole struct as the slice.
+					// So just obtain type info from heap.
+				}
+				pc += 3;
+				break;
 
-		case GC_STRING:
-			obj = *(void**)(stack_top.b + pc[1]);
-			markonly(obj);
-			pc += 2;
-			continue;
+			case GC_APTR:
+				obj = *(void**)(stack_top.b + pc[1]);
+				pc += 2;
+				break;
 
-		case GC_EFACE:
-			eface = (Eface*)(stack_top.b + pc[1]);
-			pc += 2;
-			if(eface->type == nil) {
+			case GC_STRING:
+				obj = *(void**)(stack_top.b + pc[1]);
+				markonly(obj);
+				pc += 2;
 				continue;
-			}
 
-			// eface->type
-			t = eface->type;
-			if((void*)t >= arena_start && (void*)t < arena_used) {
-				*ptrbufpos++ = (PtrTarget){t, 0};
-				if(ptrbufpos == ptrbuf_end) {
-					flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
+			case GC_EFACE:
+				eface = (Eface*)(stack_top.b + pc[1]);
+				pc += 2;
+				if(eface->type == nil) {
+					continue;
 				}
-			}
 
-			// eface->data
-			if(eface->data >= arena_start && eface->data < arena_used) {
-				if(t->size <= sizeof(void*)) {
-					if((t->kind & KindNoPointers)) {
-						continue;
-					}
-
-					obj = eface->data;
-					if((t->kind & ~KindNoPointers) == KindPtr) {
-						objti = (uintptr)((PtrType*)t)->elem->gc;
-					}
-				} else {
-					obj = eface->data;
-					objti = (uintptr)t->gc;
-				}
-			}
-			break;
-
-		case GC_IFACE:
-			iface = (Iface*)(stack_top.b + pc[1]);
-			pc += 2;
-			if(iface->tab == nil) {
-				continue;
-			}
-			
-			// iface->tab
-			if((void*)iface->tab >= arena_start && (void*)iface->tab < arena_used) {
-				*ptrbufpos++ = (PtrTarget){iface->tab, (uintptr)itabtype->gc};
-				if(ptrbufpos == ptrbuf_end) {
-					flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
-				}
-			}
-
-			// iface->data
-			if(iface->data >= arena_start && iface->data < arena_used) {
-				t = iface->tab->type;
-				if(t->size <= sizeof(void*)) {
-					if((t->kind & KindNoPointers)) {
-						continue;
-					}
-
-					obj = iface->data;
-					if((t->kind & ~KindNoPointers) == KindPtr) {
-						objti = (uintptr)((PtrType*)t)->elem->gc;
-					}
-				} else {
-					obj = iface->data;
-					objti = (uintptr)t->gc;
-				}
-			}
-			break;
-
-		case GC_DEFAULT_PTR:
-			while(stack_top.b <= end_b) {
-				obj = *(byte**)stack_top.b;
-				stack_top.b += PtrSize;
-				if(obj >= arena_start && obj < arena_used) {
-					*ptrbufpos++ = (PtrTarget){obj, 0};
+				// eface->type
+				t = eface->type;
+				if((void*)t >= arena_start && (void*)t < arena_used) {
+					*ptrbufpos++ = (PtrTarget){t, 0};
 					if(ptrbufpos == ptrbuf_end) {
 						flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
 					}
 				}
-			}
-			goto next_block;
 
-		case GC_END:
-			if(--stack_top.count != 0) {
-				// Next iteration of a loop if possible.
-				stack_top.b += stack_top.elemsize;
-				if(stack_top.b + stack_top.elemsize <= end_b+PtrSize) {
-					pc = stack_top.loop_or_ret;
-					continue;
-				}
-				i = stack_top.b;
-			} else {
-				// Stack pop if possible.
-				if(stack_ptr+1 < stack+nelem(stack)) {
-					pc = stack_top.loop_or_ret;
-					stack_top = *(++stack_ptr);
-					continue;
-				}
-				i = (uintptr)b + nominal_size;
-			}
-			if(!precise_type) {
-				// Quickly scan [b+i,b+n) for possible pointers.
-				for(; i<=end_b; i+=PtrSize) {
-					if(*(byte**)i != nil) {
-						// Found a value that may be a pointer.
-						// Do a rescan of the entire block.
-						work_enqueue((Obj){b, n, 0}, &wbuf, &wp, &nobj);
-						if(CollectStats) {
-							runtime·xadd64(&gcstats.rescan, 1);
-							runtime·xadd64(&gcstats.rescanbytes, n);
+				// eface->data
+				if(eface->data >= arena_start && eface->data < arena_used) {
+					if(t->size <= sizeof(void*)) {
+						if((t->kind & KindNoPointers)) {
+							continue;
 						}
-						break;
+
+						obj = eface->data;
+						if((t->kind & ~KindNoPointers) == KindPtr) {
+							objti = (uintptr)((PtrType*)t)->elem->gc;
+						}
+					} else {
+						obj = eface->data;
+						objti = (uintptr)t->gc;
 					}
 				}
-			}
-			goto next_block;
+				break;
 
-		case GC_ARRAY_START:
-			i = stack_top.b + pc[1];
-			count = pc[2];
-			elemsize = pc[3];
-			pc += 4;
+			case GC_IFACE:
+				iface = (Iface*)(stack_top.b + pc[1]);
+				pc += 2;
+				if(iface->tab == nil) {
+					continue;
+				}
+				
+				// iface->tab
+				if((void*)iface->tab >= arena_start && (void*)iface->tab < arena_used) {
+					*ptrbufpos++ = (PtrTarget){iface->tab, (uintptr)itabtype->gc};
+					if(ptrbufpos == ptrbuf_end) {
+						flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
+					}
+				}
 
-			// Stack push.
-			*stack_ptr-- = stack_top;
-			stack_top = (Frame){count, elemsize, i, pc};
-			continue;
+				// iface->data
+				if(iface->data >= arena_start && iface->data < arena_used) {
+					t = iface->tab->type;
+					if(t->size <= sizeof(void*)) {
+						if((t->kind & KindNoPointers)) {
+							continue;
+						}
 
-		case GC_ARRAY_NEXT:
-			if(--stack_top.count != 0) {
-				stack_top.b += stack_top.elemsize;
-				pc = stack_top.loop_or_ret;
-			} else {
-				// Stack pop.
-				stack_top = *(++stack_ptr);
-				pc += 1;
-			}
-			continue;
+						obj = iface->data;
+						if((t->kind & ~KindNoPointers) == KindPtr) {
+							objti = (uintptr)((PtrType*)t)->elem->gc;
+						}
+					} else {
+						obj = iface->data;
+						objti = (uintptr)t->gc;
+					}
+				}
+				break;
 
-		case GC_CALL:
-			// Stack push.
-			*stack_ptr-- = stack_top;
-			stack_top = (Frame){1, 0, stack_top.b + pc[1], pc+3 /*return address*/};
-			pc = (uintptr*)((byte*)pc + *(int32*)(pc+2));  // target of the CALL instruction
-			continue;
+			case GC_DEFAULT_PTR:
+				while(stack_top.b <= end_b) {
+					obj = *(byte**)stack_top.b;
+					stack_top.b += PtrSize;
+					if(obj >= arena_start && obj < arena_used) {
+						*ptrbufpos++ = (PtrTarget){obj, 0};
+						if(ptrbufpos == ptrbuf_end) {
+							flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
+						}
+					}
+				}
+				goto next_block;
 
-		case GC_REGION:
-			obj = (void*)(stack_top.b + pc[1]);
-			size = pc[2];
-			objti = pc[3];
-			pc += 4;
+			case GC_END:
+				if(--stack_top.count != 0) {
+					// Next iteration of a loop if possible.
+					stack_top.b += stack_top.elemsize;
+					if(stack_top.b + stack_top.elemsize <= end_b+PtrSize) {
+						pc = stack_top.loop_or_ret;
+						continue;
+					}
+					i = stack_top.b;
+				} else {
+					// Stack pop if possible.
+					if(stack_ptr+1 < stack+nelem(stack)) {
+						pc = stack_top.loop_or_ret;
+						stack_top = *(++stack_ptr);
+						continue;
+					}
+					i = (uintptr)b + nominal_size;
+				}
+				if(!precise_type) {
+					// Quickly scan [b+i,b+n) for possible pointers.
+					for(; i<=end_b; i+=PtrSize) {
+						if(*(byte**)i != nil) {
+							// Found a value that may be a pointer.
+							// Do a rescan of the entire block.
+							work_enqueue((Obj){b, n, 0}, &wbuf, &wp, &nobj);
+							if(CollectStats) {
+								runtime·xadd64(&gcstats.rescan, 1);
+								runtime·xadd64(&gcstats.rescanbytes, n);
+							}
+							break;
+						}
+					}
+				}
+				goto next_block;
 
-			*objbufpos++ = (Obj){obj, size, objti};
-			if(objbufpos == objbuf_end) {
-				flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
-			}
-			continue;
+			case GC_ARRAY_START:
+				i = stack_top.b + pc[1];
+				count = pc[2];
+				elemsize = pc[3];
+				pc += 4;
 
-		case GC_CHAN_PTR:
-			chan = *(Hchan**)(stack_top.b + pc[1]);
-			if(chan == nil) {
+				// Stack push.
+				*stack_ptr-- = stack_top;
+				stack_top = (Frame){count, elemsize, i, pc};
+				continue;
+
+			case GC_ARRAY_NEXT:
+				if(--stack_top.count != 0) {
+					stack_top.b += stack_top.elemsize;
+					pc = stack_top.loop_or_ret;
+				} else {
+					// Stack pop.
+					stack_top = *(++stack_ptr);
+					pc += 1;
+				}
+				continue;
+
+			case GC_CALL:
+				// Stack push.
+				*stack_ptr-- = stack_top;
+				stack_top = (Frame){1, 0, stack_top.b + pc[1], pc+3 /*return address*/};
+				pc = (uintptr*)((byte*)pc + *(int32*)(pc+2));  // target of the CALL instruction
+				continue;
+
+			case GC_REGION:
+				obj = (void*)(stack_top.b + pc[1]);
+				size = pc[2];
+				objti = pc[3];
+				pc += 4;
+
+				*objbufpos++ = (Obj){obj, size, objti};
+				if(objbufpos == objbuf_end) {
+					flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
+				}
+				continue;
+
+			case GC_CHAN_PTR:
+				chan = *(Hchan**)(stack_top.b + pc[1]);
+				if(chan == nil) {
+					pc += 3;
+					continue;
+				}
+				if(markonly(chan)) {
+					chantype = (ChanType*)pc[2];
+					if(!(chantype->elem->kind & KindNoPointers)) {
+						// Start chanProg.
+						chan_ret = pc+3;
+						pc = chanProg+1;
+						continue;
+					}
+				}
 				pc += 3;
 				continue;
-			}
-			if(markonly(chan)) {
-				chantype = (ChanType*)pc[2];
-				if(!(chantype->elem->kind & KindNoPointers)) {
-					// Start chanProg.
-					chan_ret = pc+3;
-					pc = chanProg+1;
-					continue;
-				}
-			}
-			pc += 3;
-			continue;
 
-		case GC_CHAN:
-			// There are no heap pointers in struct Hchan,
-			// so we can ignore the leading sizeof(Hchan) bytes.
-			if(!(chantype->elem->kind & KindNoPointers)) {
-				// Channel's buffer follows Hchan immediately in memory.
-				// Size of buffer (cap(c)) is second int in the chan struct.
-				chancap = ((uintgo*)chan)[1];
-				if(chancap > 0) {
-					// TODO(atom): split into two chunks so that only the
-					// in-use part of the circular buffer is scanned.
-					// (Channel routines zero the unused part, so the current
-					// code does not lead to leaks, it's just a little inefficient.)
-					*objbufpos++ = (Obj){
-						(byte*)chan+runtime·Hchansize, 
-						chancap*chantype->elem->size,
-						(uintptr)chantype->elem->gc | PRECISE | LOOP
-					};
-					if(objbufpos == objbuf_end) {
-						flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
+			case GC_CHAN:
+				// There are no heap pointers in struct Hchan,
+				// so we can ignore the leading sizeof(Hchan) bytes.
+				if(!(chantype->elem->kind & KindNoPointers)) {
+					// Channel's buffer follows Hchan immediately in memory.
+					// Size of buffer (cap(c)) is second int in the chan struct.
+					chancap = ((uintgo*)chan)[1];
+					if(chancap > 0) {
+						// TODO(atom): split into two chunks so that only the
+						// in-use part of the circular buffer is scanned.
+						// (Channel routines zero the unused part, so the current
+						// code does not lead to leaks, it's just a little inefficient.)
+						*objbufpos++ = (Obj){
+							(byte*)chan+runtime·Hchansize, 
+							chancap*chantype->elem->size,
+							(uintptr)chantype->elem->gc | PRECISE | LOOP
+						};
+						if(objbufpos == objbuf_end) {
+							flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
+						}
 					}
 				}
-			}
-			if(chan_ret == nil) {
-				goto next_block;
-			}
-			pc = chan_ret;
-			continue;
+				if(chan_ret == nil) {
+					goto next_block;
+				}
+				pc = chan_ret;
+				continue;
 
-		default:
-			runtime·throw("scanblock: invalid GC instruction");
-			return;
+			default:
+				runtime·throw("scanblock: invalid GC instruction");
+				return;
+			}
+
+			if(obj >= arena_start && obj < arena_used) {
+				*ptrbufpos++ = (PtrTarget){obj, objti};
+				if(ptrbufpos == ptrbuf_end) {
+					flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
+				}
+			}
 		}
 
-		if(obj >= arena_start && obj < arena_used) {
-			*ptrbufpos++ = (PtrTarget){obj, objti};
-			if(ptrbufpos == ptrbuf_end) {
-				flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
-			}
-		}
-	}
-
-	next_block:
-		// Done scanning [b, b+n).  Prepare for the next iteration of
-		// the loop by setting b, n, ti to the parameters for the next block.
-
-		if(nobj == 0) {
-			flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
-			flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
+		next_block:
+		{
+			// Done scanning [b, b+n).  Prepare for the next iteration of
+			// the loop by setting b, n, ti to the parameters for the next block.
 
 			if(nobj == 0) {
-				if(!keepworking) {
-					if(wbuf) {
-						putempty(wbuf);
+				flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
+				flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
+
+				if(nobj == 0) {
+					if(!keepworking) {
+						if(wbuf) {
+							putempty(wbuf);
+						}
+						goto endscan; // 这里才是整个函数结束退出的地方
 					}
-					goto endscan; // 这里才是整个函数结束退出的地方
+					// Emptied our buffer: refill.
+					wbuf = getfull(wbuf);
+					if(wbuf == nil) {
+						goto endscan; // 这里才是整个函数结束退出的地方
+					}
+					nobj = wbuf->nobj;
+					wp = wbuf->obj + wbuf->nobj;
 				}
-				// Emptied our buffer: refill.
-				wbuf = getfull(wbuf);
-				if(wbuf == nil) {
-					goto endscan; // 这里才是整个函数结束退出的地方
-				}
-				nobj = wbuf->nobj;
-				wp = wbuf->obj + wbuf->nobj;
 			}
+
+			// Fetch b from the work buffer.
+			--wp;
+			b = wp->p;
+			n = wp->n;
+			ti = wp->ti;
+			nobj--;
 		}
 
-		// Fetch b from the work buffer.
-		--wp;
-		b = wp->p;
-		n = wp->n;
-		ti = wp->ti;
-		nobj--;
-	} // 这里是第处 for(;;) {} 循环的结束位置.
+	} // 这里是最外层 for(;;) {} 循环的结束位置.
 
 endscan:;
 }
