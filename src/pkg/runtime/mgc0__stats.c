@@ -6,6 +6,8 @@
 #include "mgc0__stats.h"
 #include "mgc0__funcs.h"
 
+struct GCSTATS gcstats;
+
 // Initialized from $GOGC. GOGC=off means no gc.
 // 从环境变量GOGC进行初始化. GOGC=off表示不进行gc
 // 
