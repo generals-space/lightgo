@@ -34,6 +34,7 @@
 #include	"../ld/lib.h"
 #include	"../ld/elf.h"
 #include	"../../pkg/runtime/mgc0.h"
+#include	"../../pkg/runtime/mgc0__stats.h"
 #include	"../../pkg/runtime/mgc0__funcs.h"
 
 void	dynreloc(void);

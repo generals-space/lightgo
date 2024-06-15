@@ -9,6 +9,7 @@
 #include "malloc.h"
 #include "stack.h"
 #include "mgc0.h"
+#include "mgc0__stats.h"
 #include "mgc0__funcs.h"
 #include "race.h"
 #include "type.h"
@@ -1627,8 +1628,7 @@ static void scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 // 	1. addframeroots() 只有这一处
 //
 // Starting from scanp, scans words corresponding to set bits.
-static void
-scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
+static void scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 {
 	uintptr word, bits;
 	uint32 *wordp;
@@ -1675,8 +1675,7 @@ scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 // 	1. addstackroots() 只有这一处
 //
 // Scan a stack frame: local variables and function arguments/results.
-static void
-addframeroots(Stkframe *frame, void*)
+static void addframeroots(Stkframe *frame, void*)
 {
 	Func *f;
 	BitVector *args, *locals;
@@ -1911,6 +1910,8 @@ static void addroots(void)
 
 }
 
+// caller:
+// 	1. sweepspan() 只有这一处
 static bool handlespecial(byte *p, uintptr size)
 {
 	FuncVal *fn;
@@ -2170,8 +2171,7 @@ static void dumpspan(uint32 idx)
 }
 
 // A debugging function to dump the contents of memory
-void
-runtime·memorydump(void)
+void runtime·memorydump(void)
 {
 	uint32 spanidx;
 
@@ -2186,8 +2186,7 @@ runtime·memorydump(void)
 // 	1. proc.c -> stopm(), 只有这一处.
 // 	stopm() 这个函数有一个休眠等待的过程, 被唤醒时, 如果 m->helpgc > 0,
 // 	就会调用这个函数, 来辅助执行 gc.
-void
-runtime·gchelper(void)
+void runtime·gchelper(void)
 {
 	// 调用这个做一些准备工作, 比如验证 m->helpgc 的合法性, 判断当前g是否为g0等
 	gchelperstart();
@@ -2839,6 +2838,9 @@ void runtime·markspan(void *v, uintptr size, uintptr n, bool leftover)
 }
 
 // 从地址v开始的n bytes的内存块在bitmap中的标识位清空为0.
+//
+// caller:
+// 	1. sweepspan()
 //
 // unmark the span of memory at v of length n bytes.
 void runtime·unmarkspan(void *v, uintptr n)
