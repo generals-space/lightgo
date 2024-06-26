@@ -14,10 +14,12 @@ func (q *actionQueue) Len() int           { return len(*q) }
 func (q *actionQueue) Swap(i, j int)      { (*q)[i], (*q)[j] = (*q)[j], (*q)[i] }
 func (q *actionQueue) Less(i, j int) bool { return (*q)[i].priority < (*q)[j].priority }
 func (q *actionQueue) Push(x interface{}) { *q = append(*q, x.(*action)) }
+
+// Pop 弹出数组的末尾元素并返回
 func (q *actionQueue) Pop() interface{} {
-	n := len(*q) - 1
-	x := (*q)[n]
-	*q = (*q)[:n]
+	n := len(*q) - 1 // 数组长度
+	x := (*q)[n]     // 末尾元素
+	*q = (*q)[:n]    // 弹出末尾元素
 	return x
 }
 

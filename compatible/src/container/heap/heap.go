@@ -89,7 +89,7 @@ func Push(h Interface, x interface{}) {
 
 // 从堆中找一个最小的弹出, 并再次调整, 使堆保持为小顶堆.
 //
-// 由于小顶堆的特性, 排序后的数组中是升序数组, 最小的就是堆元素.
+// 由于小顶堆的特性, 排序后的数组中是升序数组, 最小的就是第0个成员.
 //
 // Pop removes the minimum element (according to Less) from the heap and returns it.
 // The complexity is O(log(n)) where n = h.Len().
@@ -97,8 +97,10 @@ func Push(h Interface, x interface{}) {
 //
 func Pop(h Interface) interface{} {
 	n := h.Len() - 1
+	// 交换首尾两个元素的位置
 	h.Swap(0, n)
 	down(h, 0, n)
+	// 弹出末尾元素并返回
 	return h.Pop()
 }
 
@@ -169,7 +171,7 @@ func up(h Interface, j int) {
 // 从唯一一个主调函数来看, 在调用 down() 时会先将堆顶元素与数组末尾元素调换位置.
 // 之后要将末尾元素弹出, 即弹出原本的堆顶元素, 也就是数组中最小的元素.
 //
-// Pop()调用时, 参数中的 i 虽然为0, 但已经是数组中最大的元素了.
+// Pop()调用时, 参数中的 i 虽然为 0, 但已经是数组中最大的元素了.
 // 这个调换行为破坏了小顶堆的结构, 因此需要从上向下调整.
 //
 //        1                      7       

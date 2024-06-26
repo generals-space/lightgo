@@ -128,10 +128,10 @@ func (b *builder) do(root *action) {
 	// 画图描述的话可以为
 	//
 	//               .
-	//             ---->
-	//         ------------>
-	//     -------------------->
-	// ---------------------------->
+	//             <----
+	//         <------------
+	//     <-------------------
+	// <---------------------------
 	//
 	// Build list of all actions, assigning depth-first post-order priority.
 	// The original implementation here was a true queue
