@@ -7,6 +7,7 @@
 参考文章
 
 1. [golang中context包解读](http://www.01happy.com/golang-context-reading/)
+2. [Golang-Context扫盲与原理解析](https://www.cnblogs.com/yinbiao/p/15799341.html)
 
 其实我们完全可以使用select+chan完全协程的流程控制, 不需要借助context. 但是既然有了这样一个包, 并且使用起来也蛮方便, 就来看一看ta是如何做的.
 

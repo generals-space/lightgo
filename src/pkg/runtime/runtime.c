@@ -369,6 +369,9 @@ void runtime·FuncForPC(uintptr pc, void *retf)
 }
 
 // 	@implementOf: src/pkg/runtime/extern_compatible.go -> fastrand1()
+//
+// caller:
+// 	1. src/pkg/runtime/hashmap.c -> hash_init() 构建 map 时用于生成 hash0 seed 数.
 uint32 runtime·fastrand1(void)
 {
 	uint32 x;

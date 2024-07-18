@@ -77,6 +77,7 @@ struct Bucket
 	// Note: the format of the Bucket is encoded in ../../cmd/gc/reflect.c and
 	// ../reflect/type.go. 
 	// Don't change this structure without also changing that code!
+
 	uint8  tophash[BUCKETSIZE]; // top 8 bits of hash of each entry (0 = empty)
 	Bucket *overflow;           // overflow bucket, if any
 	byte   data[1];             // BUCKETSIZE keys followed by BUCKETSIZE values
@@ -99,12 +100,12 @@ struct Hmap
 	// ../reflect/type.go. 
 	// Don't change this structure without also changing that code!
 	
-	// count map 中的元素数量(内置函数 len() 返回的就是此值)
+	// count map中的元素数量(内置函数 len() 返回的就是此值)
 	//
 	// # live cells == size of map.  Must be first (used by len() builtin)
 	// 元素数量
 	uintgo  count;
-	// 状态标识
+	// 状态标识, 比如正在被写、buckets和oldbuckets正在被遍历或扩容.
 	uint32  flags;
 	// 用于计算 hash 值的 seed, 是一个随机整数, 在创建哈希表时确定.
 	// map 中存储的 key 都是以该值计算 hash 值的.
@@ -113,11 +114,11 @@ struct Hmap
 	uint32  hash0;
 	// len(buckets) == bucketsize == 2^B
 	//
-	// ta能决定当前 map 中 bucket 的数量.
+	// ta决定了当前 map 中 bucket 的数量.
 	//
 	// log_2 of # of buckets (can hold up to LOAD * 2^B items)
 	uint8   B;
-	// 当前 map 对象 key 的大小, 一般为 string, int 这样的变量类型大小
+	// 当前 map 对象 key 的大小, 一般为 string, int 这样的变量类型大小.
 	//
 	// key size in bytes
 	uint8   keysize;
@@ -136,13 +137,15 @@ struct Hmap
 	// 计算出 buckets 数组中的索引, 确定该 key 存放在哪一个 bucket 成员中.
 	//
 	// 另外, 需要注意, hash 函数根据 key 值得到 hash 值, 并不是完美的. 
-	// 虽然几率很小, 总会出现不同 key 计算出相同 hash 值的情况.
+	// 虽然几率很小, 但总会出现不同 key 计算出相同 hash 值的情况.
 	// 这些不同的 key, 其实都存放在同一个 bucket 中, 因为 bucket 中也存在一个数组(slots),
 	// 我们可以把每个 bucket 中的 slots 数组看成槽位, 发生重复的 key 会按照先后顺序找到
 	// 自己的槽位.
 	//
 	// array of 2^B Buckets. may be nil if count==0.
 	byte    *buckets;
+	// 类型同上, 平时为 nil, 只在扩容时用于存放之前的 buckets, 扩容完成后又会被置空.
+	//
 	// previous bucket array of half the size, non-nil only when growing
 	byte    *oldbuckets;
 	// progress counter for evacuation
@@ -192,20 +195,30 @@ static void check(MapType *t, Hmap *h)
 			oldbucket = bucket & (((uintptr)1 << (h->B - 1)) - 1);
 			b = (Bucket*)(h->oldbuckets + oldbucket * h->bucketsize);
 			// b is still uninitialized
-			if(!evacuated(b)) continue; 
+			if(!evacuated(b)) {
+				continue; 
+			}
 		}
 		for(b = (Bucket*)(h->buckets + bucket * h->bucketsize); b != nil; b = b->overflow) {
 			for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
-				if(b->tophash[i] == 0) continue;
+				if(b->tophash[i] == 0) {
+					continue;
+				}
 				cnt++;
 				t->key->alg->equal(&eq, t->key->size, IK(h, k), IK(h, k));
 				// NaN!
-				if(!eq) continue; 
+				if(!eq) {
+					continue; 
+				}
 				hash = h->hash0;
 				t->key->alg->hash(&hash, t->key->size, IK(h, k));
 				top = hash >> (8*sizeof(uintptr) - 8);
-				if(top == 0) top = 1;
-				if(top != b->tophash[i]) runtime·throw("bad hash");
+				if(top == 0) {
+					top = 1;
+				}
+				if(top != b->tophash[i]) {
+					runtime·throw("bad hash");
+				}
 			}
 		}
 	}
@@ -214,19 +227,31 @@ static void check(MapType *t, Hmap *h)
 	if(h->oldbuckets != nil) {
 		for(oldbucket = 0; oldbucket < (uintptr)1 << (h->B - 1); oldbucket++) {
 			b = (Bucket*)(h->oldbuckets + oldbucket * h->bucketsize);
-			if(evacuated(b)) continue;
-			if(oldbucket < h->nevacuate) runtime·throw("bucket became unevacuated");
+			if(evacuated(b)) {
+				continue;
+			}
+			if(oldbucket < h->nevacuate) {
+				runtime·throw("bucket became unevacuated");
+			}
 			for(; b != nil; b = overflowptr(b)) {
 				for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
-					if(b->tophash[i] == 0) continue;
+					if(b->tophash[i] == 0) {
+						continue;
+					}
 					cnt++;
 					t->key->alg->equal(&eq, t->key->size, IK(h, k), IK(h, k));
-					if(!eq) continue; // NaN!
+					if(!eq) {
+						continue; // NaN!
+					}
 					hash = h->hash0;
 					t->key->alg->hash(&hash, t->key->size, IK(h, k));
 					top = hash >> (8*sizeof(uintptr) - 8);
-					if(top == 0) top = 1;
-					if(top != b->tophash[i]) runtime·throw("bad hash (old)");
+					if(top == 0) {
+						top = 1;
+					}
+					if(top != b->tophash[i]) {
+						runtime·throw("bad hash (old)");
+					}
 				}
 			}
 		}
@@ -240,8 +265,8 @@ static void check(MapType *t, Hmap *h)
 
 // hash_init 初始化 map 对象(主调函数在调用此方法时事先一定通过 malloc 为该 map 申请了空间).
 //
-// 	@param t: src/pkg/runtime/type.h -> MapType{} 类型对象, 其中包含目标 map 对象的 key/value 类型属性.
-// 	@param h: 目标 map 对象的指针(起始地址)
+// 	@param t: 其中包含目标 map 对象的 key/value 类型属性.
+// 	@param h: 目标 map 对象的指针(起始地址), 作为 make() 函数的返回值.
 // 	@param hint: make(map[string]string, hint)的第2个参数, 表示该 map 对象的容量.
 //
 // caller:
@@ -256,6 +281,8 @@ static void hash_init(MapType *t, Hmap *h, uint32 hint)
 
 	flags = 0;
 
+	// 计算目标 map 中 key/value 的大小, 比如 int 类型为 8 byte, string 类型为 8 byte.
+	//
 	// figure out how big we have to make everything
 	keysize = t->key->size;
 	if(keysize > MAXKEYSIZE) {
@@ -329,6 +356,9 @@ static void hash_init(MapType *t, Hmap *h, uint32 hint)
 	}
 }
 
+// caller:
+// 	1. grow_work() 只有这一处
+//
 // Moves entries in oldbuckets[i] to buckets[i] and buckets[i+2^k].
 // We leave the original bucket intact, except for the evacuated marks,
 // so that iterators can still iterate through the old buckets.
@@ -472,6 +502,9 @@ static void evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 		check(t, h);
 }
 
+// caller:
+// 	1. hash_insert()
+// 	2. hash_remove()
 static void grow_work(MapType *t, Hmap *h, uintptr bucket)
 {
 	uintptr noldbuckets;
@@ -483,10 +516,13 @@ static void grow_work(MapType *t, Hmap *h, uintptr bucket)
 	evacuate(t, h, bucket & (noldbuckets - 1));
 
 	// evacuate one more oldbucket to make progress on growing
-	if(h->oldbuckets != nil)
+	if(h->oldbuckets != nil) {
 		evacuate(t, h, h->nevacuate);
+	}
 }
 
+// caller:
+// 	1. hash_insert() 只有这一处
 static void hash_grow(MapType *t, Hmap *h)
 {
 	byte *old_buckets;
@@ -494,16 +530,20 @@ static void hash_grow(MapType *t, Hmap *h)
 	uint8 flags;
 
 	// allocate a bigger hash table
-	if(h->oldbuckets != nil)
+	if(h->oldbuckets != nil) {
 		runtime·throw("evacuation not done in time");
+	}
 	old_buckets = h->buckets;
 	// NOTE: this could be a big malloc,
 	// but since we don't need zeroing it is probably fast.
-	if(checkgc) mstats.next_gc = mstats.heap_alloc;
+	if(checkgc) {
+		mstats.next_gc = mstats.heap_alloc;
+	}
 	new_buckets = runtime·cnewarray(t->bucket, (uintptr)1 << (h->B + 1));
 	flags = (h->flags & ~(Iterator | OldIterator));
-	if((h->flags & Iterator) != 0)
+	if((h->flags & Iterator) != 0) {
 		flags |= OldIterator;
+	}
 
 	// commit the grow (atomic wrt gc)
 	h->B++;
@@ -514,8 +554,9 @@ static void hash_grow(MapType *t, Hmap *h)
 
 	// the actual copying of the hash table data is done incrementally
 	// by grow_work() and evacuate().
-	if(docheck)
+	if(docheck) {
 		check(t, h);
+	}
 }
 
 // returns ptr to value associated with key *keyp, or nil if none.
@@ -532,10 +573,12 @@ static byte* hash_lookup(MapType *t, Hmap *h, byte **keyp)
 	byte *k, *k2, *v;
 
 	key = *keyp;
-	if(docheck)
+	if(docheck) {
 		check(t, h);
-	if(h->count == 0)
+	}
+	if(h->count == 0) {
 		return nil;
+	}
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	bucket = hash & (((uintptr)1 << h->B) - 1);
@@ -549,8 +592,9 @@ static byte* hash_lookup(MapType *t, Hmap *h, byte **keyp)
 		b = (Bucket*)(h->buckets + bucket * h->bucketsize);
 	}
 	top = hash >> (sizeof(uintptr)*8 - 8);
-	if(top == 0)
+	if(top == 0) {
 		top = 1;
+	}
 	do {
 		for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
 			if(b->tophash[i] == top) {
@@ -663,7 +707,7 @@ static void hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	if(docheck) {
 		check(t, h);
 	}
-	// 为目标 key 计算 hash 值
+	// 为目标 key 计算 hash 值, 并回填入 hash 变量.
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	if(h->buckets == nil) {
@@ -689,7 +733,7 @@ again:
 	insertk = nil;
 	insertv = nil;
 	while(true) {
-		// 遍历当前 bucket 对象(即变量b)中的所有 slot 槽位, 找到可以插入的位置.
+		// 遍历当前 bucket 对象(即变量 b)中的所有 slot 槽位, 找到可以插入的位置.
 		//
 		// k 为 bucket 中存放 key 列表的起始位置, v 则为 value 列表的起始位置.
 		// (bucket->data 中, 是以 [key1,key2,..keyN,val1,val2,..valN] 的顺序存放的)
@@ -711,6 +755,8 @@ again:
 			if(!eq) {
 				continue;
 			}
+			// 目标 key 在 map 中已经有值了, 更新后直接返回.
+			//
 			// already have a mapping for key.  Update it.
 			// Need to update key for keys which are distinct but equal
 			// (e.g. +0.0 and -0.0)
@@ -721,11 +767,19 @@ again:
 			}
 			return;
 		}
+
+		// 遍历完成, 发现没有合适的位置, 那么就需要去 overflow 数组中继续找.
+
 		if(b->overflow == nil) {
+			// 如果还没有 overflow(之前的 key 还未发生满后溢出), 结束循环, 下面会创建.
 			break;
 		}
+		// 去已有的 overflow 中找.
 		b = b->overflow;
 	}
+
+	// 运行到这里, 要么是没找到合适的位置, 需要在 overflow 处创建额外的溢出桶再写入; 
+	// 要么是记录下了可能的位置, 但还没写入.
 
 	// did not find mapping for key.  Allocate new cell & add entry.
 	if(h->count >= LOAD * ((uintptr)1 << h->B) && h->count >= BUCKETSIZE) {
@@ -734,11 +788,12 @@ again:
 		goto again; 
 	}
 
+	// 需要创建 overflow 溢出桶
 	if(inserti == nil) {
 		// all current buckets are full, allocate a new one.
 		if(checkgc) {
 			mstats.next_gc = mstats.heap_alloc;
-		} 
+		}
 		newb = runtime·cnew(t->bucket);
 		b->overflow = newb;
 		inserti = newb->tophash;
@@ -750,7 +805,7 @@ again:
 	if((h->flags & IndirectKey) != 0) {
 		if(checkgc) {
 			mstats.next_gc = mstats.heap_alloc;
-		} 
+		}
 		kmem = runtime·cnew(t->key);
 		*(byte**)insertk = kmem;
 		insertk = kmem;
@@ -758,11 +813,12 @@ again:
 	if((h->flags & IndirectValue) != 0) {
 		if(checkgc) {
 			mstats.next_gc = mstats.heap_alloc;
-		} 
+		}
 		vmem = runtime·cnew(t->elem);
 		*(byte**)insertv = vmem;
 		insertv = vmem;
 	}
+	// 插入成功
 	t->key->alg->copy(t->key->size, insertk, key);
 	t->elem->alg->copy(t->elem->size, insertv, value);
 	*inserti = top;
@@ -801,11 +857,13 @@ static void hash_remove(MapType *t, Hmap *h, void *key)
 	}
 	do {
 		for(i = 0, k = b->data, v = k + h->keysize * BUCKETSIZE; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
-			if(b->tophash[i] != top)
+			if(b->tophash[i] != top) {
 				continue;
+			}
 			t->key->alg->equal(&eq, t->key->size, key, IK(h, k));
-			if(!eq)
+			if(!eq) {
 				continue;
+			}
 
 			if((h->flags & IndirectKey) != 0) {
 				*(byte**)k = nil;
@@ -823,8 +881,9 @@ static void hash_remove(MapType *t, Hmap *h, void *key)
 			
 			// TODO: consolidate buckets if they are mostly empty
 			// can only consolidate if there are no live iterators at this size.
-			if(docheck)
+			if(docheck) {
 				check(t, h);
+			}
 			return;
 		}
 		b = b->overflow;
@@ -1181,8 +1240,9 @@ void runtime·mapaccess2(MapType *t, Hmap *h, ...)
 {
 	byte *ak, *av, *ap;
 
-	if(raceenabled && h != nil)
+	if(raceenabled && h != nil) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), runtime·mapaccess2);
+	}
 
 	ak = (byte*)(&h + 1);
 	av = ak + ROUND(t->key->size, Structrnd);
@@ -1211,17 +1271,21 @@ void reflect·mapaccess(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres
 {
 	byte *ak, *av;
 
-	if(raceenabled && h != nil)
+	if(raceenabled && h != nil) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), reflect·mapaccess);
+	}
 
-	if(t->key->size <= sizeof(key))
+	if(t->key->size <= sizeof(key)) {
 		ak = (byte*)&key;
-	else
+	}
+	else {
 		ak = (byte*)key;
+	}
 	val = 0;
 	pres = false;
-	if(t->elem->size <= sizeof(val))
+	if(t->elem->size <= sizeof(val)) {
 		av = (byte*)&val;
+	}
 	else {
 		av = runtime·mal(t->elem->size);
 		val = (uintptr)av;
@@ -1289,6 +1353,11 @@ void runtime·mapassign1(MapType *t, Hmap *h, ...)
 	runtime·mapassign(t, h, ak, av);
 }
 
+// golang原生: delete(map, key)
+//
+// runtime·mapdelete() 第3个参数是省略号, 但其实 delete 函数每次只能删除1个 key.
+// 另外, 删除 key 操作其实只是将目标 key 的值设置为了 nil...
+//
 // mapdelete(mapType *type, hmap *map[any]any, key any)
 #pragma textflag NOSPLIT
 void runtime·mapdelete(MapType *t, Hmap *h, ...)
@@ -1322,20 +1391,27 @@ void reflect·mapassign(MapType *t, Hmap *h, uintptr key, uintptr val, bool pres
 {
 	byte *ak, *av;
 
-	if(h == nil)
+	if(h == nil) {
 		runtime·panicstring("assignment to entry in nil map");
-	if(raceenabled)
+	}
+	if(raceenabled) {
 		runtime·racewritepc(h, runtime·getcallerpc(&t), reflect·mapassign);
-	if(t->key->size <= sizeof(key))
+	}
+	if(t->key->size <= sizeof(key)) {
 		ak = (byte*)&key;
-	else
+	}
+	else {
 		ak = (byte*)key;
-	if(t->elem->size <= sizeof(val))
+	}
+	if(t->elem->size <= sizeof(val)) {
 		av = (byte*)&val;
-	else
+	}
+	else {
 		av = (byte*)val;
-	if(!pres)
+	}
+	if(!pres) {
 		av = nil;
+	}
 	runtime·mapassign(t, h, ak, av);
 }
 
@@ -1346,8 +1422,9 @@ void runtime·mapiterinit(MapType *t, Hmap *h, struct hash_iter *it)
 		it->key = nil;
 		return;
 	}
-	if(raceenabled)
+	if(raceenabled) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), runtime·mapiterinit);
+	}
 	hash_iter_init(t, h, it);
 	hash_next(it);
 	if(debug) {

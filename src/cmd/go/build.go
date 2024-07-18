@@ -285,8 +285,12 @@ func (b *builder) build(a *action) (err error) {
 		fmt.Fprintf(os.Stderr, "%s\n", a.p.ImportPath)
 	}
 
+	// 如果 p 属于标准库, 且名称为 "runtime", 但是ta的目录下边又不存在 zasm_linux_amd64.h 文件.
+	//
 	if a.p.Standard && a.p.ImportPath == "runtime" && buildContext.Compiler == "gc" &&
-		!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
+	!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
+		// 使用 make 编译 go 1.2 过程中生成的 zasm_linux_amd64.h 等文件是必须的,
+		// 否则直接拷贝一个 go 1.2 二进制文件, 执行 go build/run 进行编译, 就会报错.
 		return fmt.Errorf(
 			"%s/%s must be bootstrapped using make%v",
 			buildContext.GOOS, buildContext.GOARCH, defaultSuffix(),

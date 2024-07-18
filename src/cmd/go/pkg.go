@@ -37,7 +37,7 @@ type Package struct {
 	Doc        string `json:",omitempty"` // package documentation string
 	Target     string `json:",omitempty"` // install path
 	Goroot     bool   `json:",omitempty"` // is this package found in the Go root?
-	// Standard 判断当前 package 是属于标准库还是属于第三方库.
+	// Standard 判断当前 package 是否属于标准库(false 表示属于第三方库).
 	// 	@assignAt: Package.copyBuild()
 	//
 	// is this package part of the standard Go library?
@@ -57,7 +57,11 @@ type Package struct {
 	IgnoredGoFiles []string `json:",omitempty"` // .go sources ignored due to build constraints
 	CFiles         []string `json:",omitempty"` // .c source files
 	CXXFiles       []string `json:",omitempty"` // .cc, .cpp and .cxx source files
-	HFiles         []string `json:",omitempty"` // .h, .hh, .hpp and .hxx source files
+	// 当前 package 下的所有 .h 文件列表, 如 runtime/zasm_linux_amd64.h 文件,
+	// 在 go build 时有用.
+	//
+	// .h, .hh, .hpp and .hxx source files
+	HFiles         []string `json:",omitempty"` 
 	SFiles         []string `json:",omitempty"` // .s source files
 	SwigFiles      []string `json:",omitempty"` // .swig files
 	SwigCXXFiles   []string `json:",omitempty"` // .swigcxx files

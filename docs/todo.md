@@ -23,3 +23,9 @@
 我知道 g 任务都有自己独立的栈, 并将栈基, 栈顶等地址存储在 g 对象中. 但是 m <-> g 切换时, 也会同时发生栈的上下文切换, 目前还不清楚该机制.
 
 相关函数: runtime·gogo()
+
+[Golang - Map 内部实现原理解析](https://www.cnblogs.com/yinbiao/p/15819230.html)
+
+[Golang Map实现原理分析与解读](https://blog.csdn.net/zhw21w/article/details/129434340)
+
+[Golang-Slice 内部实现原理解析](https://www.cnblogs.com/yinbiao/p/15802792.html)
