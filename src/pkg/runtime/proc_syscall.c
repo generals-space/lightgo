@@ -55,8 +55,7 @@ void ·entersyscall(int32 dummy)
 	// 禁止抢占. 因为在此函数中 g 将处于(或者说被修改为) Gsyscall 状态,
 	// 但可能会出现 g->sched 不一致的情况, 别让gc线程发现这里.
 	//
-	// Disable preemption because during this function 
-	// g is in Gsyscall status,
+	// Disable preemption because during this function g is in Gsyscall status,
 	// but can have inconsistent g->sched, do not let GC observe it.
 	m->locks++;
 
@@ -245,11 +244,10 @@ void runtime·exitsyscall(void)
 	runtime·mcall(exitsyscall0);
 
 	// Scheduler returned, so we're allowed to run now.
-	// Delete the gcstack information that we left for
-	// the garbage collector during the system call.
-	// Must wait until now because until gosched returns
-	// we don't know for sure that the garbage collector
-	// is not running.
+	// Delete the gcstack information that we left for the garbage collector
+	// during the system call.
+	// Must wait until now because until gosched returns we don't know for sure
+	// that the garbage collector is not running.
 	// 调度器返回, 那么可以开始执行了.
 	// 删除...这里的注释应该也是错的.
 	// 删除 syscall 栈信息

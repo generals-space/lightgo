@@ -11,13 +11,6 @@ case X"$GOARCH" in
 Xamd64)
 	export A=6
 	;;
-X386)
-	export A=8
-	;;
-Xarm)
-	export A=5
-	export E="$GORUN"
-	;;
 *)
 	echo 1>&2 run: unsupported '$GOARCH'
 	exit 1

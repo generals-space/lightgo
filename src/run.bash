@@ -14,12 +14,18 @@ unset GOPATH    # we disallow local import for non-local packages, if $GOROOT ha
 # no core files, please
 ulimit -c 0
 
+## 如果 hard 为 unlimited, 则把 soft 也提升为 unlimited
+##
+## -H: hard, -S: Soft
+##
 # Raise soft limits to hard limits for NetBSD/OpenBSD.
 # We need at least 256 files and ~300 MB of bss.
 # On OS X ulimit -S -n rejects 'unlimited'.
 [ "$(ulimit -H -n)" == "unlimited" ] || ulimit -S -n $(ulimit -H -n)
 [ "$(ulimit -H -d)" == "unlimited" ] || ulimit -S -d $(ulimit -H -d)
 
+## ulimit -T 会报错, "&> /dev/null"可以让终端不打印错误日志, 而直接获取 $? 退出码.
+#
 # Thread count limit on NetBSD 7.
 if ulimit -T &> /dev/null; then
 	[ "$(ulimit -H -T)" == "unlimited" ] || ulimit -S -T $(ulimit -H -T)
@@ -40,9 +46,7 @@ fi
 # at least runtime/debug test will fail.
 unset GOROOT_FINAL
 
-# increase timeout for ARM up to 3 times the normal value
 timeout_scale=1
-[ "$GOARCH" == "arm" ] && timeout_scale=3
 
 echo '# Testing packages.'
 time go test std -short -timeout=$(expr 120 \* $timeout_scale)s
@@ -57,14 +61,11 @@ go test sync -short -timeout=$(expr 120 \* $timeout_scale)s -cpu=10
 
 # Race detector only supported on Linux and OS X,
 # and only on amd64, and only when cgo is enabled.
-case "$GOHOSTOS-$GOOS-$GOARCH-$CGO_ENABLED" in
-linux-linux-amd64-1 | darwin-darwin-amd64-1)
-	echo
-	echo '# Testing race detector.'
-	go test -race -i runtime/race flag
-	go test -race -run=Output runtime/race
-	go test -race -short flag
-esac
+echo
+echo '# Testing race detector.'
+go test -race -i runtime/race flag
+go test -race -run=Output runtime/race
+go test -race -short flag
 
 xcd() {
 	echo
@@ -107,27 +108,15 @@ go test -ldflags '-linkmode=auto' || exit 1
 # linkmode=internal fails on dragonfly since errno is a TLS relocation.
 [ "$GOHOSTOS" == dragonfly ] || go test -ldflags '-linkmode=internal' || exit 1
 case "$GOHOSTOS-$GOARCH" in
-openbsd-386 | openbsd-amd64)
-	# test linkmode=external, but __thread not supported, so skip testtls.
-	go test -ldflags '-linkmode=external' || exit 1
-	;;
-darwin-386 | darwin-amd64)
-	# linkmode=external fails on OS X 10.6 and earlier == Darwin
-	# 10.8 and earlier.
-	case $(uname -r) in
-	[0-9].* | 10.*) ;;
-	*) go test -ldflags '-linkmode=external'  || exit 1;;
-	esac
-	;;
-dragonfly-386 | dragonfly-amd64 | freebsd-386 | freebsd-amd64 | linux-386 | linux-amd64 | linux-arm | netbsd-386 | netbsd-amd64)
+linux-amd64)
 	go test -ldflags '-linkmode=external' || exit 1
 	go test -ldflags '-linkmode=auto' ../testtls || exit 1
 	go test -ldflags '-linkmode=external' ../testtls || exit 1
 esac
 ) || exit $?
 
-# This tests cgo -godefs. That mode is not supported,
-# so it's okay if it doesn't work on some systems.
+# This tests cgo -godefs.
+# That mode is not supported, so it's okay if it doesn't work on some systems.
 # In particular, it works badly with clang on OS X.
 [ "$CGO_ENABLED" != 1 ] || [ "$GOOS" == darwin ] ||
 (xcd ../misc/cgo/testcdefs

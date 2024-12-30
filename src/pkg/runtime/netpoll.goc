@@ -68,10 +68,12 @@ func runtime_pollServerInit() {
 func runtime_pollOpen(fd uintptr) (pd *PollDesc, errno int) {
 	pd = allocPollDesc();
 	runtime·lock(pd);
-	if(pd->wg != nil && pd->wg != READY)
+	if(pd->wg != nil && pd->wg != READY) {
 		runtime·throw("runtime_pollOpen: blocked write on free descriptor");
-	if(pd->rg != nil && pd->rg != READY)
+	}
+	if(pd->rg != nil && pd->rg != READY) {
 		runtime·throw("runtime_pollOpen: blocked read on free descriptor");
+	}
 	pd->fd = fd;
 	pd->closing = false;
 	pd->seq++;

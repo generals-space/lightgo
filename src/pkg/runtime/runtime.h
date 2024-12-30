@@ -33,7 +33,7 @@ typedef	uint32		uintgo; // Go's uint
 #endif
 
 /*
- * get rid of C types
+ * get rid of(摆脱) C types
  * the / / / forces a syntax error immediately,
  * which will show "last name: XXunsigned".
  */

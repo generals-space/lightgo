@@ -16,6 +16,9 @@ build:
 dist:
 	cd ./src; bash ./make.bash --dist-tool; cd ..;
 
+install:
+	cp -f ./bin/* /usr/local/bin/
+
 clean:
 	rm -rf ./bin/*;
 	rm -rf ./pkg/*;
