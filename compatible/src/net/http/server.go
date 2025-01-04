@@ -51,6 +51,8 @@ type Handler interface {
 // 拆分 ServeMux 到独立文件 server_mux.go
 ////////////////////////////////////////////////////////////////////////////////
 
+// HandlerFunc 大部分应用场景都是进行类型转换, 将目标函数转换为标准的 handler.
+//
 // 	@implementOf: Handler
 //
 // The HandlerFunc type is an adapter to allow the use of ordinary functions
@@ -66,6 +68,9 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 	f(w, r)
 }
 
+// 	@param pattern: uri 路径
+// 	@param handler: 对应的处理函数
+//
 // Handle registers the handler for the given pattern in the DefaultServeMux.
 // The documentation for ServeMux explains how patterns are matched.
 func Handle(pattern string, handler Handler) {
@@ -92,9 +97,11 @@ type Server struct {
 	// 与 WriteTimeout 相同, 不过ta的设置时机是在第一次从客户端读取到 http request 后.
 	//
 	// maximum duration before timing out write of the response
-	WriteTimeout   time.Duration
-	MaxHeaderBytes int         // maximum size of request headers, DefaultMaxHeaderBytes if 0
-	TLSConfig      *tls.Config // optional TLS config, used by ListenAndServeTLS
+	WriteTimeout time.Duration
+	// maximum size of request headers, DefaultMaxHeaderBytes if 0
+	MaxHeaderBytes int
+	// optional TLS config, used by ListenAndServeTLS
+	TLSConfig *tls.Config
 
 	// TLSNextProto optionally specifies a function to take over ownership of
 	//the provided TLS connection when an NPN protocol upgrade has occurred.

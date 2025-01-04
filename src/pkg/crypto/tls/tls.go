@@ -19,17 +19,18 @@ import (
 
 // Server returns a new TLS server side connection
 // using conn as the underlying transport.
-// The configuration config must be non-nil and must have
-// at least one certificate.
+// The configuration config must be non-nil and must have at least one certificate.
 func Server(conn net.Conn, config *Config) *Conn {
 	return &Conn{conn: conn, config: config}
 }
 
+// caller:
+// 	1. compatible/src/net/http/transport.go -> Transport.dialConn()
+//
 // Client returns a new TLS client side connection
 // using conn as the underlying transport.
-// Client interprets a nil configuration as equivalent to
-// the zero configuration; see the documentation of Config
-// for the defaults.
+// Client interprets a nil configuration as equivalent to the zero configuration;
+// see the documentation of Config for the defaults.
 func Client(conn net.Conn, config *Config) *Conn {
 	return &Conn{conn: conn, config: config, isClient: true}
 }

@@ -933,6 +933,10 @@ func (c *Conn) Close() error {
 	return alertErr
 }
 
+// caller:
+// 	1. compatible/src/net/http/server_conn.go -> conn.serve()
+// 	https server 接受一个 tcp 连接前, 先调用该方法进行握手, 以验证双方证书.
+//
 // Handshake runs the client or server handshake
 // protocol if it has not yet been run.
 // Most uses of this package need not call Handshake

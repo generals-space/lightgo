@@ -6,6 +6,8 @@
 
 // Test that a select statement proceeds when a value is ready.
 
+// 这个用例太简单了, 没有阅读的必要.
+
 package main
 
 func f() *int {
@@ -21,6 +23,8 @@ func main() {
 	c1 := make(chan int)
 	c <- 42
 	select {
+	// 将 c1 中的成员赋值给 f() 返回的 int 指针.
+	// 不过 c1 是无缓冲 channel, 里面没有成员, 所以根本进不了这个 case.
 	case *f() = <-c1:
 		// nothing
 	case x.a = <-c:

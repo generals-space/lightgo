@@ -272,6 +272,8 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 	return nil
 }
 
+// caller:
+// 	1. Conn.serverHandshake() 只有这一处
 func (hs *serverHandshakeState) doFullHandshake() error {
 	config := hs.c.config
 	c := hs.c

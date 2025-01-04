@@ -87,8 +87,7 @@ func NewServer(handler http.Handler) *Server {
 
 // NewUnstartedServer returns a new Server but doesn't start it.
 //
-// After changing its configuration, the caller should call Start or
-// StartTLS.
+// After changing its configuration, the caller should call Start or StartTLS.
 //
 // The caller should call Close when finished, to shut it down.
 func NewUnstartedServer(handler http.Handler) *Server {

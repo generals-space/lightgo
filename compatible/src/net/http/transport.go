@@ -566,6 +566,8 @@ func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
 	}
 }
 
+// caller:
+// 	1. Transport.getConn() 只有这一处
 func (t *Transport) dialConn(cm *connectMethod) (*persistConn, error) {
 	conn, err := t.dial("tcp", cm.addr())
 	if err != nil {
