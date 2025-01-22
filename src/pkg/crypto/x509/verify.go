@@ -86,6 +86,7 @@ func (h HostnameError) Error() string {
 			valid = c.Subject.CommonName
 		}
 	}
+	// 目标服务端的 tls 证书, 与其IP不符(这种情况一般是服务端的问题)
 	return "x509: certificate is valid for " + valid + ", not " + h.Host
 }
 

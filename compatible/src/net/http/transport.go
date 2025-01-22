@@ -37,6 +37,10 @@ var DefaultTransport RoundTripper = &Transport{Proxy: ProxyFromEnvironment}
 // MaxIdleConnsPerHost.
 const DefaultMaxIdleConnsPerHost = 2
 
+// Transport http请求中进行 tcp 连接的部分.
+//
+// 	@usedAt: compatible/src/net/http/client.go -> send()
+//
 // Transport is an implementation of RoundTripper that supports http,
 // https, and http proxies (for either http or https with CONNECT).
 // Transport can also cache connections for future re-use.
@@ -55,8 +59,7 @@ type Transport struct {
 	// If Proxy is nil or returns a nil *URL, no proxy is used.
 	Proxy func(*Request) (*url.URL, error)
 
-	// Dial specifies the dial function for creating TCP
-	// connections.
+	// Dial specifies the dial function for creating TCP connections.
 	// If Dial is nil, net.Dial is used.
 	Dial func(network, addr string) (net.Conn, error)
 
@@ -269,6 +272,11 @@ func (tr *transportRequest) extraHeaders() Header {
 	return tr.extra
 }
 
+// 	@param req: GET、POST等类型的请求对象
+//
+// caller:
+// 	1. compatible/src/net/http/client.go -> send()
+//
 // RoundTrip implements the RoundTripper interface.
 //
 // For higher-level HTTP client support (such as handling of cookies

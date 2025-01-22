@@ -29,3 +29,7 @@
 [Golang Map实现原理分析与解读](https://blog.csdn.net/zhw21w/article/details/129434340)
 
 [Golang-Slice 内部实现原理解析](https://www.cnblogs.com/yinbiao/p/15802792.html)
+
+## map并发
+
+原生 map 不支持并发, 但假设存在一个`map[string]*Struct{}`对象, 多个协程并发处理, 但每个协程只更改自己所属 key 的 struct 成员字段, 是否就不用加锁了?

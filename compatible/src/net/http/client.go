@@ -31,6 +31,8 @@ import (
 // and additionally handles HTTP details such as cookies and
 // redirects.
 type Client struct {
+	// 	@usedAt: Client.send() 只有这一处
+	//
 	// Transport specifies the mechanism by which individual
 	// HTTP requests are made.
 	// If nil, DefaultTransport is used.
@@ -56,24 +58,26 @@ type Client struct {
 
 	// 	@compatible: 此字段在 v1.3 版本添加
 	//
-	// Timeout specifies a time limit for requests made by this
-	// Client. The timeout includes connection time, any
-	// redirects, and reading the response body. The timer remains
-	// running after Get, Head, Post, or Do return and will
+	// Timeout specifies a time limit for requests made by this Client.
+	// The timeout includes connection time, any redirects, and reading
+	// the response body.
+	// The timer remains running after Get, Head, Post, or Do return and will
 	// interrupt reading of the Response.Body.
 	//
 	// A Timeout of zero means no timeout.
 	//
 	// The Client's Transport must support the CancelRequest
 	// method or Client will return errors when attempting to make
-	// a request with Get, Head, Post, or Do. Client's default
-	// Transport (DefaultTransport) supports CancelRequest.
+	// a request with Get, Head, Post, or Do.
+	// Client's default Transport (DefaultTransport) supports CancelRequest.
 	Timeout time.Duration
 }
 
 // DefaultClient is the default Client and is used by Get, Head, and Post.
 var DefaultClient = &Client{}
 
+// 	@implementBy: compatible/src/net/http/transport.go -> Transport{}
+//
 // RoundTripper is an interface representing the ability to execute a
 // single HTTP transaction, obtaining the Response for a given Request.
 //
@@ -81,18 +85,17 @@ var DefaultClient = &Client{}
 // goroutines.
 type RoundTripper interface {
 	// RoundTrip executes a single HTTP transaction, returning
-	// the Response for the request req.  RoundTrip should not
-	// attempt to interpret the response.  In particular,
-	// RoundTrip must return err == nil if it obtained a response,
-	// regardless of the response's HTTP status code.  A non-nil
-	// err should be reserved for failure to obtain a response.
-	// Similarly, RoundTrip should not attempt to handle
-	// higher-level protocol details such as redirects,
-	// authentication, or cookies.
+	// the Response for the request req. 
+	// RoundTrip should not attempt to interpret the response. 
+	// In particular, RoundTrip must return err == nil if it obtained a response,
+	// regardless of the response's HTTP status code. 
+	// A non-nil err should be reserved for failure to obtain a response.
+	// Similarly, RoundTrip should not attempt to handle higher-level protocol
+	// details such as redirects, authentication, or cookies.
 	//
 	// RoundTrip should not modify the request, except for
-	// consuming and closing the Body. The request's URL and
-	// Header fields are guaranteed to be initialized.
+	// consuming and closing the Body.
+	// The request's URL and Header fields are guaranteed to be initialized.
 	RoundTrip(*Request) (*Response, error)
 }
 
@@ -108,6 +111,10 @@ type readClose struct {
 	io.Closer
 }
 
+// 	@param req: GET、POST等类型的请求对象
+//
+// caller:
+// 	1. Client.Do()
 func (c *Client) send(req *Request) (*Response, error) {
 	if c.Jar != nil {
 		for _, cookie := range c.Jar.Cookies(req.URL) {
@@ -151,6 +158,11 @@ func (c *Client) Do(req *Request) (resp *Response, err error) {
 	return c.send(req)
 }
 
+// 	@param req: GET、POST等类型的请求对象
+//
+// caller:
+// 	1. Client.send()
+//
 // send issues an HTTP request.
 // Caller should close resp.Body when done reading from it.
 func send(req *Request, t RoundTripper) (resp *Response, err error) {
